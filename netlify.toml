@@ -1,0 +1,26 @@
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://app.xts.vn/dungbaby-service/hs/apps/execute/xts/:splat"
+  status = 200
+  force = true
+  headers = {
+    Accept = "*/*"
+    Accept-Encoding = "gzip, deflate, br, zstd"
+    Accept-Language = "en-US,en;q=0.9,vi;q=0.8,vi-VN;q=0.7"
+    Content-Type = "text/plain;charset=UTF-8"
+    Origin = "https://cool-clafoutis-0474e4.netlify.app"
+    Referer = "https://cool-clafoutis-0474e4.netlify.app/"
+    Priority = "u=1, i"
+    Sec-Fetch-Dest = "empty"
+    Sec-Fetch-Mode = "cors"
+    Sec-Fetch-Site = "cross-site"
+    Access-Control-Allow-Origin = "https://cool-clafoutis-0474e4.netlify.app"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
+    Access-Control-Allow-Headers = "Accept, Accept-Encoding, Accept-Language, Content-Type, Origin, Referer, Priority, Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site"
+    Access-Control-Allow-Credentials = "true"
+  }
