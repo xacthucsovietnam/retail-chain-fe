@@ -4,14 +4,9 @@ import {
   ArrowLeft,
   Pencil,
   Trash2,
-  FileText,
-  Download,
   Loader2,
   AlertCircle,
-  Package,
-  Tag,
-  DollarSign,
-  Ruler
+  Package
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getProductDetail } from '../../services/product';
@@ -62,29 +57,8 @@ export default function ProductDetail() {
     toast.error('Delete functionality not implemented yet');
   };
 
-  const handleDownloadImage = async () => {
-    if (!product?.imageUrl) {
-      toast.error(t('product.detail.noImage'));
-      return;
-    }
-
-    try {
-      const response = await fetch(product.imageUrl);
-      if (!response.ok) throw new Error('Failed to fetch image');
-      
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${product.code}-image.${blob.type.split('/')[1]}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to download image';
-      toast.error(errorMessage);
-    }
+  const handleBack = () => {
+    navigate('/products');
   };
 
   if (isLoading) {
@@ -107,7 +81,7 @@ export default function ProductDetail() {
             {t('product.detail.loadError')}
           </p>
           <button
-            onClick={() => navigate('/products')}
+            onClick={handleBack}
             className="text-blue-600 hover:text-blue-800 flex items-center gap-2 mx-auto"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -119,145 +93,100 @@ export default function ProductDetail() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      {/* Header with back button */}
-      <div className="flex justify-between items-center mb-6">
-        <button
-          onClick={() => navigate('/products')}
-          className="text-gray-600 hover:text-gray-800 flex items-center gap-2"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          {t('product.detail.back')}
-        </button>
-
-        <div className="flex gap-2">
-          <button
-            onClick={handleEdit}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <Pencil className="w-4 h-4 mr-2" />
-            {t('product.detail.edit')}
-          </button>
-
-          <button
-            onClick={handleDelete}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            {t('product.detail.delete')}
-          </button>
-
-          {product.imageUrl && (
-            <button
-              onClick={handleDownloadImage}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              {t('product.detail.downloadImage')}
-            </button>
-          )}
-        </div>
-      </div>
-
+    <div className="min-h-screen bg-gray-50 pb-20">
       {/* Product Information */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        {/* Product image */}
-        <div className="aspect-w-16 aspect-h-9 bg-gray-100">
+      <div className="bg-white">
+        {/* Product Image */}
+        <div className="aspect-square bg-gray-100">
           {product.imageUrl ? (
             <img
               src={product.imageUrl}
               alt={product.name}
-              className="object-contain w-full h-64"
+              className="w-full h-full object-contain"
               onError={(e) => {
                 e.currentTarget.src = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc';
                 e.currentTarget.alt = 'Fallback product image';
               }}
             />
           ) : (
-            <div className="flex items-center justify-center h-64 bg-gray-50">
+            <div className="w-full h-full flex items-center justify-center">
               <Package className="w-16 h-16 text-gray-400" />
             </div>
           )}
         </div>
 
-        {/* Product information */}
-        <div className="p-6">
-          <div className="grid grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <Tag className="w-4 h-4 mr-2" />
-                  <span className="text-sm">{t('product.detail.code')}</span>
-                </div>
-                <p className="text-lg font-medium text-gray-900">{product.code}</p>
-              </div>
-              
-              <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <Package className="w-4 h-4 mr-2" />
-                  <span className="text-sm">{t('product.detail.name')}</span>
-                </div>
-                <p className="text-lg text-gray-900">{product.name}</p>
-              </div>
-
-              <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <Tag className="w-4 h-4 mr-2" />
-                  <span className="text-sm">{t('product.detail.category')}</span>
-                </div>
-                <p className="text-lg text-gray-900">{product.category}</p>
-              </div>
-
-              <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <DollarSign className="w-4 h-4 mr-2" />
-                  <span className="text-sm">{t('product.detail.price')}</span>
-                </div>
-                <p className="text-lg font-semibold text-blue-600">
-                  {formatCurrency(product.price, 'VND')}
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <Ruler className="w-4 h-4 mr-2" />
-                  <span className="text-sm">{t('product.detail.baseUnit')}</span>
-                </div>
-                <p className="text-lg text-gray-900">{product.baseUnit}</p>
-              </div>
-
-              <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <Ruler className="w-4 h-4 mr-2" />
-                  <span className="text-sm">{t('product.detail.riCoefficient')}</span>
-                </div>
-                <p className="text-lg text-gray-900">{product.riCoefficient}</p>
-              </div>
-
-              <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <FileText className="w-4 h-4 mr-2" />
-                  <span className="text-sm">{t('product.detail.description')}</span>
-                </div>
-                <p className="text-lg text-gray-900">
-                  {product.description || t('product.detail.noDescription')}
-                </p>
-              </div>
-
-              {product.comment && (
-                <div>
-                  <div className="flex items-center text-gray-600 mb-1">
-                    <FileText className="w-4 h-4 mr-2" />
-                    <span className="text-sm">{t('product.detail.notes')}</span>
-                  </div>
-                  <p className="text-lg text-gray-900">{product.comment}</p>
-                </div>
-              )}
-            </div>
+        {/* Product Details */}
+        <div className="p-4 space-y-4">
+          <div className="space-y-1">
+            <p className="text-sm text-gray-500">Mã</p>
+            <p className="text-base text-gray-900">{product.code}</p>
           </div>
+
+          <div className="space-y-1">
+            <p className="text-sm text-gray-500">Sản phẩm</p>
+            <p className="text-base text-gray-900">{product.name}</p>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-sm text-gray-500">Loại sản phẩm</p>
+            <p className="text-base text-gray-900">{product.category}</p>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-sm text-gray-500">Đơn vị</p>
+            <p className="text-base text-gray-900">{product.baseUnit}</p>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-sm text-gray-500">Hệ số Ri</p>
+            <p className="text-base text-gray-900">{product.riCoefficient}</p>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-sm text-gray-500">Giá bán</p>
+            <p className="text-base font-semibold text-blue-600">
+              {formatCurrency(product.price, 'VND')}
+            </p>
+          </div>
+
+          {product.description && (
+            <div className="space-y-1">
+              <p className="text-sm text-gray-500">Mô tả</p>
+              <p className="text-base text-gray-900">{product.description}</p>
+            </div>
+          )}
+
+          {product.comment && (
+            <div className="space-y-1">
+              <p className="text-sm text-gray-500">Ghi chú</p>
+              <p className="text-base text-gray-900">{product.comment}</p>
+            </div>
+          )}
         </div>
+      </div>
+
+      {/* Floating Action Buttons */}
+      <div className="fixed bottom-4 right-4 flex flex-col gap-2">
+        <button
+          onClick={handleBack}
+          className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        >
+          <ArrowLeft className="h-6 w-6" />
+        </button>
+        
+        <button
+          onClick={handleEdit}
+          className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        >
+          <Pencil className="h-6 w-6" />
+        </button>
+
+        <button
+          onClick={handleDelete}
+          className="p-3 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+        >
+          <Trash2 className="h-6 w-6" />
+        </button>
       </div>
     </div>
   );

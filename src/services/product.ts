@@ -1,6 +1,13 @@
 import api from './axiosClient';
 import { ListRequest, PaginatedResponse } from './types';
 
+// Add new interface for image processing
+export interface ImageUploadResponse {
+    url: string;
+    id: string;
+}
+
+// Update existing interfaces
 export interface Product {
     id: string;
     name: string;
@@ -29,8 +36,8 @@ export interface Category {
 }
 
 export interface MeasurementUnit {
-  id: string;
-  name: string;
+    id: string;
+    name: string;
 }
 
 export interface CreateProductData {
@@ -57,6 +64,158 @@ export interface UpdateProductData {
     comment?: string;
     picture?: string;
 }
+
+// Add helper function for image processing
+const processImage = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        // Validate file type
+        if (!file.type.match(/^image\/(jpeg|jpg|png)$/)) {
+            reject(new Error('Invalid file type. Only JPG and PNG files are allowed.'));
+            return;
+        }
+
+        // Validate file size
+        if (file.size > 5 * 1024 * 1024) {
+            reject(new Error('File size exceeds 5MB limit.'));
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            const base64String = reader.result as string;
+            resolve(base64String.split(',')[1]); // Remove data URI prefix
+        };
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+    });
+};
+
+// Add function to upload image
+const uploadProductImage = async (
+    productId: string, 
+    productName: string, 
+    imageData: string, 
+    fileExtension: string
+): Promise<ImageUploadResponse> => {
+    const uploadData = {
+        _type: 'XTSUploadFileRequest',
+        _dbId: '',
+        _msgId: '',
+        file: {
+            _type: 'XTSProductAttachedFile',
+            _isFullData: false,
+            objectId: {
+                _type: 'XTSObjectId',
+                dataType: 'XTSProductAttachedFile',
+                id: '',
+                presentation: '',
+                url: ''
+            },
+            author: {
+                _type: 'XTSObjectId',
+                dataType: 'XTSUser',
+                id: '',
+                presentation: '',
+                url: ''
+            },
+            fileOwner: {
+                _type: 'XTSObjectId',
+                dataType: 'XTSProduct',
+                id: productId,
+                presentation: productName,
+                url: ''
+            },
+            description: '',
+            creationDate: new Date().toISOString(),
+            longDescription: '',
+            size: Math.ceil(imageData.length * 3/4), // Estimate size from base64
+            extension: fileExtension.toLowerCase()
+        },
+        binaryData: imageData,
+        startsWith: '',
+        attributeName: 'picture',
+        copyToS3Storage: true
+    };
+
+    try {
+        const response = await api.post('', uploadData);
+        
+        if (!response.data?.file?.objectId) {
+            throw new Error('Invalid image upload response format');
+        }
+
+        return {
+            url: response.data.file.objectId.url,
+            id: response.data.file.objectId.id
+        };
+    } catch (error) {
+        console.error('Image upload error:', error);
+        throw new Error('Failed to upload image');
+    }
+};
+
+// Update existing functions
+export const getCategories = async (): Promise<Category[]> => {
+    const categoryListData = {
+        _type: 'XTSGetObjectListRequest',
+        _dbId: '',
+        _msgId: '',
+        dataType: 'XTSProductCategory',
+        columnSet: [],
+        sortBy: [],
+        positionFrom: 1,
+        positionTo: 100,
+        limit: 100,
+        conditions: []
+    };
+
+    try {
+        const response = await api.post('', categoryListData);
+
+        if (!response.data || !Array.isArray(response.data.items)) {
+            throw new Error('Invalid category list response format');
+        }
+
+        return response.data.items.map((item: any) => ({
+            id: item.object.objectId.id,
+            name: item.object.objectId.presentation
+        }));
+    } catch (error) {
+        console.error('Category fetch error:', error);
+        throw new Error('Failed to fetch categories');
+    }
+};
+
+export const getMeasurementUnits = async (): Promise<MeasurementUnit[]> => {
+    const unitListData = {
+        _type: 'XTSGetObjectListRequest',
+        _dbId: '',
+        _msgId: '',
+        dataType: 'XTSUOMClassifier',
+        columnSet: [],
+        sortBy: [],
+        positionFrom: 1,
+        positionTo: 100,
+        limit: 100,
+        conditions: []
+    };
+
+    try {
+        const response = await api.post('', unitListData);
+
+        if (!response.data || !Array.isArray(response.data.items)) {
+            throw new Error('Invalid measurement unit list response format');
+        }
+
+        return response.data.items.map((item: any) => ({
+            id: item.object.objectId.id,
+            name: item.object.objectId.presentation
+        }));
+    } catch (error) {
+        console.error('Measurement unit fetch error:', error);
+        throw new Error('Failed to fetch measurement units');
+    }
+};
 
 export const getProducts = async (searchTerm: string = '', category: string = '', page: number = 1, pageSize: number = 20): Promise<PaginatedResponse<Product>> => {
     const positionFrom = (page - 1) * pageSize + 1;
@@ -103,11 +262,11 @@ export const getProducts = async (searchTerm: string = '', category: string = ''
         return {
             items: response.data.items.map((item: any) => ({
                 id: item.object.objectId.id,
-                imageUrl: item.object.picture,
-                category: item.object.productCategory.presentation,
-                name: item.object.description,
-                code: item.object.sku,
-                price: item.object._price
+                imageUrl: item.object.picture?.url || '',
+                category: item.object.productCategory?.presentation || '',
+                name: item.object.description || '',
+                code: item.object.code || '',
+                price: item.object._price || 0
             })),
             hasMore: response.data.items.length === pageSize
         };
@@ -148,7 +307,7 @@ export const getProductDetail = async (id: string): Promise<ProductDetail> => {
             code: product.code || '',
             category: product.productCategory?.presentation || '',
             price: product._price || 0,
-            imageUrl: product.picture || null,
+            imageUrl: product.picture?.url || null,
             baseUnit: product.measurementUnit?.presentation || '',
             riCoefficient: product._uomCoefficient || 1,
             description: product.descriptionFull || '',
@@ -160,69 +319,8 @@ export const getProductDetail = async (id: string): Promise<ProductDetail> => {
     }
 };
 
-export const getCategories = async (): Promise<Category[]> => {
-    const categoryListData = {
-        _type: 'XTSGetObjectListRequest',
-        _dbId: '',
-        _msgId: '',
-        dataType: 'XTSProductCategory',
-        columnSet: [],
-        sortBy: [],
-        positionFrom: 1,
-        positionTo: 100,
-        limit: 0,
-        conditions: []
-    };
-
-    try {
-        const response = await api.post('', categoryListData);
-
-        if (!response.data || !Array.isArray(response.data.items)) {
-            throw new Error('Invalid category list response format');
-        }
-
-        return response.data.items.map((item: any) => ({
-            id: item.object.objectId.id,
-            name: item.object.objectId.presentation
-        }));
-    } catch (error) {
-        console.error('Category fetch error:', error);
-        throw new Error('Failed to fetch categories');
-    }
-};
-
-export const getMeasurementUnits = async (): Promise<MeasurementUnit[]> => {
-  const unitListData = {
-    _type: 'XTSGetObjectListRequest',
-    _dbId: '',
-    _msgId: '',
-    dataType: 'XTSUOMClassifier',
-    columnSet: [],
-    sortBy: [],
-    positionFrom: 1,
-    positionTo: 100,
-    limit: 0,
-    conditions: []
-  };
-
-  try {
-    const response = await api.post('', unitListData);
-
-    if (!response.data || !Array.isArray(response.data.items)) {
-      throw new Error('Invalid measurement unit list response format');
-    }
-
-    return response.data.items.map((item: any) => ({
-      id: item.object.objectId.id,
-      name: item.object.objectId.presentation
-    }));
-  } catch (error) {
-    console.error('Measurement unit fetch error:', error);
-    throw new Error('Failed to fetch measurement units');
-  }
-};
-
-export const createProduct = async (data: CreateProductData): Promise<void> => {
+export const createProduct = async (data: CreateProductData): Promise<{ id: string; presentation: string }> => {
+    // Step 1: Create product
     const createProductData = {
         _type: 'XTSCreateObjectsRequest',
         _dbId: '',
@@ -238,10 +336,9 @@ export const createProduct = async (data: CreateProductData): Promise<void> => {
                     presentation: data.name,
                     url: ''
                 },
-                description: data.name || '',
-                descriptionFull: data.description || '',
-                sku: data.code  || '',
-                comment: data.description  || '',
+                description: data.name,
+                descriptionFull: data.description,
+                code: data.code,
                 productType: {
                     _type: 'XTSObjectId',
                     id: 'InventoryItem',
@@ -263,32 +360,13 @@ export const createProduct = async (data: CreateProductData): Promise<void> => {
                     presentation: '',
                     navigationRef: null
                 },
-                _uomCoefficient: data.riCoefficient || '',
-                _price: data.sellingPrice || '',
+                _uomCoefficient: data.riCoefficient,
+                _price: data.sellingPrice,
                 _priceKind: {
                     _type: 'XTSObjectId',
                     id: '1a1fb49c-5b28-11ef-a699-00155d058802',
                     dataType: 'XTSPriceKind',
                     presentation: 'Giá bán lẻ',
-                    navigationRef: null
-                },
-                _vatRate: {
-                    _type: 'XTSObjectId',
-                    dataType: 'XTSVATRate',
-                    id: '',
-                    presentation: '',
-                    url: ''
-                },
-                _vatRateRate: 0,
-                _uoms: [],
-                _characteristics: [],
-                _prices: [],
-                _pictures: [],
-                businessActivity: {
-                    _type: 'XTSObjectId',
-                    id: '5736c39d-5b28-11ef-a699-00155d058802',
-                    dataType: 'XTSBusinessActivity',
-                    presentation: 'Mảng hoạt động chính',
                     navigationRef: null
                 }
             }
@@ -296,7 +374,41 @@ export const createProduct = async (data: CreateProductData): Promise<void> => {
     };
 
     try {
-        await api.post('', createProductData);
+        const productResponse = await api.post('', createProductData);
+
+        if (!productResponse.data?.objects?.[0]?.objectId) {
+            throw new Error('Invalid create product response format');
+        }
+
+        const createdProduct = productResponse.data.objects[0];
+        const productId = createdProduct.objectId.id;
+        const productPresentation = createdProduct.objectId.presentation;
+
+        // Step 2: Upload images if provided
+        if (data.images.length > 0) {
+            try {
+                // Process and upload the first image
+                const image = data.images[0];
+                const imageData = await processImage(image);
+                const fileExtension = image.name.split('.').pop() || 'png';
+                
+                await uploadProductImage(
+                    productId,
+                    productPresentation,
+                    imageData,
+                    fileExtension
+                );
+            } catch (error) {
+                console.error('Image upload error:', error);
+                // Continue even if image upload fails
+                // The product is already created
+            }
+        }
+
+        return {
+            id: productId,
+            presentation: productPresentation
+        };
     } catch (error) {
         console.error('Product creation error:', error);
         throw new Error('Failed to create product');
@@ -321,7 +433,7 @@ export const updateProduct = async (data: UpdateProductData): Promise<void> => {
                 },
                 description: data.name,
                 descriptionFull: data.description,
-                sku: data.code,
+                code: data.code,
                 comment: data.comment || '',
                 productType: {
                     _type: 'XTSObjectId',
@@ -344,13 +456,13 @@ export const updateProduct = async (data: UpdateProductData): Promise<void> => {
                     presentation: '',
                     url: ''
                 },
-                picture: {
+                picture: data.picture ? {
                     _type: 'XTSObjectId',
                     dataType: '',
                     id: '',
                     presentation: '',
-                    url: data.picture || ''
-                },
+                    url: data.picture
+                } : null,
                 _uomCoefficient: data.riCoefficient,
                 _price: data.price,
                 _priceKind: {
@@ -359,52 +471,16 @@ export const updateProduct = async (data: UpdateProductData): Promise<void> => {
                     id: '1a1fb49c-5b28-11ef-a699-00155d058802',
                     presentation: 'Giá bán lẻ',
                     url: ''
-                },
-                _vatRate: {
-                    _type: 'XTSObjectId',
-                    dataType: '',
-                    id: '',
-                    presentation: '',
-                    url: ''
-                },
-                _vatRateRate: 0,
-                _uoms: [
-                    {
-                        _type: 'XTSProductUOMRow',
-                        _lineNumber: 0,
-                        uom: {
-                            _type: 'XTSObjectId',
-                            id: data.measurementUnit,
-                            dataType: 'XTSUOMClassifier',
-                            presentation: '',
-                            navigationRef: ''
-                        },
-                        coefficient: 1
-                    },
-                    {
-                        _type: 'XTSProductUOMRow',
-                        _lineNumber: 0,
-                        uom: {
-                            _type: 'XTSObjectId',
-                            id: data.measurementUnit,
-                            dataType: 'XTSMeasurementUnit',
-                            presentation: `Ri (${data.riCoefficient} c)`,
-                            navigationRef: ''
-                        },
-                        coefficient: data.riCoefficient
-                    }
-                ],
-                _characteristics: [],
-                _prices: [null],
-                _pictures: []
+                }
             }
         ]
     };
 
     try {
         const response = await api.post('', updateProductData);
-        if (!response.data?.success) {
-            throw new Error('Product update failed');
+        
+        if (!response.data?.objects?.[0]) {
+            throw new Error('Invalid update product response format');
         }
     } catch (error) {
         console.error('Product update error:', error);

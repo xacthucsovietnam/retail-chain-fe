@@ -3,18 +3,19 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Save,
-  Loader2,
-  AlertCircle,
+  User,
   Building,
-  User
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getEmployeeDetail, updateEmployee } from '../../services/employee';
 import type { EmployeeDetail, UpdateEmployeeData } from '../../services/employee';
 
 interface FormData {
+  id: string;
   name: string;
-  company: string;
+  isActive: boolean;
 }
 
 export default function EmployeeUpdate() {
@@ -28,14 +29,15 @@ export default function EmployeeUpdate() {
   const [isDirty, setIsDirty] = useState(false);
 
   const [formData, setFormData] = useState<FormData>({
+    id: '',
     name: '',
-    company: ''
+    isActive: true
   });
 
   useEffect(() => {
     const fetchEmployeeDetail = async () => {
       if (!id) {
-        setError('Employee ID is missing');
+        setError('ID nhân viên không tồn tại');
         setIsLoading(false);
         return;
       }
@@ -46,11 +48,12 @@ export default function EmployeeUpdate() {
         const data = await getEmployeeDetail(id);
         setEmployee(data);
         setFormData({
+          id: data.id,
           name: data.name,
-          company: data.company
+          isActive: true
         });
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to load employee details';
+        const errorMessage = error instanceof Error ? error.message : 'Không thể tải thông tin nhân viên';
         setError(errorMessage);
         toast.error(errorMessage);
       } finally {
@@ -61,7 +64,7 @@ export default function EmployeeUpdate() {
     fetchEmployeeDetail();
   }, [id]);
 
-  const handleInputChange = (field: keyof FormData, value: string) => {
+  const handleInputChange = (field: keyof FormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setIsDirty(true);
   };
@@ -74,28 +77,26 @@ export default function EmployeeUpdate() {
     return true;
   };
 
-  const handleSave = () => {
+  const handleSubmit = () => {
     if (!validateForm()) return;
     setShowConfirmation(true);
   };
 
-  const handleConfirmSave = async () => {
-    if (!id || !employee) return;
-
+  const handleConfirmSubmit = async () => {
     try {
       setIsSaving(true);
-      const updateData: UpdateEmployeeData = {
-        id: id,
-        name: formData.name,
-        individualId: id, // Using the same ID for individual since we don't have separate individual records
-        isActive: true,
+
+      await updateEmployee({
+        id: formData.id,
+        name: formData.name.trim(),
+        individualId: formData.id,
+        isActive: formData.isActive,
         managerId: null,
         companyId: null
-      };
+      });
 
-      await updateEmployee(updateData);
       toast.success('Cập nhật thông tin nhân viên thành công');
-      navigate(`/employees/${id}`);
+      navigate(`/employees/${formData.id}`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Không thể cập nhật thông tin nhân viên';
       toast.error(errorMessage);
@@ -131,15 +132,12 @@ export default function EmployeeUpdate() {
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
             {error || 'Không tìm thấy nhân viên'}
           </h2>
-          <p className="text-gray-600 mb-4">
-            Không thể tải thông tin nhân viên hoặc đã xảy ra lỗi.
-          </p>
           <button
             onClick={() => navigate('/employees')}
             className="text-blue-600 hover:text-blue-800 flex items-center gap-2 mx-auto"
           >
             <ArrowLeft className="w-4 h-4" />
-            Quay lại danh sách nhân viên
+            Quay lại danh sách
           </button>
         </div>
       </div>
@@ -147,102 +145,117 @@ export default function EmployeeUpdate() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        {/* Header */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex justify-between items-start">
-            <div className="flex items-center">
-              <div className="h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
-                <User className="h-8 w-8 text-blue-600" />
-              </div>
-              <div className="ml-4">
-                <h1 className="text-2xl font-bold text-gray-900">Sửa thông tin nhân viên</h1>
-                <p className="text-sm text-gray-500">{employee.name}</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleBack}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Quay lại
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={!isDirty || isSaving}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                <Save className="w-4 h-4 mr-2" />
-                Lưu thay đổi
-              </button>
-            </div>
+    <div className="min-h-screen bg-gray-50 pb-20">
+      {/* Fixed Header */}
+      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
+        <div className="px-4 py-3">
+          <h1 className="text-lg font-semibold text-gray-900">Cập nhật nhân viên</h1>
+          <p className="text-sm text-gray-500">{employee.name}</p>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="pt-16 px-4">
+        {/* Profile Image */}
+        <div className="flex justify-center mb-6">
+          <div className="h-24 w-24 bg-blue-100 rounded-full flex items-center justify-center">
+            <User className="h-12 w-12 text-blue-600" />
           </div>
         </div>
 
-        {/* Form */}
-        <div className="p-6">
-          <div className="space-y-6 max-w-2xl">
-            {/* Employee Name */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tên nhân viên <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-                  placeholder="Nhập tên nhân viên"
-                />
-                <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-              </div>
+        {/* Form Fields */}
+        <div className="space-y-6">
+          {/* Employee Name */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Tên nhân viên <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => handleInputChange('name', e.target.value)}
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Nhập tên nhân viên"
+              />
+              <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
+          </div>
 
-            {/* Company */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Công ty
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={formData.company}
-                  readOnly
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-sm"
-                />
-                <Building className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-              </div>
+          {/* Company */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Công ty
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={employee.company}
+                readOnly
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50"
+              />
+              <Building className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
+          </div>
+
+          {/* Active Status */}
+          <div>
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={formData.isActive}
+                onChange={(e) => handleInputChange('isActive', e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className="ml-2 text-sm text-gray-900">Đang hoạt động</span>
+            </label>
           </div>
         </div>
       </div>
 
+      {/* Floating Action Buttons */}
+      <div className="fixed bottom-4 right-4 flex flex-col gap-2">
+        <button
+          onClick={handleBack}
+          className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        >
+          <ArrowLeft className="h-6 w-6" />
+        </button>
+        
+        <button
+          onClick={handleSubmit}
+          disabled={!isDirty || isSaving}
+          className={`p-3 rounded-full shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+            isDirty ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500' : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+          }`}
+        >
+          <Save className="h-6 w-6" />
+        </button>
+      </div>
+
       {/* Confirmation Modal */}
       {showConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
-              Xác nhận cập nhật thông tin
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-lg p-4 w-full max-w-sm">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Xác nhận cập nhật nhân viên
             </h3>
             <p className="text-sm text-gray-500 mb-4">
               Bạn có chắc chắn muốn cập nhật thông tin nhân viên này không?
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowConfirmation(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+                className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
               >
                 Hủy
               </button>
               <button
-                onClick={handleConfirmSave}
+                onClick={handleConfirmSubmit}
                 disabled={isSaving}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md disabled:opacity-50"
+                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md disabled:opacity-50"
               >
-                {isSaving ? 'Đang lưu...' : 'Xác nhận'}
+                {isSaving ? 'Đang xử lý...' : 'Xác nhận'}
               </button>
             </div>
           </div>

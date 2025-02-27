@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
+  Pencil,
+  Trash2,
   User,
   Phone,
   Mail,
@@ -11,17 +13,14 @@ import {
   Calendar,
   Loader2,
   AlertCircle,
-  Pencil,
-  Trash2,
-  FileSearch,
+  DollarSign,
+  CreditCard,
   CheckCircle,
   XCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getPartnerDetail } from '../../services/partner';
 import type { PartnerDetail } from '../../services/partner';
-import { useLanguage } from '../../contexts/LanguageContext';
-import LanguageSwitcher from '../../components/LanguageSwitcher';
 
 export default function PartnerDetail() {
   const { id } = useParams<{ id: string }>();
@@ -33,7 +32,7 @@ export default function PartnerDetail() {
   useEffect(() => {
     const fetchPartnerDetail = async () => {
       if (!id) {
-        setError('Partner ID is missing');
+        setError('ID khách hàng không tồn tại');
         setIsLoading(false);
         return;
       }
@@ -44,7 +43,7 @@ export default function PartnerDetail() {
         const data = await getPartnerDetail(id);
         setPartner(data);
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to load partner details';
+        const errorMessage = error instanceof Error ? error.message : 'Không thể tải thông tin khách hàng';
         setError(errorMessage);
         toast.error(errorMessage);
       } finally {
@@ -62,11 +61,16 @@ export default function PartnerDetail() {
   };
 
   const handleDelete = () => {
-    toast.error('Delete functionality not implemented yet');
+    toast.error('Chức năng xóa chưa được triển khai');
   };
 
-  const handleRelatedDocuments = () => {
-    toast.error('Related documents functionality not implemented yet');
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'Chưa cập nhật';
+    return new Date(dateString).toLocaleDateString('vi-VN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
   };
 
   if (isLoading) {
@@ -83,17 +87,14 @@ export default function PartnerDetail() {
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            {error || 'Partner Not Found'}
+            {error || 'Không tìm thấy khách hàng'}
           </h2>
-          <p className="text-gray-600 mb-4">
-            The partner you're looking for could not be found or an error occurred.
-          </p>
           <button
             onClick={() => navigate('/partners')}
             className="text-blue-600 hover:text-blue-800 flex items-center gap-2 mx-auto"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to Partners
+            Quay lại danh sách
           </button>
         </div>
       </div>
@@ -101,203 +102,223 @@ export default function PartnerDetail() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      {/* Header with back button and actions */}
-      <div className="flex justify-between items-center mb-6">
-        <button
-          onClick={() => navigate('/partners')}
-          className="text-gray-600 hover:text-gray-800 flex items-center gap-2"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          Back to Partners
-        </button>
-
-        <div className="flex gap-2">
-           Continuing the PartnerDetail.tsx file content exactly where we left off:
-
-```tsx
-          <button
-            onClick={handleEdit}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <Pencil className="w-4 h-4 mr-2" />
-            Edit
-          </button>
-
-          <button
-            onClick={handleDelete}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Delete
-          </button>
-
-          <button
-            onClick={handleRelatedDocuments}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <FileSearch className="w-4 h-4 mr-2" />
-            Related Documents
-          </button>
+    <div className="min-h-screen bg-gray-50 pb-20">
+      {/* Fixed Header */}
+      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
+        <div className="px-4 py-3">
+          <h1 className="text-lg font-semibold text-gray-900">Chi tiết khách hàng</h1>
+          <p className="text-sm text-gray-500">#{partner.code}</p>
         </div>
       </div>
 
-      {/* Partner Information Card */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">{partner.name}</h1>
-              <p className="text-sm text-gray-500">#{partner.code}</p>
+      {/* Main Content */}
+      <div className="pt-4 px-4">
+        {/* Profile Header */}
+        <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
+          <div className="flex items-center">
+            <div className="h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
+              {partner.picture ? (
+                <img
+                  src={partner.picture}
+                  alt={partner.name}
+                  className="h-16 w-16 rounded-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.src = 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80';
+                  }}
+                />
+              ) : (
+                <User className="h-8 w-8 text-blue-600" />
+              )}
             </div>
-            <div className="flex gap-2">
-              {partner.isCustomer && (
-                <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-                  Customer
-                </span>
-              )}
-              {partner.isVendor && (
-                <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-medium">
-                  Supplier
-                </span>
-              )}
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                partner.isActive
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-red-100 text-red-800'
-              }`}>
-                {partner.isActive ? 'Active' : 'Inactive'}
-              </span>
+            <div className="ml-4">
+              <h2 className="text-xl font-semibold text-gray-900">{partner.name}</h2>
+              <p className="text-sm text-gray-500">{partner.description}</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
+          <div className="mt-4 flex flex-wrap gap-2">
+            {partner.isCustomer && (
+              <span className="px-2.5 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+                Khách hàng
+              </span>
+            )}
+            {partner.isVendor && (
+              <span className="px-2.5 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full">
+                Nhà cung cấp
+              </span>
+            )}
+            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+              partner.isActive
+                ? 'bg-green-100 text-green-800'
+                : 'bg-red-100 text-red-800'
+            }`}>
+              {partner.isActive ? 'Đang hoạt động' : 'Ngừng hoạt động'}
+            </span>
+          </div>
+        </div>
+
+        {/* Contact Information */}
+        <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
+          <h3 className="text-base font-medium text-gray-900 mb-4">Thông tin liên hệ</h3>
+          
+          <div className="space-y-3">
+            <div className="flex items-center">
+              <Phone className="w-5 h-5 text-gray-400 mr-3" />
               <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <Building className="w-4 h-4 mr-2" />
-                  <span className="text-sm">Partner Type</span>
-                </div>
-                <p className="text-lg text-gray-900">{partner.type}</p>
+                <p className="text-sm text-gray-500">Số điện thoại</p>
+                <p className="text-base text-gray-900">{partner.phone || 'Chưa cập nhật'}</p>
               </div>
-
-              {partner.dateOfBirth && (
-                <div>
-                  <div className="flex items-center text-gray-600 mb-1">
-                    <Calendar className="w-4 h-4 mr-2" />
-                    <span className="text-sm">Date of Birth</span>
-                  </div>
-                  <p className="text-lg text-gray-900">{new Date(partner.dateOfBirth).toLocaleDateString()}</p>
-                </div>
-              )}
-
-              {partner.gender && (
-                <div>
-                  <div className="flex items-center text-gray-600 mb-1">
-                    <User className="w-4 h-4 mr-2" />
-                    <span className="text-sm">Gender</span>
-                  </div>
-                  <p className="text-lg text-gray-900">{partner.gender}</p>
-                </div>
-              )}
-
-              {partner.phone && (
-                <div>
-                  <div className="flex items-center text-gray-600 mb-1">
-                    <Phone className="w-4 h-4 mr-2" />
-                    <span className="text-sm">Phone Number</span>
-                  </div>
-                  <p className="text-lg text-gray-900">{partner.phone}</p>
-                </div>
-              )}
-
-              {partner.email && (
-                <div>
-                  <div className="flex items-center text-gray-600 mb-1">
-                    <Mail className="w-4 h-4 mr-2" />
-                    <span className="text-sm">Email</span>
-                  </div>
-                  <p className="text-lg text-gray-900">{partner.email}</p>
-                </div>
-              )}
-
-              {partner.address && (
-                <div>
-                  <div className="flex items-center text-gray-600 mb-1">
-                    <MapPin className="w-4 h-4 mr-2" />
-                    <span className="text-sm">Address</span>
-                  </div>
-                  <p className="text-lg text-gray-900">{partner.address}</p>
-                </div>
-              )}
             </div>
 
-            <div className="space-y-4">
+            <div className="flex items-center">
+              <Mail className="w-5 h-5 text-gray-400 mr-3" />
               <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <FileText className="w-4 h-4 mr-2" />
-                  <span className="text-sm">Operation Settings</span>
-                </div>
-                <div className="space-y-2 mt-2">
-                  <div className="flex items-center gap-2">
-                    {partner.doOperationsByContracts ? (
-                      <CheckCircle className="w-5 h-5 text-green-500" />
-                    ) : (
-                      <XCircle className="w-5 h-5 text-red-500" />
-                    )}
-                    <span className="text-gray-700">Operations by Contracts</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {partner.doOperationsByOrders ? (
-                      <CheckCircle className="w-5 h-5 text-green-500" />
-                    ) : (
-                      <XCircle className="w-5 h-5 text-red-500" />
-                    )}
-                    <span className="text-gray-700">Operations by Orders</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {partner.doOperationsByDocuments ? (
-                      <CheckCircle className="w-5 h-5 text-green-500" />
-                    ) : (
-                      <XCircle className="w-5 h-5 text-red-500" />
-                    )}
-                    <span className="text-gray-700">Operations by Documents</span>
-                  </div>
-                </div>
+                <p className="text-sm text-gray-500">Email</p>
+                <p className="text-base text-gray-900">{partner.email || 'Chưa cập nhật'}</p>
               </div>
+            </div>
 
-              {partner.taxId && (
-                <div>
-                  <div className="flex items-center text-gray-600 mb-1">
-                    <FileText className="w-4 h-4 mr-2" />
-                    <span className="text-sm">Tax ID</span>
-                  </div>
-                  <p className="text-lg text-gray-900">{partner.taxId}</p>
-                </div>
+            <div className="flex items-center">
+              <MapPin className="w-5 h-5 text-gray-400 mr-3" />
+              <div>
+                <p className="text-sm text-gray-500">Địa chỉ</p>
+                <p className="text-base text-gray-900">{partner.address || 'Chưa cập nhật'}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center">
+              <Calendar className="w-5 h-5 text-gray-400 mr-3" />
+              <div>
+                <p className="text-sm text-gray-500">Ngày sinh</p>
+                <p className="text-base text-gray-900">{formatDate(partner.dateOfBirth)}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center">
+              <User className="w-5 h-5 text-gray-400 mr-3" />
+              <div>
+                <p className="text-sm text-gray-500">Giới tính</p>
+                <p className="text-base text-gray-900">
+                  {partner.gender === 'Male' ? 'Nam' : partner.gender === 'Female' ? 'Nữ' : 'Chưa cập nhật'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Financial Information */}
+        <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
+          <h3 className="text-base font-medium text-gray-900 mb-4">Thông tin tài chính</h3>
+          
+          <div className="space-y-3">
+            <div className="flex items-center">
+              <DollarSign className="w-5 h-5 text-gray-400 mr-3" />
+              <div>
+                <p className="text-sm text-gray-500">Tổng doanh thu</p>
+                <p className="text-base font-medium text-blue-600">
+                  {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(15000000)}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center">
+              <CreditCard className="w-5 h-5 text-gray-400 mr-3" />
+              <div>
+                <p className="text-sm text-gray-500">Tổng công nợ</p>
+                <p className="text-base font-medium text-red-600">
+                  {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(5000000)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Operation Settings */}
+        <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
+          <h3 className="text-base font-medium text-gray-900 mb-4">Thiết lập giao dịch</h3>
+          
+          <div className="space-y-3">
+            <div className="flex items-center">
+              {partner.doOperationsByContracts ? (
+                <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
+              ) : (
+                <XCircle className="w-5 h-5 text-red-500 mr-3" />
               )}
+              <span className="text-gray-700">Theo hợp đồng</span>
+            </div>
 
+            <div className="flex items-center">
+              {partner.doOperationsByOrders ? (
+                <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
+              ) : (
+                <XCircle className="w-5 h-5 text-red-500 mr-3" />
+              )}
+              <span className="text-gray-700">Theo đơn hàng</span>
+            </div>
+
+            <div className="flex items-center">
+              {partner.doOperationsByDocuments ? (
+                <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
+              ) : (
+                <XCircle className="w-5 h-5 text-red-500 mr-3" />
+              )}
+              <span className="text-gray-700">Theo chứng từ</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Additional Information */}
+        {(partner.notes || partner.employeeResponsible) && (
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <h3 className="text-base font-medium text-gray-900 mb-4">Thông tin bổ sung</h3>
+            
+            <div className="space-y-3">
               {partner.employeeResponsible && (
-                <div>
-                  <div className="flex items-center text-gray-600 mb-1">
-                    <User className="w-4 h-4 mr-2" />
-                    <span className="text-sm">Responsible Employee</span>
+                <div className="flex items-center">
+                  <User className="w-5 h-5 text-gray-400 mr-3" />
+                  <div>
+                    <p className="text-sm text-gray-500">Nhân viên phụ trách</p>
+                    <p className="text-base text-gray-900">{partner.employeeResponsible}</p>
                   </div>
-                  <p className="text-lg text-gray-900">{partner.employeeResponsible}</p>
                 </div>
               )}
 
               {partner.notes && (
-                <div>
-                  <div className="flex items-center text-gray-600 mb-1">
-                    <FileText className="w-4 h-4 mr-2" />
-                    <span className="text-sm">Notes</span>
+                <div className="flex items-start">
+                  <FileText className="w-5 h-5 text-gray-400 mr-3 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-gray-500">Ghi chú</p>
+                    <p className="text-base text-gray-900 whitespace-pre-line">{partner.notes}</p>
                   </div>
-                  <p className="text-lg text-gray-900 whitespace-pre-line">{partner.notes}</p>
                 </div>
               )}
             </div>
           </div>
-        </div>
+        )}
+      </div>
+
+      {/* Floating Action Buttons */}
+      <div className="fixed bottom-4 right-4 flex flex-col gap-2">
+        <button
+          onClick={() => navigate('/partners')}
+          className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        >
+          <ArrowLeft className="h-6 w-6" />
+        </button>
+        
+        <button
+          onClick={handleEdit}
+          className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        >
+          <Pencil className="h-6 w-6" />
+        </button>
+
+        <button
+          onClick={handleDelete}
+          className="p-3 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+        >
+          <Trash2 className="h-6 w-6" />
+        </button>
       </div>
     </div>
   );

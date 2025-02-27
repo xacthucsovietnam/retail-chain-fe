@@ -1,19 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Building, User, Users, Plus } from 'lucide-react';
+import { Search, Filter, Building, User, Users, Plus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getEmployees } from '../../services/employee';
-import { useLanguage } from '../../contexts/LanguageContext';
-import LanguageSwitcher from '../../components/LanguageSwitcher';
 
 interface Employee {
-    id: string;
-    name: string;
-    description: string;
-    personalInfo: string;
-    company: string;
-    manager: string;
-    isActive: boolean;
+  id: string;
+  name: string;
+  description: string;
+  personalInfo: string;
+  company: string;
+  manager: string;
+  isActive: boolean;
 }
 
 export default function Employees() {
@@ -23,9 +21,10 @@ export default function Employees() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [showFilter, setShowFilter] = useState(true);
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const lastScrollY = useRef(0);
-  const { t } = useLanguage();
 
   // Search filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,10 +48,13 @@ export default function Employees() {
   useEffect(() => {
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
-      if (currentScrollY < lastScrollY.current - 100) {
-        setShowFilter(true);
+      
+      // Show/hide header based on scroll direction
+      if (currentScrollY < lastScrollY.current - 10) {
+        setIsHeaderVisible(true);
       } else if (currentScrollY > lastScrollY.current + 10) {
-        setShowFilter(false);
+        setIsHeaderVisible(false);
+        setIsSearchExpanded(false);
       }
       lastScrollY.current = currentScrollY;
     };
@@ -108,22 +110,6 @@ export default function Employees() {
         });
       }
 
-      if (roleFilter === 'partner') {
-        conditions.push({
-          _type: 'XTSCondition',
-          property: 'partner',
-          value: true,
-          comparisonOperator: '='
-        });
-      } else if (roleFilter === 'supplier') {
-        conditions.push({
-          _type: 'XTSCondition',
-          property: 'vendor',
-          value: true,
-          comparisonOperator: '='
-        });
-      }
-
       const response = await getEmployees(pageNumber, 50, conditions);
       
       if (isNewSearch) {
@@ -134,7 +120,7 @@ export default function Employees() {
       
       setHasMore(response.hasMore);
     } catch (error) {
-      toast.error(t('message.employeesFailed'));
+      toast.error('Không thể tải danh sách nhân viên');
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
@@ -162,250 +148,248 @@ export default function Employees() {
     setPage(1);
     setHasMore(true);
     fetchEmployees(1, true);
+    setIsSearchExpanded(false);
+    setIsFilterOpen(false);
+  };
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setTypeFilter('');
+    setGenderFilter('');
+    setStatusFilter('');
+    setRoleFilter('');
+    setIsFilterOpen(false);
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-      {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-white shadow-md transition-transform duration-300">
-        <div className="px-4 py-3">
-          <div className="flex justify-between items-center mb-3">
-            <h2 className="text-xl font-bold text-gray-800">{t('employees.title')}</h2>
-            <button
-              onClick={() => navigate('/employees/add')}
-              className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Thêm mới
-            </button>
-          </div>
-          
-          <div className="space-y-3">
-            <div className="relative">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder={t('employees.searchPlaceholder')}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-              />
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            </div>
+    <div className="min-h-screen bg-gray-50">
+      {/* Fixed Header */}
+      <div
+        className={`fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ${
+          isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
+        }`}
+      >
+        {/* Title Bar */}
+        <div className="bg-white px-4 py-3 shadow-sm">
+          <h1 className="text-lg font-semibold text-gray-900">Danh sách nhân viên</h1>
+        </div>
 
-            <div className={`space-y-3 overflow-hidden transition-all duration-300 ${showFilter ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="relative">
-                  <select
-                    value={typeFilter}
-                    onChange={(e) => setTypeFilter(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
+        {/* Search Bar */}
+        <div className={`bg-white px-4 py-2 shadow-sm transition-transform duration-300 ${
+          isHeaderVisible ? 'translate-y-0' : 'translate-y-full'
+        }`}>
+          <div className="flex items-center gap-2">
+            <div className={`relative flex-1 transition-all duration-300 ${isSearchExpanded ? 'flex-grow' : ''}`}>
+              {isSearchExpanded ? (
+                <div className="flex items-center">
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Tìm kiếm nhân viên..."
+                    className="w-full pl-9 pr-9 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                    autoFocus
+                  />
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                  <button
+                    onClick={() => {
+                      setSearchTerm('');
+                      setIsSearchExpanded(false);
+                    }}
+                    className="absolute right-3 top-2.5"
                   >
-                    <option value="">{t('employees.allTypes')}</option>
-                    <option value="Individual">Individual</option>
-                    <option value="Company">Company</option>
-                  </select>
-                  <Building className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                    <X className="h-4 w-4 text-gray-400" />
+                  </button>
                 </div>
-
-                <div className="relative">
-                  <select
-                    value={genderFilter}
-                    onChange={(e) => setGenderFilter(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
-                  >
-                    <option value="">{t('employees.allGenders')}</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                  </select>
-                  <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="relative">
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
-                  >
-                    <option value="">{t('employees.allTypes')}</option>
-                    <option value="active">{t('employees.active')}</option>
-                    <option value="inactive">{t('employees.inactive')}</option>
-                  </select>
-                  <Filter className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                </div>
-
-                <div className="relative">
-                  <select
-                    value={roleFilter}
-                    onChange={(e) => setRoleFilter(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
-                  >
-                    <option value="">{t('employees.allTypes')}</option>
-                    <option value="partner">{t('employees.partner')}</option>
-                    <option value="supplier">{t('employees.supplier')}</option>
-                  </select>
-                  <Users className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                </div>
-              </div>
+              ) : (
+                <button
+                  onClick={() => setIsSearchExpanded(true)}
+                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                >
+                  <Search className="h-5 w-5" />
+                </button>
+              )}
             </div>
 
             <button
-              onClick={handleSearch}
-              disabled={isLoading}
-              className="w-full py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+              onClick={() => setIsFilterOpen(true)}
+              className={`p-2 text-gray-600 hover:bg-gray-100 rounded-lg ${
+                typeFilter || genderFilter || statusFilter || roleFilter
+                  ? 'bg-blue-50 text-blue-600'
+                  : ''
+              }`}
             >
-              {isLoading ? t('employees.searching') : t('employees.search')}
+              <Filter className="h-5 w-5" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Desktop Header */}
-      <div className="hidden md:block bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold text-gray-800">{t('employees.title')}</h2>
-          <button
-            onClick={() => navigate('/employees/add')}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Thêm mới
-          </button>
-        </div>
-        
-        <div className="grid grid-cols-5 gap-4 mb-4">
-          <div className="relative col-span-2">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder={t('employees.searchPlaceholder')}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-            />
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-          </div>
-
-          <div className="relative">
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
-            >
-              <option value="">{t('employees.allTypes')}</option>
-              <option value="Individual">Individual</option>
-              <option value="Company">Company</option>
-            </select>
-            <Building className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-          </div>
-
-          <div className="relative">
-            <select
-              value={genderFilter}
-              onChange={(e) => setGenderFilter(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
-            >
-              <option value="">{t('employees.allGenders')}</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-            </select>
-            <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-          </div>
-
-          <div className="relative">
-            <select
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
-            >
-              <option value="">{t('employees.allTypes')}</option>
-              <option value="partner">{t('employees.partner')}</option>
-              <option value="supplier">{t('employees.supplier')}</option>
-            </select>
-            <Users className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-          </div>
-        </div>
-
-        <button
-          onClick={handleSearch}
-          disabled={isLoading}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-        >
-          {isLoading ? t('employees.searching') : t('employees.search')}
-        </button>
-      </div>
-
-      {/* Employees List */}
-      <div className="md:bg-white md:rounded-lg md:shadow-md md:p-6">
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-20 md:mt-0">
-            {[...Array(6)].map((_, index) => (
-              <div key={index} className="bg-white rounded-lg shadow-md p-4 animate-pulse">
-                <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
-                <div className="space-y-3">
-                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                  <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                  <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+      {/* Main Content */}
+      <div className="pt-12 px-4 pb-20">
+        <div className="grid grid-cols-1 gap-4">
+          {isLoading ? (
+            // Loading Skeletons
+            Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="bg-white rounded-lg shadow animate-pulse p-4">
+                <div className="h-4 bg-gray-200 rounded w-3/4 mb-3" />
+                <div className="space-y-2">
+                  <div className="h-4 bg-gray-200 rounded w-1/2" />
+                  <div className="h-4 bg-gray-200 rounded w-2/3" />
                 </div>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-20 md:mt-0">
-            {employees.map((employee, index) => (
+            ))
+          ) : (
+            employees.map((employee, index) => (
               <div
                 key={employee.id}
                 ref={index === employees.length - 1 ? lastEmployeeRef : null}
-                className="bg-white rounded-lg shadow-md p-4 border border-gray-200 hover:shadow-lg transition-shadow duration-200 cursor-pointer"
                 onClick={() => navigate(`/employees/${employee.id}`)}
+                className="bg-white rounded-lg shadow-sm p-4 active:scale-[0.98] transition-transform"
               >
-                <div className="flex justify-between items-start mb-3">
+                <div className="flex justify-between items-start mb-2">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-800">{employee.name}</h3>
-                    <p className="text-sm text-gray-600">{employee.description}</p>
+                    <h3 className="text-base font-semibold text-gray-900">{employee.name}</h3>
+                    <p className="text-sm text-gray-500">{employee.description}</p>
                   </div>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                     employee.isActive
                       ? 'bg-green-100 text-green-800'
                       : 'bg-red-100 text-red-800'
                   }`}>
-                    {employee.isActive ? t('employees.active') : t('employees.inactive')}
+                    {employee.isActive ? 'Đang làm việc' : 'Đã nghỉ việc'}
                   </span>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center text-gray-700">
-                    <Building className="h-4 w-4 mr-2" />
-                    <span className="text-sm">{employee.company}</span>
-                  </div>
+                <div className="space-y-1.5">
+                  {employee.company && (
+                    <div className="flex items-center text-sm text-gray-600">
+                      <Building className="h-4 w-4 mr-2" />
+                      {employee.company}
+                    </div>
+                  )}
 
                   {employee.personalInfo && (
-                    <div className="flex items-center text-gray-700">
+                    <div className="flex items-center text-sm text-gray-600">
                       <User className="h-4 w-4 mr-2" />
-                      <span className="text-sm">{employee.personalInfo}</span>
+                      {employee.personalInfo}
                     </div>
                   )}
 
                   {employee.manager && (
-                    <div className="flex items-center text-gray-700">
+                    <div className="flex items-center text-sm text-gray-600">
                       <Users className="h-4 w-4 mr-2" />
-                      <span className="text-sm">Manager: {employee.manager}</span>
+                      Quản lý: {employee.manager}
                     </div>
                   )}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            ))
+          )}
 
-        {isLoadingMore && (
-          <div className="text-center py-4">{t('employees.loadingMore')}</div>
-        )}
+          {isLoadingMore && (
+            <div className="text-center py-4">
+              <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+            </div>
+          )}
 
-        {!isLoading && employees.length === 0 && (
-          <div className="text-center py-8 text-gray-500">{t('employees.noResults')}</div>
-        )}
+          {!isLoading && employees.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              Không tìm thấy nhân viên
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Filter Bottom Sheet */}
+      {isFilterOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
+          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl p-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">Bộ lọc</h2>
+              <button onClick={() => setIsFilterOpen(false)}>
+                <X className="h-6 w-6 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Loại nhân viên
+                </label>
+                <select
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Tất cả loại</option>
+                  <option value="Individual">Cá nhân</option>
+                  <option value="Company">Công ty</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Giới tính
+                </label>
+                <select
+                  value={genderFilter}
+                  onChange={(e) => setGenderFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Tất cả</option>
+                  <option value="Male">Nam</option>
+                  <option value="Female">Nữ</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Trạng thái
+                </label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Tất cả</option>
+                  <option value="active">Đang làm việc</option>
+                  <option value="inactive">Đã nghỉ việc</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={clearFilters}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50"
+                >
+                  Xóa bộ lọc
+                </button>
+                <button
+                  onClick={() => {
+                    handleSearch();
+                    setIsFilterOpen(false);
+                  }}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                >
+                  Áp dụng
+                </button>
+              </div>
+            </div>
+
+            {/* Bottom Safe Area */}
+            <div className="h-6" />
+          </div>
+        </div>
+      )}
+
+      {/* Floating Action Button */}
+      <button
+        onClick={() => navigate('/employees/add')}
+        className="fixed right-4 bottom-4 p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+      >
+        <Plus className="h-6 w-6" />
+      </button>
     </div>
   );
 }

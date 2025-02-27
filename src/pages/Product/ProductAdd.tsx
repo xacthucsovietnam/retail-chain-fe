@@ -1,28 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, 
-  Camera, 
-  Upload, 
-  Package, 
-  Tag, 
-  DollarSign, 
-  Ruler, 
-  FileText,
+  ArrowLeft,
   Save,
+  Upload,
   X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { createProduct, getCategories, getMeasurementUnits } from '../../services/product';
-import { useLanguage } from '../../contexts/LanguageContext';
-import type { MeasurementUnit } from '../../services/product';
+import type { Category, MeasurementUnit } from '../../services/product';
 
-interface Category {
-  id: string;
-  name: string;
-}
-
-interface ProductFormData {
+interface FormData {
   images: File[];
   code: string;
   name: string;
@@ -39,16 +27,15 @@ const MAX_DESCRIPTION_LENGTH = 500;
 
 export default function ProductAdd() {
   const navigate = useNavigate();
-  const { t } = useLanguage();
   const [categories, setCategories] = useState<Category[]>([]);
   const [measurementUnits, setMeasurementUnits] = useState<MeasurementUnit[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingUnits, setIsLoadingUnits] = useState(true);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [formData, setFormData] = useState<ProductFormData>({
+  const [formData, setFormData] = useState<FormData>({
     images: [],
     code: '',
     name: '',
@@ -56,37 +43,25 @@ export default function ProductAdd() {
     purchasePrice: 0,
     sellingPrice: 0,
     measurementUnit: '',
-    riCoefficient: 0,
+    riCoefficient: 1,
     description: ''
-  });
-
-  const [errors, setErrors] = useState({
-    images: '',
-    code: '',
-    name: '',
-    category: '',
-    sellingPrice: '',
-    measurementUnit: ''
   });
 
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        // Load categories
-        const categoryData = await getCategories();
+        const [categoryData, unitData] = await Promise.all([
+          getCategories(),
+          getMeasurementUnits()
+        ]);
         setCategories(categoryData);
-
-        // Load measurement units
-        setIsLoadingUnits(true);
-        const unitData = await getMeasurementUnits();
         setMeasurementUnits(unitData);
         
-        // Set first unit as default if available
         if (unitData.length > 0) {
           setFormData(prev => ({ ...prev, measurementUnit: unitData[0].id }));
         }
       } catch (error) {
-        toast.error('Failed to load form data');
+        toast.error('Không thể tải dữ liệu ban đầu');
       } finally {
         setIsLoadingUnits(false);
       }
@@ -95,54 +70,24 @@ export default function ProductAdd() {
     loadInitialData();
   }, []);
 
-  const validateForm = () => {
-    const newErrors = {
-      images: '',
-      code: '',
-      name: '',
-      category: '',
-      sellingPrice: '',
-      measurementUnit: ''
-    };
-
-    if (formData.code.trim() === '') {
-      newErrors.code = 'Product code is required';
-    }
-
-    if (formData.name.trim().length < 3) {
-      newErrors.name = 'Product name must be at least 3 characters';
-    }
-
-    if (formData.category === '') {
-      newErrors.category = 'Please select a category';
-    }
-
-    if (formData.sellingPrice <= 0) {
-      newErrors.sellingPrice = 'Selling price is required';
-    }
-
-    if (formData.measurementUnit === '') {
-      newErrors.measurementUnit = 'Please select a measurement unit';
-    }
-
-    setErrors(newErrors);
-    return Object.values(newErrors).every(error => error === '');
-  };
-
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     
     if (files.length + formData.images.length > MAX_IMAGES) {
-      toast.error(`Maximum ${MAX_IMAGES} images allowed`);
+      toast.error(`Chỉ được tải tối đa ${MAX_IMAGES} ảnh`);
       return;
     }
 
     const validFiles = files.filter(file => {
-      const isValid = file.type.startsWith('image/');
-      if (!isValid) {
-        toast.error(`${file.name} is not a valid image file`);
+      if (!file.type.startsWith('image/')) {
+        toast.error(`${file.name} không phải là file ảnh hợp lệ`);
+        return false;
       }
-      return isValid;
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`${file.name} vượt quá kích thước cho phép (5MB)`);
+        return false;
+      }
+      return true;
     });
 
     setFormData(prev => ({
@@ -150,40 +95,61 @@ export default function ProductAdd() {
       images: [...prev.images, ...validFiles]
     }));
 
-    // Create preview URLs
     const newPreviewUrls = validFiles.map(file => URL.createObjectURL(file));
     setPreviewUrls(prev => [...prev, ...newPreviewUrls]);
   };
 
   const removeImage = (index: number) => {
+    URL.revokeObjectURL(previewUrls[index]);
+    setPreviewUrls(prev => prev.filter((_, i) => i !== index));
     setFormData(prev => ({
       ...prev,
       images: prev.images.filter((_, i) => i !== index)
     }));
+  };
 
-    // Revoke the URL to prevent memory leaks
-    URL.revokeObjectURL(previewUrls[index]);
-    setPreviewUrls(prev => prev.filter((_, i) => i !== index));
+  const validateForm = (): boolean => {
+    if (!formData.code.trim()) {
+      toast.error('Vui lòng nhập mã sản phẩm');
+      return false;
+    }
+
+    if (formData.name.trim().length < 3) {
+      toast.error('Tên sản phẩm phải có ít nhất 3 ký tự');
+      return false;
+    }
+
+    if (!formData.category) {
+      toast.error('Vui lòng chọn loại sản phẩm');
+      return false;
+    }
+
+    if (formData.sellingPrice <= 0) {
+      toast.error('Giá bán phải lớn hơn 0');
+      return false;
+    }
+
+    if (!formData.measurementUnit) {
+      toast.error('Vui lòng chọn đơn vị tính');
+      return false;
+    }
+
+    return true;
   };
 
   const handleSubmit = async () => {
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
+    setShowConfirmation(true);
+  };
 
-    setIsLoading(true);
+  const handleConfirmSubmit = async () => {
     try {
-      await createProduct({
-        ...formData,
-        purchasePrice: Number(formData.purchasePrice),
-        sellingPrice: Number(formData.sellingPrice),
-        riCoefficient: Number(formData.riCoefficient)
-      });
-
-      toast.success('Product created successfully');
+      setIsLoading(true);
+      await createProduct(formData);
+      toast.success('Thêm sản phẩm thành công');
       navigate('/products');
     } catch (error) {
-      toast.error('Failed to create product');
+      toast.error('Không thể thêm sản phẩm');
     } finally {
       setIsLoading(false);
       setShowConfirmation(false);
@@ -191,37 +157,22 @@ export default function ProductAdd() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <button
-          onClick={() => navigate('/products')}
-          className="text-gray-600 hover:text-gray-800 flex items-center gap-2"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          Back to Products
-        </button>
-
-        <button
-          onClick={() => setShowConfirmation(true)}
-          disabled={isLoading}
-          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-        >
-          <Save className="w-4 h-4 mr-2" />
-          Save Product
-        </button>
+    <div className="min-h-screen bg-gray-50 pb-20">
+      {/* Fixed Header */}
+      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
+        <div className="px-4 py-3">
+          <h1 className="text-lg font-semibold text-gray-900">Thêm mới sản phẩm</h1>
+        </div>
       </div>
 
-      {/* Form */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Add New Product</h2>
-
+      {/* Main Content */}
+      <div className="pt-3 px-4">
         {/* Image Upload */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Product Images ({formData.images.length}/{MAX_IMAGES})
+            Hình ảnh (Tải tối đa 5 ảnh)
           </label>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-3 gap-2">
             {previewUrls.map((url, index) => (
               <div key={index} className="relative aspect-square">
                 <img
@@ -231,9 +182,9 @@ export default function ProductAdd() {
                 />
                 <button
                   onClick={() => removeImage(index)}
-                  className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                  className="absolute -top-1 -right-1 p-0.5 bg-red-500 text-white rounded-full hover:bg-red-600"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-3 h-3" />
                 </button>
               </div>
             ))}
@@ -241,10 +192,10 @@ export default function ProductAdd() {
               <div className="aspect-square">
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full h-full flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="w-full h-full flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400"
                 >
-                  <Upload className="w-8 h-8 text-gray-400" />
-                  <span className="mt-2 text-sm text-gray-500">Upload Image</span>
+                  <Upload className="w-6 h-6 text-gray-400" />
+                  <span className="mt-1 text-xs text-gray-500">Tải ảnh</span>
                 </button>
                 <input
                   ref={fileInputRef}
@@ -257,182 +208,122 @@ export default function ProductAdd() {
               </div>
             )}
           </div>
-          {errors.images && (
-            <p className="mt-1 text-sm text-red-600">{errors.images}</p>
-          )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Product Code */}
+        {/* Form Fields */}
+        <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Product Code *
+              Mã *
             </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={formData.code}
-                onChange={(e) => setFormData(prev => ({ ...prev, code: e.target.value.trim() }))}
-                onBlur={() => validateForm()}
-                placeholder="Enter product code..."
-                className={`block w-full pl-10 pr-3 py-2 border ${
-                  errors.code ? 'border-red-300' : 'border-gray-300'
-                } rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm`}
-              />
-              <Package className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            </div>
-            {errors.code && (
-              <p className="mt-1 text-sm text-red-600">{errors.code}</p>
-            )}
+            <input
+              type="text"
+              value={formData.code}
+              onChange={(e) => setFormData(prev => ({ ...prev, code: e.target.value }))}
+              placeholder="Nhập mã sản phẩm"
+              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+            />
           </div>
 
-          {/* Product Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Product Name *
+              Tên sản phẩm *
             </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                onBlur={() => validateForm()}
-                placeholder="Enter product name..."
-                className={`block w-full pl-10 pr-3 py-2 border ${
-                  errors.name ? 'border-red-300' : 'border-gray-300'
-                } rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm`}
-              />
-              <Tag className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            </div>
-            {errors.name && (
-              <p className="mt-1 text-sm text-red-600">{errors.name}</p>
-            )}
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              placeholder="Nhập tên sản phẩm"
+              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+            />
           </div>
 
-          {/* Category */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Category *
+              Loại sản phẩm *
             </label>
-            <div className="relative">
-              <select
-                value={formData.category}
-                onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-                onBlur={() => validateForm()}
-                className={`block w-full pl-10 pr-3 py-2 border ${
-                  errors.category ? 'border-red-300' : 'border-gray-300'
-                } rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none`}
-              >
-                <option value="">Select category...</option>
-                {categories.map(category => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-              <Tag className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            </div>
-            {errors.category && (
-              <p className="mt-1 text-sm text-red-600">{errors.category}</p>
-            )}
+            <select
+              value={formData.category}
+              onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">Chọn loại sản phẩm</option>
+              {categories.map(category => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* Purchase Price */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Purchase Price
+              Giá mua
             </label>
-            <div className="relative">
-              <input
-                type="number"
-                value={formData.purchasePrice}
-                onChange={(e) => setFormData(prev => ({ ...prev, purchasePrice: Number(e.target.value) }))}
-                min="0"
-                step="0.01"
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm text-right"
-              />
-              <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            </div>
+            <input
+              type="number"
+              value={formData.purchasePrice}
+              onChange={(e) => setFormData(prev => ({ ...prev, purchasePrice: Number(e.target.value) }))}
+              min="0"
+              step="1000"
+              placeholder="Nhập giá mua"
+              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+            />
           </div>
 
-          {/* Selling Price */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Selling Price *
+              Giá bán *
             </label>
-            <div className="relative">
-              <input
-                type="number"
-                value={formData.sellingPrice}
-                onChange={(e) => setFormData(prev => ({ ...prev, sellingPrice: Number(e.target.value) }))}
-                onBlur={() => validateForm()}
-                min="0"
-                step="0.01"
-                className={`block w-full pl-10 pr-3 py-2 border ${
-                  errors.sellingPrice ? 'border-red-300' : 'border-gray-300'
-                } rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm text-right`}
-              />
-              <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            </div>
-            {errors.sellingPrice && (
-              <p className="mt-1 text-sm text-red-600">{errors.sellingPrice}</p>
-            )}
+            <input
+              type="number"
+              value={formData.sellingPrice}
+              onChange={(e) => setFormData(prev => ({ ...prev, sellingPrice: Number(e.target.value) }))}
+              min="0"
+              step="1000"
+              placeholder="Nhập giá bán"
+              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+            />
           </div>
 
-          {/* Measurement Unit */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Measurement Unit *
+              Đơn vị *
             </label>
-            <div className="relative">
-              <select
-                value={formData.measurementUnit}
-                onChange={(e) => setFormData(prev => ({ ...prev, measurementUnit: e.target.value }))}
-                onBlur={() => validateForm()}
-                disabled={isLoadingUnits}
-                className={`block w-full pl-10 pr-3 py-2 border ${
-                  errors.measurementUnit ? 'border-red-300' : 'border-gray-300'
-                } rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none disabled:bg-gray-50`}
-              >
-                <option value="">Select unit...</option>
-                {measurementUnits.map(unit => (
-                  <option key={unit.id} value={unit.id}>
-                    {unit.name}
-                  </option>
-                ))}
-              </select>
-              <Ruler className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            </div>
-            {errors.measurementUnit && (
-              <p className="mt-1 text-sm text-red-600">{errors.measurementUnit}</p>
-            )}
+            <select
+              value={formData.measurementUnit}
+              onChange={(e) => setFormData(prev => ({ ...prev, measurementUnit: e.target.value }))}
+              disabled={isLoadingUnits}
+              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+            >
+              <option value="">Chọn đơn vị</option>
+              {measurementUnits.map(unit => (
+                <option key={unit.id} value={unit.id}>
+                  {unit.name}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* Ri Coefficient */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Ri Coefficient
+              Hệ số ri
             </label>
-            <div className="relative">
-              <input
-                type="number"
-                value={formData.riCoefficient}
-                onChange={(e) => setFormData(prev => ({ ...prev, riCoefficient: Number(e.target.value) }))}
-                min="0"
-                step="0.01"
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm text-right"
-              />
-              <Ruler className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            </div>
+            <input
+              type="number"
+              value={formData.riCoefficient}
+              onChange={(e) => setFormData(prev => ({ ...prev, riCoefficient: Number(e.target.value) }))}
+              min="1"
+              step="1"
+              placeholder="Nhập hệ số ri"
+              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+            />
           </div>
-        </div>
 
-        {/* Description */}
-        <div className="mt-6">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Description
-          </label>
-          <div className="relative">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Mô tả
+            </label>
             <textarea
               value={formData.description}
               onChange={(e) => {
@@ -440,41 +331,58 @@ export default function ProductAdd() {
                   setFormData(prev => ({ ...prev, description: e.target.value }));
                 }
               }}
-              placeholder="Enter description"
+              placeholder="Nhập mô tả sản phẩm"
               rows={4}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm resize-y"
+              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
             />
-            <FileText className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+            <p className="mt-1 text-xs text-gray-500 text-right">
+              {formData.description.length}/{MAX_DESCRIPTION_LENGTH}
+            </p>
           </div>
-          <p className="mt-1 text-sm text-gray-500">
-            {formData.description.length}/{MAX_DESCRIPTION_LENGTH} characters
-          </p>
         </div>
+      </div>
+
+      {/* Floating Action Buttons */}
+      <div className="fixed bottom-4 right-4 flex flex-col gap-2">
+        <button
+          onClick={() => navigate('/products')}
+          className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        >
+          <ArrowLeft className="h-6 w-6" />
+        </button>
+        
+        <button
+          onClick={handleSubmit}
+          disabled={isLoading}
+          className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+        >
+          <Save className="h-6 w-6" />
+        </button>
       </div>
 
       {/* Confirmation Modal */}
       {showConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
-              Confirm Product Creation
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-lg p-4 w-full max-w-sm">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Xác nhận thêm sản phẩm
             </h3>
             <p className="text-sm text-gray-500 mb-4">
-              Are you sure you want to create this product? This action cannot be undone.
+              Bạn có chắc chắn muốn thêm sản phẩm này không?
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowConfirmation(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+                className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
               >
-                Cancel
+                Hủy
               </button>
               <button
-                onClick={handleSubmit}
+                onClick={handleConfirmSubmit}
                 disabled={isLoading}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md disabled:opacity-50"
+                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md disabled:opacity-50"
               >
-                {isLoading ? 'Creating...' : 'Create Product'}
+                {isLoading ? 'Đang xử lý...' : 'Xác nhận'}
               </button>
             </div>
           </div>

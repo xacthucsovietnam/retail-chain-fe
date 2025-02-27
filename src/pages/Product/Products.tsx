@@ -1,21 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Plus } from 'lucide-react';
+import { Search, Filter, Plus, X, ChevronDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getProducts } from '../../services/product';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { formatCurrency } from '../../utils/currency';
 
 interface Product {
   id: string;
-  imageUrl: string;
-  category: string;
   name: string;
   code: string;
+  category: string;
   price: number;
+  imageUrl: string;
 }
 
-function Products() {
+export default function Products() {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -24,7 +23,9 @@ function Products() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [showFilter, setShowFilter] = useState(true);
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const lastScrollY = useRef(0);
   const { t } = useLanguage();
 
@@ -43,10 +44,13 @@ function Products() {
   useEffect(() => {
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
-      if (currentScrollY < lastScrollY.current - 100) {
-        setShowFilter(true);
-      } else if (currentScrollY > lastScrollY.current + 10) {
-        setShowFilter(false);
+      
+      // Show/hide header based on scroll direction
+      if (currentScrollY < lastScrollY.current - 20) {
+        setIsHeaderVisible(true);
+      } else if (currentScrollY > lastScrollY.current + 20) {
+        setIsHeaderVisible(false);
+        setIsSearchExpanded(false);
       }
       lastScrollY.current = currentScrollY;
     };
@@ -58,7 +62,13 @@ function Products() {
   const fetchProducts = async (pageNumber: number, isNewSearch: boolean = false) => {
     try {
       const response = await getProducts(searchTerm, selectedCategory, pageNumber);
-      setProducts(prev => isNewSearch ? response.items : [...prev, ...response.items]);
+      
+      if (isNewSearch) {
+        setProducts(response.items);
+      } else {
+        setProducts(prev => [...prev, ...response.items]);
+      }
+      
       setHasMore(response.hasMore);
     } catch (error) {
       toast.error(t('message.productsFailed'));
@@ -89,170 +99,211 @@ function Products() {
     setPage(1);
     setHasMore(true);
     fetchProducts(1, true);
+    setIsSearchExpanded(false);
   };
 
-  const handleProductClick = (productId: string) => {
-    navigate(`/products/${productId}`);
+  const clearFilters = () => {
+    setSearchTerm('');
+    setSelectedCategory('');
+    setIsFilterOpen(false);
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
+    }).format(amount);
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-      {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-white shadow-md transition-transform duration-300">
+    <div className="min-h-screen bg-gray-50">
+      {/* Fixed Header */}
+      <div
+        className={`fixed top-0 left-0 right-0 z-50 bg-white shadow-md transition-transform duration-300 ${
+          isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
+        }`}
+      >
         <div className="px-4 py-3">
+          {/* Title and Add Button */}
           <div className="flex justify-between items-center mb-3">
-            <h2 className="text-xl font-bold text-gray-800">{t('products.title')}</h2>
+            <h1 className="text-lg font-semibold text-gray-900">Danh sách sản phẩm</h1>
             <button
               onClick={() => navigate('/products/add')}
-              className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="p-2 text-white bg-blue-600 rounded-full hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
-              <Plus className="h-4 w-4 mr-1" />
-              {t('products.newProduct')}
+              <Plus className="h-5 w-5" />
             </button>
           </div>
-          
-          <div className="space-y-3">
-            <div className="relative">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder={t('products.searchPlaceholder')}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-              />
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            </div>
-            
-            <div className={`overflow-hidden transition-all duration-300 ${showFilter ? 'max-h-20 opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <div className="relative">
-                    <select
-                      value={selectedCategory}
-                      onChange={(e) => setSelectedCategory(e.target.value)}
-                      className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
-                    >
-                      <option value="">{t('products.allCategories')}</option>
-                      <option value="clothing">{t('products.categoryClothing')}</option>
-                      <option value="toys">{t('products.categoryToys')}</option>
-                      <option value="accessories">{t('products.categoryAccessories')}</option>
-                    </select>
-                    <Filter className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                  </div>
+
+          {/* Search and Filter Bar */}
+          <div className="flex items-center gap-2">
+            <div className={`relative flex-1 transition-all duration-300 ${isSearchExpanded ? 'flex-grow' : ''}`}>
+              {isSearchExpanded ? (
+                <div className="flex items-center">
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Tìm kiếm sản phẩm..."
+                    className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                    autoFocus
+                  />
+                  <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                  <button
+                    onClick={() => {
+                      setSearchTerm('');
+                      setIsSearchExpanded(false);
+                    }}
+                    className="absolute right-3 top-2.5"
+                  >
+                    <X className="h-5 w-5 text-gray-400" />
+                  </button>
                 </div>
+              ) : (
                 <button
-                  onClick={handleSearch}
-                  disabled={isLoading}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+                  onClick={() => setIsSearchExpanded(true)}
+                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
                 >
-                  {isLoading ? t('products.searching') : t('products.search')}
+                  <Search className="h-5 w-5" />
                 </button>
+              )}
+            </div>
+
+            <button
+              onClick={() => setIsFilterOpen(true)}
+              className={`p-2 text-gray-600 hover:bg-gray-100 rounded-lg ${
+                selectedCategory ? 'bg-blue-50 text-blue-600' : ''
+              }`}
+            >
+              <Filter className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content - Reduced top padding */}
+      <div className="pt-16 px-4 pb-20">
+        <div className="grid grid-cols-2 gap-3">
+          {isLoading ? (
+            // Loading Skeletons
+            Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="bg-white rounded-lg shadow animate-pulse">
+                <div className="h-32 bg-gray-200 rounded-t-lg" />
+                <div className="p-3 space-y-2">
+                  <div className="h-4 bg-gray-200 rounded w-3/4" />
+                  <div className="h-4 bg-gray-200 rounded w-1/2" />
+                  <div className="h-4 bg-gray-200 rounded w-2/3" />
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Desktop Header */}
-      <div className="hidden md:block bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold text-gray-800">{t('products.title')}</h2>
-          <button
-            onClick={() => navigate('/products/add')}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Product
-          </button>
-        </div>
-        
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <div className="relative">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder={t('products.searchPlaceholder')}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-              />
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            </div>
-          </div>
-
-          <div className="w-48">
-            <div className="relative">
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
-              >
-                <option value="">{t('products.allCategories')}</option>
-                <option value="clothing">{t('products.categoryClothing')}</option>
-                <option value="toys">{t('products.categoryToys')}</option>
-                <option value="accessories">{t('products.categoryAccessories')}</option>
-              </select>
-              <Filter className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            </div>
-          </div>
-
-          <button
-            onClick={handleSearch}
-            disabled={isLoading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-          >
-            {isLoading ? t('products.searching') : t('products.search')}
-          </button>
-        </div>
-      </div>
-
-      {/* Products Grid */}
-      <div className="md:bg-white md:rounded-lg md:shadow-md md:p-6">
-        {isLoading ? (
-          <div className="text-center py-8">{t('products.loading')}</div>
-        ) : (
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6 mt-20 md:mt-0">
-            {products.map((product, index) => (
+            ))
+          ) : (
+            // Product Grid
+            products.map((product, index) => (
               <div
-                key={`${product.code}-${index}`}
+                key={product.id}
                 ref={index === products.length - 1 ? lastProductRef : null}
-                className="bg-white rounded-lg shadow overflow-hidden border border-gray-200 cursor-pointer hover:shadow-lg transition-shadow duration-200"
-                onClick={() => handleProductClick(product.id)}
+                onClick={() => navigate(`/products/${product.id}`)}
+                className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden active:scale-95 transition-transform"
               >
-                <div className="aspect-w-16 aspect-h-9 bg-gray-200">
+                <div className="aspect-square">
                   <img
                     src={product.imageUrl || 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc'}
                     alt={product.name}
-                    className="object-cover w-full h-32 sm:h-48"
+                    className="w-full h-full object-cover"
+                    loading="lazy"
                     onError={(e) => {
                       e.currentTarget.src = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc';
-                      e.currentTarget.alt = 'Fallback product image';
                     }}
                   />
                 </div>
-                <div className="p-3 sm:p-4">
-                  <span className="inline-block px-2 py-1 text-xs font-semibold text-blue-600 bg-blue-100 rounded-full mb-1 sm:mb-2">
+                <div className="p-2">
+                  <span className="inline-block px-1.5 py-0.5 text-[10px] font-medium text-blue-600 bg-blue-50 rounded-full mb-1">
                     {product.category}
                   </span>
-                  <h3 className="text-sm sm:text-lg font-semibold text-gray-800 mb-1 line-clamp-2">{product.name}</h3>
-                  <p className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">{product.code}</p>
-                  <p className="text-sm sm:text-lg font-bold text-blue-600">{formatCurrency(product.price, 'VND')}</p>
+                  <h3 className="text-sm font-medium text-gray-900 line-clamp-2">{product.name}</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">{product.code}</p>
+                  <p className="text-sm font-semibold text-blue-600 mt-1">
+                    {formatCurrency(product.price)}
+                  </p>
                 </div>
               </div>
-            ))}
+            ))
+          )}
+        </div>
+
+        {isLoadingMore && (
+          <div className="text-center py-4">
+            <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
           </div>
         )}
 
-        {isLoadingMore && (
-          <div className="text-center py-4">{t('products.loadingMore')}</div>
-        )}
-
         {!isLoading && products.length === 0 && (
-          <div className="text-center py-8 text-gray-500">{t('products.noResults')}</div>
+          <div className="text-center py-8">
+            <p className="text-gray-500">Không tìm thấy sản phẩm</p>
+          </div>
         )}
       </div>
+
+      {/* Filter Bottom Sheet */}
+      {isFilterOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
+          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl p-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">Bộ lọc</h2>
+              <button onClick={() => setIsFilterOpen(false)}>
+                <X className="h-6 w-6 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Danh mục
+                </label>
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Tất cả danh mục</option>
+                  <option value="clothing">Quần áo</option>
+                  <option value="toys">Đồ chơi</option>
+                  <option value="accessories">Phụ kiện</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={clearFilters}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50"
+                >
+                  Xóa bộ lọc
+                </button>
+                <button
+                  onClick={() => {
+                    handleSearch();
+                    setIsFilterOpen(false);
+                  }}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                >
+                  Áp dụng
+                </button>
+              </div>
+            </div>
+
+            {/* Bottom Safe Area */}
+            <div className="h-6" />
+          </div>
+        </div>
+      )}
+
+      {/* Floating Action Button - Always visible */}
+      <button
+        onClick={() => navigate('/products/add')}
+        className="fixed right-4 bottom-4 p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+      >
+        <Plus className="h-6 w-6" />
+      </button>
     </div>
   );
 }
-
-export default Products;

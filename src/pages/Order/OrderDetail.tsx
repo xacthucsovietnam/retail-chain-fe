@@ -2,21 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
-  Package,
-  User,
-  Calendar,
-  FileText,
-  DollarSign,
+  Pencil,
+  Trash2,
+  Printer,
   Loader2,
   AlertCircle,
-  Printer,
-  CreditCard,
-  Truck,
-  Tag,
-  Building,
-  Phone,
-  Pencil,
-  Trash2
+  Package
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getOrderDetail } from '../../services/order';
@@ -94,17 +85,14 @@ export default function OrderDetail() {
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            {error || 'Order Not Found'}
+            {error || 'Không tìm thấy đơn hàng'}
           </h2>
-          <p className="text-gray-600 mb-4">
-            The order you're looking for could not be found or an error occurred.
-          </p>
           <button
             onClick={() => navigate('/orders')}
             className="text-blue-600 hover:text-blue-800 flex items-center gap-2 mx-auto"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to Orders
+            Quay lại danh sách
           </button>
         </div>
       </div>
@@ -112,279 +100,158 @@ export default function OrderDetail() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Header */}
-      <div className="mb-6 flex justify-between items-center">
-        <button
-          onClick={() => navigate('/orders')}
-          className="text-gray-600 hover:text-gray-800 flex items-center gap-2"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          Back to Orders
-        </button>
-        <div className="flex gap-2">
-          <button
-            onClick={handlePrint}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <Printer className="w-4 h-4 mr-2" />
-            Print Order
-          </button>
-          <button
-            onClick={handleEdit}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-          >
-            <Pencil className="w-4 h-4 mr-2" />
-            Edit
-          </button>
-          <button
-            onClick={handleDelete}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Delete
-          </button>
+    <div className="min-h-screen bg-gray-50 pb-20">
+      {/* Fixed Header */}
+      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
+        <div className="px-4 py-3">
+          <h1 className="text-lg font-semibold text-gray-900">Chi tiết đơn hàng</h1>
         </div>
       </div>
 
-      {/* Order Information */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="flex justify-between items-start mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800">{order.title}</h2>
-            <p className="text-sm text-gray-500">#{order.number}</p>
-          </div>
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-            order.orderState.toLowerCase().includes('delivered') ? 'bg-green-100 text-green-800' :
-            order.orderState.toLowerCase().includes('processing') ? 'bg-yellow-100 text-yellow-800' :
-            order.orderState.toLowerCase().includes('cancelled') ? 'bg-red-100 text-red-800' :
-            'bg-blue-100 text-blue-800'
-          }`}>
-            {order.orderState}
-          </span>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-4">
+      {/* Main Content */}
+      <div className="pt-4 px-4">
+        {/* Order Information */}
+        <div className="bg-white rounded-lg shadow-sm p-4 space-y-4">
+          {/* Order Number and Status */}
+          <div className="flex justify-between items-center">
             <div>
-              <div className="flex items-center text-gray-600 mb-1">
-                <Calendar className="w-4 h-4 mr-2" />
-                <span className="text-sm">Order Date</span>
-              </div>
-              <p className="text-lg text-gray-900">{formatDate(order.date)}</p>
+              <p className="text-sm text-gray-500">Số đơn hàng</p>
+              <p className="text-base font-medium text-gray-900">#{order.number}</p>
             </div>
-
-            <div>
-              <div className="flex items-center text-gray-600 mb-1">
-                <User className="w-4 h-4 mr-2" />
-                <span className="text-sm">Customer</span>
-              </div>
-              <p className="text-lg text-gray-900">{order.customer}</p>
-            </div>
-
-            {order.phone && (
-              <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <Phone className="w-4 h-4 mr-2" />
-                  <span className="text-sm">Phone</span>
-                </div>
-                <p className="text-lg text-gray-900">{order.phone}</p>
-              </div>
-            )}
-
-            <div>
-              <div className="flex items-center text-gray-600 mb-1">
-                <Building className="w-4 h-4 mr-2" />
-                <span className="text-sm">Company</span>
-              </div>
-              <p className="text-lg text-gray-900">{order.company}</p>
-            </div>
-
-            {order.deliveryAddress && (
-              <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <Truck className="w-4 h-4 mr-2" />
-                  <span className="text-sm">Delivery Address</span>
-                </div>
-                <p className="text-lg text-gray-900">{order.deliveryAddress}</p>
-              </div>
-            )}
-
-            {order.comment && (
-              <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <FileText className="w-4 h-4 mr-2" />
-                  <span className="text-sm">Notes</span>
-                </div>
-                <p className="text-lg text-gray-900">{order.comment}</p>
-              </div>
-            )}
+            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+              order.orderState.toLowerCase().includes('delivered') ? 'bg-green-100 text-green-800' :
+              order.orderState.toLowerCase().includes('processing') ? 'bg-yellow-100 text-yellow-800' :
+              order.orderState.toLowerCase().includes('cancelled') ? 'bg-red-100 text-red-800' :
+              'bg-blue-100 text-blue-800'
+            }`}>
+              {order.orderState}
+            </span>
           </div>
 
-          <div className="space-y-4">
+          {/* Customer and Employee */}
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <div className="flex items-center text-gray-600 mb-1">
-                <Tag className="w-4 h-4 mr-2" />
-                <span className="text-sm">Order Type</span>
-              </div>
-              <p className="text-lg text-gray-900">{order.operationType}</p>
-            </div>
-
-            <div>
-              <div className="flex items-center text-gray-600 mb-1">
-                <Tag className="w-4 h-4 mr-2" />
-                <span className="text-sm">Price Kind</span>
-              </div>
-              <p className="text-lg text-gray-900">{order.priceKind}</p>
+              <p className="text-sm text-gray-500">Khách hàng</p>
+              <p className="text-base text-gray-900">{order.customer}</p>
             </div>
 
             {order.employeeResponsible && (
               <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <User className="w-4 h-4 mr-2" />
-                  <span className="text-sm">Responsible Employee</span>
-                </div>
-                <p className="text-lg text-gray-900">{order.employeeResponsible}</p>
+                <p className="text-sm text-gray-500">Người bán</p>
+                <p className="text-base text-gray-900">{order.employeeResponsible}</p>
               </div>
             )}
+          </div>
 
+          {/* Amounts */}
+          <div className="grid grid-cols-3 gap-2">
             <div>
-              <div className="flex items-center text-gray-600 mb-1">
-                <DollarSign className="w-4 h-4 mr-2" />
-                <span className="text-sm">Total Amount</span>
-              </div>
-              <p className="text-xl font-bold text-blue-600">
+              <p className="text-sm text-gray-500">Tổng tiền</p>
+              <p className="text-sm font-semibold text-blue-600">
                 {formatCurrency(order.documentAmount, order.documentCurrency)}
               </p>
             </div>
 
             {order.cash !== null && (
               <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  <span className="text-sm">Cash Payment</span>
-                </div>
-                <p className="text-lg font-medium text-green-600">
+                <p className="text-sm text-gray-500">Thu tiền mặt</p>
+                <p className="text-sm font-medium text-green-600">
                   {formatCurrency(order.cash, order.documentCurrency)}
-                </p>
-              </div>
-            )}
-
-            {order.bankTransfer !== null && (
-              <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  <span className="text-sm">Bank Transfer</span>
-                </div>
-                <p className="text-lg font-medium text-green-600">
-                  {formatCurrency(order.bankTransfer, order.documentCurrency)}
                 </p>
               </div>
             )}
 
             {order.postPayment !== null && (
               <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  <span className="text-sm">Post Payment</span>
-                </div>
-                <p className="text-lg font-medium text-red-600">
+                <p className="text-sm text-gray-500">Công nợ</p>
+                <p className="text-sm font-medium text-red-600">
                   {formatCurrency(order.postPayment, order.documentCurrency)}
                 </p>
               </div>
             )}
           </div>
+
+          {order.deliveryAddress && (
+            <div>
+              <p className="text-sm text-gray-500">Địa chỉ giao hàng</p>
+              <p className="text-base text-gray-900">{order.deliveryAddress}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Products List */}
+        <div className="mt-4">
+          <h2 className="text-base font-medium text-gray-900 mb-3">Danh sách sản phẩm</h2>
+          <div className="space-y-3">
+            {order.products.map((product) => (
+              <div key={product.lineNumber} className="bg-white rounded-lg shadow-sm p-3">
+                <div className="flex gap-3">
+                  {product.picture ? (
+                    <img
+                      src={product.picture}
+                      alt={product.productName}
+                      className="h-16 w-16 rounded-lg object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc';
+                      }}
+                    />
+                  ) : (
+                    <div className="h-16 w-16 bg-gray-100 rounded-lg flex items-center justify-center">
+                      <Package className="h-8 w-8 text-gray-400" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-medium text-gray-900 truncate">
+                        {product.productName}
+                      </h3>
+                      <p className="text-xs text-gray-500 ml-2">{product.sku}</p>
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <div className="text-sm text-gray-700">
+                        {product.quantity} {product.unit} x {formatCurrency(product.price, order.documentCurrency)}
+                      </div>
+                      <div className="text-sm font-medium text-blue-600">
+                        {formatCurrency(product.total, order.documentCurrency)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Products List */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Order Products</h2>
+      {/* Floating Action Buttons */}
+      <div className="fixed bottom-4 right-4 flex flex-col gap-2">
+        <button
+          onClick={() => navigate('/orders')}
+          className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        >
+          <ArrowLeft className="h-6 w-6" />
+        </button>
         
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead>
-              <tr>
-                <th className="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  No.
-                </th>
-                <th className="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Product
-                </th>
-                <th className="px-6 py-3 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Unit
-                </th>
-                <th className="px-6 py-3 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Unit Price
-                </th>
-                <th className="px-6 py-3 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Quantity
-                </th>
-                <th className="px-6 py-3 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Total
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {order.products.map((product) => (
-                <tr key={product.lineNumber} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {product.lineNumber}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center">
-                      {product.picture ? (
-                        <img
-                          src={product.picture}
-                          alt={product.productName}
-                          className="h-10 w-10 rounded-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc';
-                            e.currentTarget.alt = 'Fallback product image';
-                          }}
-                        />
-                      ) : (
-                        <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                          <Package className="h-6 w-6 text-gray-400" />
-                        </div>
-                      )}
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">
-                          {product.productName}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          SKU: {product.sku}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                    {product.unit}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                    {formatCurrency(product.price, order.documentCurrency)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                    {product.quantity}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-blue-600">
-                    {formatCurrency(product.total, order.documentCurrency)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="bg-gray-50">
-                <td colSpan={5} className="px-6 py-4 text-right text-sm font-medium text-gray-900">
-                  Total Amount
-                </td>
-                <td className="px-6 py-4 text-right text-sm font-bold text-blue-600">
-                  {formatCurrency(order.documentAmount, order.documentCurrency)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+        <button
+          onClick={handleEdit}
+          className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        >
+          <Pencil className="h-6 w-6" />
+        </button>
+
+        <button
+          onClick={handleDelete}
+          className="p-3 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+        >
+          <Trash2 className="h-6 w-6" />
+        </button>
+
+        <button
+          onClick={handlePrint}
+          className="p-3 bg-green-600 text-white rounded-full shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+        >
+          <Printer className="h-6 w-6" />
+        </button>
       </div>
     </div>
   );

@@ -6,6 +6,9 @@ export interface ReportData {
     receiptCash: number;
     receiptBank: number;
     postPayment: number;
+  	orderToPrepay: number;
+		orderPreparing: number;
+		orderTransporting: number;
 }
 
 export const getReportData = async (startDate: string, endDate: string) => {

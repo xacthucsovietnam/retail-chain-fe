@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Phone, Mail, MapPin, FileText, User, Building, Users, Plus } from 'lucide-react';
+import { Search, Filter, Phone, Mail, MapPin, FileText, User, Building, Users, Plus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getPartners } from '../../services/partner';
 import { useLanguage } from '../../contexts/LanguageContext';
-import LanguageSwitcher from '../../components/LanguageSwitcher';
 
 interface Partner {
-  id: string; // Add id field
+  id: string;
   code: string;
   name: string;
   type: string;
@@ -28,7 +27,9 @@ export default function Partners() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [showFilter, setShowFilter] = useState(true);
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const lastScrollY = useRef(0);
   const { t } = useLanguage();
 
@@ -54,10 +55,13 @@ export default function Partners() {
   useEffect(() => {
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
-      if (currentScrollY < lastScrollY.current - 100) {
-        setShowFilter(true);
+      
+      // Show/hide header based on scroll direction
+      if (currentScrollY < lastScrollY.current - 10) {
+        setIsHeaderVisible(true);
       } else if (currentScrollY > lastScrollY.current + 10) {
-        setShowFilter(false);
+        setIsHeaderVisible(false);
+        setIsSearchExpanded(false);
       }
       lastScrollY.current = currentScrollY;
     };
@@ -167,209 +171,111 @@ export default function Partners() {
     setPage(1);
     setHasMore(true);
     fetchPartners(1, true);
+    setIsSearchExpanded(false);
+    setIsFilterOpen(false);
+  };
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setTypeFilter('');
+    setGenderFilter('');
+    setStatusFilter('');
+    setRoleFilter('');
+    setIsFilterOpen(false);
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-      {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-white shadow-md transition-transform duration-300">
-        <div className="px-4 py-3">
-          <div className="flex justify-between items-center mb-3">
-            <h2 className="text-xl font-bold text-gray-800">{t('partners.title')}</h2>
-            <button
-              onClick={() => navigate('/partners/add')}
-              className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Thêm mới
-            </button>
-          </div>
-          
-          <div className="space-y-3">
-            <div className="relative">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder={t('partners.searchPlaceholder')}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-              />
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            </div>
+    <div className="min-h-screen bg-gray-50">
+      {/* Fixed Header */}
+      <div
+        className={`fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ${
+          isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
+        }`}
+      >
+        {/* Title Bar */}
+        <div className="bg-white px-4 py-3 shadow-sm">
+          <h1 className="text-lg font-semibold text-gray-900">{t('partners.title')}</h1>
+        </div>
 
-            <div className={`space-y-3 overflow-hidden transition-all duration-300 ${showFilter ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="relative">
-                  <select
-                    value={typeFilter}
-                    onChange={(e) => setTypeFilter(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
+        {/* Search Bar - Now separate from header */}
+        <div className={`bg-white px-4 py-2 shadow-sm transition-transform duration-300 ${
+          isHeaderVisible ? 'translate-y-0' : 'translate-y-full'
+        }`}>
+          <div className="flex items-center gap-2">
+            <div className={`relative flex-1 transition-all duration-300 ${isSearchExpanded ? 'flex-grow' : ''}`}>
+              {isSearchExpanded ? (
+                <div className="flex items-center">
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder={t('partners.searchPlaceholder')}
+                    className="w-full pl-9 pr-9 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                    autoFocus
+                  />
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                  <button
+                    onClick={() => {
+                      setSearchTerm('');
+                      setIsSearchExpanded(false);
+                    }}
+                    className="absolute right-3 top-2.5"
                   >
-                    <option value="">{t('partners.allTypes')}</option>
-                    <option value="Individual">Individual</option>
-                    <option value="Company">Company</option>
-                  </select>
-                  <Building className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                    <X className="h-4 w-4 text-gray-400" />
+                  </button>
                 </div>
-
-                <div className="relative">
-                  <select
-                    value={genderFilter}
-                    onChange={(e) => setGenderFilter(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
-                  >
-                    <option value="">{t('partners.allGenders')}</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                  </select>
-                  <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="relative">
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
-                  >
-                    <option value="">{t('partners.allTypes')}</option>
-                    <option value="active">{t('partners.active')}</option>
-                    <option value="inactive">{t('partners.inactive')}</option>
-                  </select>
-                  <Filter className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                </div>
-
-                <div className="relative">
-                  <select
-                    value={roleFilter}
-                    onChange={(e) => setRoleFilter(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
-                  >
-                    <option value="">{t('partners.allTypes')}</option>
-                    <option value="partner">{t('partners.partner')}</option>
-                    <option value="supplier">{t('partners.supplier')}</option>
-                  </select>
-                  <Users className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                </div>
-              </div>
+              ) : (
+                <button
+                  onClick={() => setIsSearchExpanded(true)}
+                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                >
+                  <Search className="h-5 w-5" />
+                </button>
+              )}
             </div>
 
             <button
-              onClick={handleSearch}
-              disabled={isLoading}
-              className="w-full py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+              onClick={() => setIsFilterOpen(true)}
+              className={`p-2 text-gray-600 hover:bg-gray-100 rounded-lg ${
+                typeFilter || genderFilter || statusFilter || roleFilter
+                  ? 'bg-blue-50 text-blue-600'
+                  : ''
+              }`}
             >
-              {isLoading ? t('partners.searching') : t('partners.search')}
+              <Filter className="h-5 w-5" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Desktop Header */}
-      <div className="hidden md:block bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold text-gray-800">{t('partners.title')}</h2>
-          <button
-            onClick={() => navigate('/partners/add')}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Thêm mới
-          </button>
-        </div>
-        
-        <div className="grid grid-cols-5 gap-4 mb-4">
-          <div className="relative col-span-2">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder={t('partners.searchPlaceholder')}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-            />
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-          </div>
-
-          <div className="relative">
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
-            >
-              <option value="">{t('partners.allTypes')}</option>
-              <option value="Individual">Individual</option>
-              <option value="Company">Company</option>
-            </select>
-            <Building className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-          </div>
-
-          <div className="relative">
-            <select
-              value={genderFilter}
-              onChange={(e) => setGenderFilter(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
-            >
-              <option value="">{t('partners.allGenders')}</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-            </select>
-            <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-          </div>
-
-          <div className="relative">
-            <select
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
-            >
-              <option value="">{t('partners.allTypes')}</option>
-              <option value="partner">{t('partners.partner')}</option>
-              <option value="supplier">{t('partners.supplier')}</option>
-            </select>
-            <Users className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-          </div>
-        </div>
-
-        <button
-          onClick={handleSearch}
-          disabled={isLoading}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-        >
-          {isLoading ? t('partners.searching') : t('partners.search')}
-        </button>
-      </div>
-
-      {/* Partners List */}
-      <div className="md:bg-white md:rounded-lg md:shadow-md md:p-6">
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-20 md:mt-0">
-            {[...Array(6)].map((_, index) => (
-              <div key={index} className="bg-white rounded-lg shadow-md p-4 animate-pulse">
-                <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
-                <div className="space-y-3">
-                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                  <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                  <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+      {/* Main Content */}
+      <div className="pt-12 px-4 pb-20">
+        <div className="grid grid-cols-1 gap-4">
+          {isLoading ? (
+            // Loading Skeletons
+            Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="bg-white rounded-lg shadow animate-pulse p-4">
+                <div className="h-4 bg-gray-200 rounded w-3/4 mb-3" />
+                <div className="space-y-2">
+                  <div className="h-4 bg-gray-200 rounded w-1/2" />
+                  <div className="h-4 bg-gray-200 rounded w-2/3" />
                 </div>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-20 md:mt-0">
-            {partners.map((partner, index) => (
+            ))
+          ) : (
+            partners.map((partner, index) => (
               <div
                 key={partner.code}
                 ref={index === partners.length - 1 ? lastPartnerRef : null}
-                className="bg-white rounded-lg shadow-md p-4 border border-gray-200 hover:shadow-lg transition-shadow duration-200 cursor-pointer"
                 onClick={() => navigate(`/partners/${partner.id}`)}
+                className="bg-white rounded-lg shadow-sm p-4 active:scale-[0.98] transition-transform"
               >
-                <div className="flex justify-between items-start mb-3">
+                <div className="flex justify-between items-start mb-2">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-800">{partner.name}</h3>
-                    <p className="text-sm text-gray-600">#{partner.code}</p>
+                    <h3 className="text-base font-semibold text-gray-900">{partner.name}</h3>
+                    <p className="text-sm text-gray-500">#{partner.code}</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-1">
                     {partner.isPartner && (
                       <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
                         {t('partners.partner')}
@@ -383,43 +289,31 @@ export default function Partners() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center text-gray-700">
-                    <Building className="h-4 w-4 mr-2" />
-                    <span className="text-sm">{partner.type}</span>
-                  </div>
-
+                <div className="space-y-1.5">
                   {partner.phone && (
-                    <div className="flex items-center text-gray-700">
+                    <div className="flex items-center text-sm text-gray-600">
                       <Phone className="h-4 w-4 mr-2" />
-                      <span className="text-sm">{partner.phone}</span>
+                      {partner.phone}
                     </div>
                   )}
 
                   {partner.email && (
-                    <div className="flex items-center text-gray-700">
+                    <div className="flex items-center text-sm text-gray-600">
                       <Mail className="h-4 w-4 mr-2" />
-                      <span className="text-sm">{partner.email}</span>
+                      {partner.email}
                     </div>
                   )}
 
                   {partner.address && (
-                    <div className="flex items-center text-gray-700">
+                    <div className="flex items-center text-sm text-gray-600">
                       <MapPin className="h-4 w-4 mr-2" />
-                      <span className="text-sm">{partner.address}</span>
-                    </div>
-                  )}
-
-                  {partner.notes && (
-                    <div className="flex items-start text-gray-700">
-                      <FileText className="h-4 w-4 mr-2 mt-1" />
-                      <span className="text-sm">{partner.notes}</span>
+                      {partner.address}
                     </div>
                   )}
                 </div>
 
-                <div className="mt-3 pt-3 border-t border-gray-200">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                <div className="mt-2 pt-2 border-t border-gray-100">
+                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                     partner.isActive
                       ? 'bg-green-100 text-green-800'
                       : 'bg-red-100 text-red-800'
@@ -428,18 +322,127 @@ export default function Partners() {
                   </span>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            ))
+          )}
 
-        {isLoadingMore && (
-          <div className="text-center py-4">{t('partners.loadingMore')}</div>
-        )}
+          {isLoadingMore && (
+            <div className="text-center py-4">
+              <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+            </div>
+          )}
 
-        {!isLoading && partners.length === 0 && (
-          <div className="text-center py-8 text-gray-500">{t('partners.noResults')}</div>
-        )}
+          {!isLoading && partners.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              {t('partners.noResults')}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Filter Bottom Sheet */}
+      {isFilterOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
+          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl p-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">Bộ lọc</h2>
+              <button onClick={() => setIsFilterOpen(false)}>
+                <X className="h-6 w-6 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Loại đối tác
+                </label>
+                <select
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">{t('partners.allTypes')}</option>
+                  <option value="Individual">Individual</option>
+                  <option value="Company">Company</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Giới tính
+                </label>
+                <select
+                  value={genderFilter}
+                  onChange={(e) => setGenderFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">{t('partners.allGenders')}</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Trạng thái
+                </label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">{t('partners.allTypes')}</option>
+                  <option value="active">{t('partners.active')}</option>
+                  <option value="inactive">{t('partners.inactive')}</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Vai trò
+                </label>
+                <select
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">{t('partners.allTypes')}</option>
+                  <option value="partner">{t('partners.partner')}</option>
+                  <option value="supplier">{t('partners.supplier')}</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={clearFilters}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50"
+                >
+                  Xóa bộ lọc
+                </button>
+                <button
+                  onClick={() => {
+                    handleSearch();
+                    setIsFilterOpen(false);
+                  }}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                >
+                  Áp dụng
+                </button>
+              </div>
+            </div>
+
+            {/* Bottom Safe Area */}
+            <div className="h-6" />
+          </div>
+        </div>
+      )}
+
+      {/* Floating Action Button */}
+      <button
+        onClick={() => navigate('/partners/add')}
+        className="fixed right-4 bottom-4 p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+      >
+        <Plus className="h-6 w-6" />
+      </button>
     </div>
   );
 }
