@@ -1,6 +1,7 @@
+// src/services/auth.ts
 import { v4 as uuidv4 } from 'uuid';
 import api from './axiosClient';
-import { User } from './types';
+import { setSession, clearSession } from '../utils/storage';
 
 interface LoginRequest {
     _type: string;
@@ -51,8 +52,12 @@ export const login = async (username: string, password: string) => {
             throw new Error('Invalid response from server');
         }
 
+        // Lưu toàn bộ response.data (XTSSignInResponse) vào localStorage
+        setSession(response.data);
+
         return response.data;
     } catch (error) {
+        console.error('Login error:', error);
         if (error instanceof Error) {
             throw new Error(error.message);
         }
@@ -60,7 +65,7 @@ export const login = async (username: string, password: string) => {
     }
 };
 
-export const logout = async (user: User) => {
+export const logout = async (user: any) => {
     const logoutData: LogoutRequest = {
         _type: 'XTSSignOutRequest',
         _dbId: '',
@@ -72,8 +77,11 @@ export const logout = async (user: User) => {
 
     try {
         const response = await api.post('', logoutData);
+        clearSession();
         return response.data;
     } catch (error) {
+        console.error('Logout error:', error);
+        clearSession();
         throw new Error('Logout failed');
     }
 };

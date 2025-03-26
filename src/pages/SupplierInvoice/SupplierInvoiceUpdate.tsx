@@ -19,8 +19,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getSupplierInvoiceDetail, updateSupplierInvoice } from '../../services/supplierInvoice';
-import type { SupplierInvoiceDetail, UpdateSupplierInvoiceData, CreateSupplierInvoiceProduct } from '../../services/supplierInvoice';
-import { useLanguage } from '../../contexts/LanguageContext';
+import type { SupplierInvoiceDetail, UpdateSupplierInvoiceData } from '../../services/supplierInvoice';
 
 interface FormData {
   id: string;
@@ -55,7 +54,6 @@ interface FormData {
 export default function SupplierInvoiceUpdate() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { t } = useLanguage();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -63,14 +61,14 @@ export default function SupplierInvoiceUpdate() {
   const [isDirty, setIsDirty] = useState(false);
   const [invoice, setInvoice] = useState<SupplierInvoiceDetail | null>(null);
 
-  const [currencies, setCurrencies] = useState([
+  const [currencies] = useState([
     { id: 'c26a4d87-c6e2-4aca-ab05-1b02be6ecaec', name: 'VND' },
     { id: 'cd8e4a47-6236-11ef-a699-00155d058802', name: 'CNY' }
   ]);
-  const [employees, setEmployees] = useState([
+  const [employees] = useState([
     { id: '0a1ae9b8-5b28-11ef-a699-00155d058802', name: 'Test' }
   ]);
-  const [externalAccounts, setExternalAccounts] = useState([
+  const [externalAccounts] = useState([
     { id: 'b66ac3a4-e850-11ef-9602-f2202b293748', name: '0396492705 / Unknown' }
   ]);
 
@@ -98,7 +96,7 @@ export default function SupplierInvoiceUpdate() {
   useEffect(() => {
     const fetchInvoiceDetail = async () => {
       if (!id) {
-        setError('Invoice ID is missing');
+        setError('ID đơn nhận hàng không tồn tại');
         setIsLoading(false);
         return;
       }
@@ -109,29 +107,28 @@ export default function SupplierInvoiceUpdate() {
         const data = await getSupplierInvoiceDetail(id);
         setInvoice(data);
         
-        // Map the API data to our form data structure
         setFormData({
           id: data.id,
           number: data.number,
           title: data.number,
           date: data.date,
-          customerId: data.counterparty,
-          customerName: data.counterparty,
-          contractId: data.contract || '',
-          contractName: data.contract || '',
-          currencyId: getCurrencyIdFromName(data.currency),
-          currencyName: data.currency,
-          rate: 1, // Default rate, should be retrieved from the API
+          customerId: data.counterparty.id || '', // Lấy id từ counterparty
+          customerName: data.counterparty.presentation || '', // Lấy presentation từ counterparty
+          contractId: data.contract?.id || '', // Lấy id từ contract (nếu có)
+          contractName: data.contract?.presentation || '', // Lấy presentation từ contract
+          currencyId: getCurrencyIdFromName(data.currency.presentation), // Sử dụng presentation
+          currencyName: data.currency.presentation, // Sử dụng presentation
+          rate: 1, // Không có rate trong SupplierInvoiceDetail, giữ mặc định
           comment: data.comment,
-          employeeId: data.employeeResponsible || '',
-          employeeName: data.employeeResponsible || '',
-          externalAccountId: 'b66ac3a4-e850-11ef-9602-f2202b293748', // Default value
-          externalAccountName: '0396492705 / Unknown', // Default value
+          employeeId: data.employeeResponsible?.id || '', // Lấy id từ employeeResponsible
+          employeeName: data.employeeResponsible?.presentation || '', // Lấy presentation từ employeeResponsible
+          externalAccountId: 'b66ac3a4-e850-11ef-9602-f2202b293748', // Không có trong data, giữ mặc định
+          externalAccountName: '0396492705 / Unknown', // Không có trong data, giữ mặc định
           posted: data.posted,
           products: data.products.map(product => ({
             productId: product.productId,
             productName: product.productName,
-            unitId: '5736c39c-5b28-11ef-a699-00155d058802', // Default unit ID
+            unitId: '5736c39c-5b28-11ef-a699-00155d058802', // Không có unitId trong data, giữ mặc định
             unitName: product.unit,
             quantity: product.quantity,
             price: product.price,
@@ -140,7 +137,7 @@ export default function SupplierInvoiceUpdate() {
           }))
         });
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to load invoice details';
+        const errorMessage = error instanceof Error ? error.message : 'Không thể tải thông tin đơn nhận hàng';
         setError(errorMessage);
         toast.error(errorMessage);
       } finally {
@@ -155,7 +152,7 @@ export default function SupplierInvoiceUpdate() {
     if (currencyName.includes('CNY')) {
       return 'cd8e4a47-6236-11ef-a699-00155d058802';
     }
-    return 'c26a4d87-c6e2-4aca-ab05-1b02be6ecaec'; // Default to VND
+    return 'c26a4d87-c6e2-4aca-ab05-1b02be6ecaec';
   };
 
   const calculateTotal = () => {
@@ -198,7 +195,6 @@ export default function SupplierInvoiceUpdate() {
         [field]: value
       };
       
-      // Recalculate total if quantity or price changes
       if (field === 'quantity' || field === 'price') {
         newProducts[index].total = newProducts[index].quantity * newProducts[index].price;
       }
@@ -211,31 +207,6 @@ export default function SupplierInvoiceUpdate() {
   const handleInputChange = (field: keyof FormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setIsDirty(true);
-  };
-
-  const handleCurrencyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedCurrency = currencies.find(c => c.id === e.target.value);
-    if (selectedCurrency) {
-      setFormData(prev => ({
-        ...prev,
-        currencyId: selectedCurrency.id,
-        currencyName: selectedCurrency.name,
-        rate: selectedCurrency.id === 'cd8e4a47-6236-11ef-a699-00155d058802' ? 113 : 1 // Set rate to 113 for CNY, 1 for VND
-      }));
-      setIsDirty(true);
-    }
-  };
-
-  const handleEmployeeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedEmployee = employees.find(emp => emp.id === e.target.value);
-    if (selectedEmployee) {
-      setFormData(prev => ({
-        ...prev,
-        employeeId: selectedEmployee.id,
-        employeeName: selectedEmployee.name
-      }));
-      setIsDirty(true);
-    }
   };
 
   const validateForm = (): boolean => {
@@ -269,12 +240,12 @@ export default function SupplierInvoiceUpdate() {
     return true;
   };
 
-  const handleSave = () => {
+  const handleSubmit = () => {
     if (!validateForm()) return;
     setShowConfirmation(true);
   };
 
-  const handleConfirmSave = async () => {
+  const handleConfirmSubmit = async () => {
     try {
       setIsSaving(true);
 
@@ -368,37 +339,16 @@ export default function SupplierInvoiceUpdate() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Header */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Cập nhật đơn nhận hàng</h1>
-            <p className="text-sm text-gray-500">#{formData.number}</p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleBack}
-              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-            >
-              <ArrowLeft className="w-5 h-5 inline-block mr-1" />
-              Quay lại
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={isSaving || !isDirty}
-              className={`px-4 py-2 text-white rounded-md ${
-                isDirty ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'
-              }`}
-            >
-              <Save className="w-5 h-5 inline-block mr-1" />
-              {isSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
-            </button>
-          </div>
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
+        <div className="px-4 py-3">
+          <h1 className="text-lg font-semibold text-gray-900">Cập nhật đơn nhận hàng</h1>
+          <p className="text-sm text-gray-500">#{formData.number}</p>
         </div>
+      </div>
 
-        {/* General Information */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      <div className="pt-4 px-4">
+        <div className="space-y-4 mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Ngày tạo *
@@ -408,7 +358,7 @@ export default function SupplierInvoiceUpdate() {
                 type="datetime-local"
                 value={formData.date.slice(0, 16)}
                 onChange={(e) => handleInputChange('date', e.target.value)}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               />
               <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
@@ -428,7 +378,7 @@ export default function SupplierInvoiceUpdate() {
                     handleInputChange('customerName', selected.name);
                   }
                 }}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="">Chọn nhà cung cấp</option>
                 {mockSuppliers.map(supplier => (
@@ -437,7 +387,7 @@ export default function SupplierInvoiceUpdate() {
                   </option>
                 ))}
               </select>
-              <Building className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+              <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
           </div>
 
@@ -448,8 +398,15 @@ export default function SupplierInvoiceUpdate() {
             <div className="relative">
               <select
                 value={formData.currencyId}
-                onChange={handleCurrencyChange}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                onChange={(e) => {
+                  const selected = currencies.find(c => c.id === e.target.value);
+                  if (selected) {
+                    handleInputChange('currencyId', selected.id);
+                    handleInputChange('currencyName', selected.name);
+                    handleInputChange('rate', selected.id === 'cd8e4a47-6236-11ef-a699-00155d058802' ? 113 : 1);
+                  }
+                }}
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               >
                 {currencies.map(currency => (
                   <option key={currency.id} value={currency.id}>
@@ -470,50 +427,13 @@ export default function SupplierInvoiceUpdate() {
                 type="number"
                 value={formData.rate}
                 onChange={(e) => handleInputChange('rate', Number(e.target.value))}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               />
               <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nhân viên phụ trách
-            </label>
-            <div className="relative">
-              <select
-                value={formData.employeeId}
-                onChange={handleEmployeeChange}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-              >
-                {employees.map(employee => (
-                  <option key={employee.id} value={employee.id}>
-                    {employee.name}
-                  </option>
-                ))}
-              </select>
-              <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Trạng thái
-            </label>
-            <div className="relative">
-              <select
-                value={formData.posted ? 'posted' : 'draft'}
-                onChange={(e) => handleInputChange('posted', e.target.value === 'posted')}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-              >
-                <option value="draft">Nháp</option>
-                <option value="posted">Đã ghi sổ</option>
-              </select>
-              <Tag className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            </div>
-          </div>
-
-          <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Ghi chú
             </label>
@@ -522,7 +442,7 @@ export default function SupplierInvoiceUpdate() {
                 value={formData.comment}
                 onChange={(e) => handleInputChange('comment', e.target.value)}
                 rows={3}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
                 placeholder="Nhập ghi chú..."
               />
               <FileText className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
@@ -530,133 +450,144 @@ export default function SupplierInvoiceUpdate() {
           </div>
         </div>
 
-        {/* Products Table */}
-        <div className="mb-8">
+        <div>
           <div className="flex justify-between items-center mb-4">
-            <h2  className="text-lg font-medium text-gray-900">Danh sách sản phẩm</h2>
+            <h2 className="text-base font-medium text-gray-900">Danh sách sản phẩm</h2>
             <button
               onClick={handleAddProduct}
-              className="px-3 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700"
+              className="text-sm text-blue-600 hover:text-blue-700"
             >
-              <Plus className="w-5 h-5 inline-block mr-1" />
               Thêm sản phẩm
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead>
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">STT</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sản phẩm</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Đơn vị tính</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Số lượng</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Đơn giá</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Thành tiền</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {formData.products.map((product, index) => (
-                  <tr key={index}>
-                    <td className="px-4 py-3 text-sm text-gray-900">{index + 1}</td>
-                    <td className="px-4 py-3">
-                      <select
-                        value={product.productId}
-                        onChange={(e) => {
-                          const selected = mockProducts.find(p => p.id === e.target.value);
-                          if (selected) {
-                            handleProductChange(index, 'productId', selected.id);
-                            handleProductChange(index, 'productName', selected.name);
-                            handleProductChange(index, 'price', selected.price);
-                            handleProductChange(index, 'total', selected.price * product.quantity);
-                          }
-                        }}
-                        className="w-full px-2 py-1 border border-gray-300 rounded-md"
-                      >
-                        <option value="">Chọn sản phẩm</option>
-                        {mockProducts.map(p => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-4 py-3">
-                      <input
-                        type="text"
-                        value={product.unitName}
-                        readOnly
-                        className="w-full px-2 py-1 border border-gray-300 rounded-md bg-gray-50"
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <input
-                        type="number"
-                        value={product.quantity}
-                        onChange={(e) => handleProductChange(index, 'quantity', Number(e.target.value))}
-                        min="1"
-                        className="w-full px-2 py-1 border border-gray-300 rounded-md text-right"
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <input
-                        type="number"
-                        value={product.price}
-                        onChange={(e) => handleProductChange(index, 'price', Number(e.target.value))}
-                        min="0"
-                        className="w-full px-2 py-1 border border-gray-300 rounded-md text-right"
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm text-gray-900">
-                      {product.total.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => handleRemoveProduct(index)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="bg-gray-50">
-                  <td colSpan={5} className="px-4 py-3 text-right font-medium">
-                    Tổng cộng:
-                  </td>
-                  <td className="px-4 py-3 text-right font-bold text-blue-600">
-                    {calculateTotal().toLocaleString()}
-                  </td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
+          <div className="space-y-4">
+            {formData.products.map((product, index) => (
+              <div key={index} className="bg-white rounded-lg shadow-sm p-4">
+                <div className="flex gap-3 mb-3">
+                  <div className="h-16 w-16 bg-gray-100 rounded-lg flex items-center justify-center">
+                    <Package className="h-8 w-8 text-gray-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <select
+                      value={product.productId}
+                      onChange={(e) => {
+                        const selected = mockProducts.find(p => p.id === e.target.value);
+                        if (selected) {
+                          handleProductChange(index, 'productId', selected.id);
+                          handleProductChange(index, 'productName', selected.name);
+                          handleProductChange(index, 'price', selected.price);
+                          handleProductChange(index, 'total', selected.price * product.quantity);
+                        }
+                      }}
+                      className="w-full text-sm text-gray-900 bg-transparent border-0 p-0 focus:ring-0"
+                    >
+                      <option value="">Chọn sản phẩm</option>
+                      {mockProducts.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveProduct(index)}
+                    className="text-red-600"
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Số lượng
+                    </label>
+                    <input
+                      type="number"
+                      value={product.quantity}
+                      onChange={(e) => handleProductChange(index, 'quantity', Number(e.target.value))}
+                      min="1"
+                      className="w-full text-sm text-gray-900 bg-transparent border-0 p-0 focus:ring-0"
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Đơn giá
+                    </label>
+                    <input
+                      type="number"
+                      value={product.price}
+                      onChange={(e) => handleProductChange(index, 'price', Number(e.target.value))}
+                      min="0"
+                      step="1000"
+                      className="w-full text-sm text-gray-900 bg-transparent border-0 p-0 focus:ring-0"
+                      inputMode="numeric"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
+                  <span className="text-xs text-gray-500">Thành tiền</span>
+                  <span className="text-sm font-medium text-blue-600">
+                    {product.total.toLocaleString()} {formData.currencyName}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
+
+          {formData.products.length > 0 && (
+            <div className="mt-4 bg-white rounded-lg shadow-sm p-4">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-gray-900">Tổng cộng</span>
+                <span className="text-base font-semibold text-blue-600">
+                  {calculateTotal().toLocaleString()} {formData.currencyName}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Confirmation Modal */}
+      <div className="fixed bottom-4 right-4 flex flex-col gap-2">
+        <button
+          onClick={handleBack}
+          className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        >
+          <ArrowLeft className="h-6 w-6" />
+        </button>
+        
+        <button
+          onClick={handleSubmit}
+          disabled={!isDirty || isSaving}
+          className={`p-3 rounded-full shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+            isDirty ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500' : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+          }`}
+        >
+          <Save className="h-6 w-6" />
+        </button>
+      </div>
+
       {showConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-lg p-4 w-full max-w-sm">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
               Xác nhận cập nhật đơn nhận hàng
             </h3>
             <p className="text-sm text-gray-500 mb-4">
               Bạn có chắc chắn muốn cập nhật đơn nhận hàng này không?
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowConfirmation(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+                className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
               >
                 Hủy
               </button>
               <button
-                onClick={handleConfirmSave}
+                onClick={handleConfirmSubmit}
                 disabled={isSaving}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md disabled:opacity-50"
+                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md disabled:opacity-50"
               >
                 {isSaving ? 'Đang xử lý...' : 'Xác nhận'}
               </button>

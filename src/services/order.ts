@@ -1,7 +1,17 @@
 import api from './axiosClient';
-import { ListRequest, PaginatedResponse } from './types';
-
-// Interfaces for dropdown data
+// First add the new interface for related documents
+export interface RelatedDocument {
+  id: string;
+  number: string;
+  date: string;
+  dataType: string;
+  presentation: string;
+  documentAmount: number;
+  documentCurrency: string;
+  company: string;
+  counterparty: string;
+}
+// Keep all existing interfaces and functions
 export interface CustomerDropdownItem {
   id: string;
   name: string;
@@ -28,7 +38,6 @@ export interface ProductDropdownItem {
   price: number;
 }
 
-// Existing interfaces
 export interface Order {
   id: string;
   number: string;
@@ -82,6 +91,104 @@ export interface OrderDetail {
   vatTaxation: string;
   products: OrderProduct[];
 }
+
+export interface CreateOrderProduct {
+  productId: string;
+  productName: string;
+  quantity: number;
+  price: number;
+  unitId: string;
+  unitName: string;
+  coefficient: number;
+  sku: string;
+}
+
+export interface CreateOrderData {
+  customerId: string;
+  customerName: string;
+  employeeId: string;
+  employeeName: string;
+  orderState: string;
+  deliveryAddress: string;
+  comment: string;
+  documentAmount: number;
+  products: CreateOrderProduct[];
+}
+
+export interface UpdateOrderProduct {
+  productId: string;
+  productName: string;
+  quantity: number;
+  price: number;
+  unitId: string;
+  unitName: string;
+  coefficient: number;
+  sku: string;
+  lineNumber: number;
+}
+
+export interface UpdateOrderData {
+  id: string;
+  number: string;
+  title: string;
+  customerId: string;
+  customerName: string;
+  employeeId: string;
+  employeeName: string;
+  orderState: string;
+  deliveryAddress: string;
+  comment: string;
+  documentAmount: number;
+  products: UpdateOrderProduct[];
+  date: string;
+  contractId: string;
+  contractName: string;
+  externalAccountId: string;
+  externalAccountName: string;
+  cashAmount: number;
+  transferAmount: number;
+  postPayAmount: number;
+  paymentNotes: string;
+}
+
+// Add the new function to get related documents
+export const getRelatedDocuments = async (orderId: string, orderNumber: string): Promise<RelatedDocument[]> => {
+  const request = {
+    _type: "XTSGetRelatedDocumentsRequest",
+    _dbId: "",
+    _msgId: "",
+    objectId: {
+      _type: "XTSObjectId",
+      dataType: "XTSOrder",
+      id: orderId,
+      presentation: orderNumber,
+      url: ""
+    }
+  };
+
+  try {
+    const response = await api.post('', request);
+
+    if (!response.data?.documents) {
+      throw new Error('Invalid response format');
+    }
+
+    return response.data.documents.map((doc: any) => ({
+      id: doc.document?.id || '',
+      number: doc.number || '',
+      date: doc.date || '',
+      dataType: doc.document?.dataType || '',
+      presentation: doc.document?.presentation || '',
+      documentAmount: doc.documentAmount || 0,
+      documentCurrency: doc.documentCurrency?.presentation || '',
+      company: doc.company?.presentation || '',
+      counterparty: doc.counterparty?.presentation || ''
+    }));
+  } catch (error) {
+    console.error('Failed to fetch related documents:', error);
+    throw new Error('Failed to fetch related documents');
+  }
+};
 
 // Static list of order states
 const orderStates = [
@@ -296,10 +403,10 @@ export const getOrders = async (page: number = 1, pageSize: number = 20, conditi
         id: item.object.objectId.id,
         number: item.object.number,
         date: item.object.date,
-        customerName: item.object.customer.presentation,
-        status: item.object.orderState.presentation,
-        totalAmount: item.object.documentAmount,
-        totalProducts: item.object.inventory.length,
+        customerName: item.object.customer?.presentation || '',
+        status: item.object.orderState?.presentation || '',
+        totalAmount: item.object.documentAmount || 0,
+        totalProducts: item.object.inventory?.length || 0,
         notes: item.object.comment
       })),
       hasMore: response.data.items.length === pageSize
@@ -380,29 +487,6 @@ export const getOrderDetail = async (id: string): Promise<OrderDetail> => {
     throw new Error('Failed to fetch order details');
   }
 };
-
-export interface CreateOrderProduct {
-  productId: string;
-  productName: string;
-  quantity: number;
-  price: number;
-  unitId: string;
-  unitName: string;
-  coefficient: number;
-  sku: string;
-}
-
-export interface CreateOrderData {
-  customerId: string;
-  customerName: string;
-  employeeId: string;
-  employeeName: string;
-  orderState: string;
-  deliveryAddress: string;
-  comment: string;
-  documentAmount: number;
-  products: CreateOrderProduct[];
-}
 
 export const createOrder = async (data: CreateOrderData): Promise<{ id: string; number: string }> => {
   // Validate required fields
@@ -574,42 +658,6 @@ export const createOrder = async (data: CreateOrderData): Promise<{ id: string; 
     throw new Error('Failed to create order');
   }
 };
-
-export interface UpdateOrderProduct {
-  productId: string;
-  productName: string;
-  quantity: number;
-  price: number;
-  unitId: string;
-  unitName: string;
-  coefficient: number;
-  sku: string;
-  lineNumber: number;
-}
-
-export interface UpdateOrderData {
-  id: string;
-  number: string;
-  title: string;
-  customerId: string;
-  customerName: string;
-  employeeId: string;
-  employeeName: string;
-  orderState: string;
-  deliveryAddress: string;
-  comment: string;
-  documentAmount: number;
-  products: UpdateOrderProduct[];
-  date: string;
-  contractId: string;
-  contractName: string;
-  externalAccountId: string;
-  externalAccountName: string;
-  cashAmount: number;
-  transferAmount: number;
-  postPayAmount: number;
-  paymentNotes: string;
-}
 
 export const updateOrder = async (data: UpdateOrderData): Promise<void> => {
   // Validate required fields

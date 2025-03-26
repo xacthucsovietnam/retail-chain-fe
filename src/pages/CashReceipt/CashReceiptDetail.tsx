@@ -2,19 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
-  FileText,
+  Pencil,
+  Trash2,
   User,
-  DollarSign,
+  Phone,
+  Mail,
+  MapPin,
+  Calendar,
   Loader2,
   AlertCircle,
-  Pencil,
-  Trash2
+  DollarSign,
+  CreditCard,
+  Tag,
+  FileText,
+  Receipt
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getCashReceiptDetail } from '../../services/cashReceipt';
 import type { CashReceiptDetail } from '../../services/cashReceipt';
 import { formatCurrency } from '../../utils/currency';
-import { useLanguage } from '../../contexts/LanguageContext';
 
 export default function CashReceiptDetail() {
   const { id } = useParams<{ id: string }>();
@@ -26,7 +32,7 @@ export default function CashReceiptDetail() {
   useEffect(() => {
     const fetchReceiptDetail = async () => {
       if (!id) {
-        setError('Cash receipt ID is missing');
+        setError('ID phiếu thu không tồn tại');
         setIsLoading(false);
         return;
       }
@@ -37,7 +43,7 @@ export default function CashReceiptDetail() {
         const data = await getCashReceiptDetail(id);
         setReceipt(data);
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to load cash receipt details';
+        const errorMessage = error instanceof Error ? error.message : 'Không thể tải thông tin phiếu thu';
         setError(errorMessage);
         toast.error(errorMessage);
       } finally {
@@ -55,7 +61,7 @@ export default function CashReceiptDetail() {
   };
 
   const handleDelete = () => {
-    toast.error('Delete functionality not implemented yet');
+    toast.error('Chức năng xóa chưa được triển khai');
   };
 
   const formatDate = (dateString: string) => {
@@ -82,17 +88,14 @@ export default function CashReceiptDetail() {
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            {error || 'Cash Receipt Not Found'}
+            {error || 'Không tìm thấy phiếu thu'}
           </h2>
-          <p className="text-gray-600 mb-4">
-            The cash receipt you're looking for could not be found or an error occurred.
-          </p>
           <button
             onClick={() => navigate('/cash-receipts')}
             className="text-blue-600 hover:text-blue-800 flex items-center gap-2 mx-auto"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to Cash Receipts
+            Quay lại danh sách
           </button>
         </div>
       </div>
@@ -100,101 +103,119 @@ export default function CashReceiptDetail() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      {/* Header with back button and actions */}
-      <div className="flex justify-between items-center mb-6">
-        <button
-          onClick={() => navigate('/cash-receipts')}
-          className="text-gray-600 hover:text-gray-800 flex items-center gap-2"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          Back to Cash Receipts
-        </button>
-
-        <div className="flex gap-2">
-          <button
-            onClick={handleEdit}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <Pencil className="w-4 h-4 mr-2" />
-            Edit
-          </button>
-
-          <button
-            onClick={handleDelete}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Delete
-          </button>
+    <div className="min-h-screen bg-gray-50 pb-20">
+      {/* Fixed Header */}
+      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
+        <div className="px-4 py-3">
+          <h1 className="text-lg font-semibold text-gray-900">Chi tiết phiếu thu</h1>
+          <p className="text-sm text-gray-500">#{receipt.number}</p>
         </div>
       </div>
 
-      {/* Receipt Information Card */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
+      {/* Main Content */}
+      <div className="pt-4 px-4">
+        {/* Basic Information */}
+        <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
+          <div className="flex justify-between items-start mb-3">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Cash Receipt Details</h1>
-              <p className="text-sm text-gray-500">#{receipt.number}</p>
+              <p className="text-sm text-gray-500">Số phiếu thu</p>
+              <p className="text-base font-medium text-gray-900">#{receipt.number}</p>
             </div>
-            <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
               {receipt.transactionType}
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
+          <div className="space-y-3">
+            <div className="flex items-center">
+              <Calendar className="w-5 h-5 text-gray-400 mr-3" />
               <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <User className="w-4 h-4 mr-2" />
-                  <span className="text-sm">Customer</span>
-                </div>
-                <p className="text-lg text-gray-900">{receipt.customer}</p>
+                <p className="text-sm text-gray-500">Ngày thu</p>
+                <p className="text-base text-gray-900">{formatDate(receipt.date)}</p>
               </div>
+            </div>
 
+            <div className="flex items-center">
+              <User className="w-5 h-5 text-gray-400 mr-3" />
               <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <FileText className="w-4 h-4 mr-2" />
-                  <span className="text-sm">Order</span>
-                </div>
-                <p className="text-lg text-gray-900">{receipt.order || 'Not associated with an order'}</p>
+                <p className="text-sm text-gray-500">Khách hàng</p>
+                <p className="text-base text-gray-900">{receipt.customer}</p>
               </div>
+            </div>
 
+            <div className="flex items-center">
+              <DollarSign className="w-5 h-5 text-gray-400 mr-3" />
               <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <DollarSign className="w-4 h-4 mr-2" />
-                  <span className="text-sm">Amount</span>
-                </div>
-                <p className="text-xl font-bold text-blue-600">
+                <p className="text-sm text-gray-500">Số tiền</p>
+                <p className="text-base font-medium text-blue-600">
                   {formatCurrency(receipt.amount, receipt.currency)}
                 </p>
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="flex items-center">
+              <Tag className="w-5 h-5 text-gray-400 mr-3" />
               <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <User className="w-4 h-4 mr-2" />
-                  <span className="text-sm">Collector</span>
-                </div>
-                <p className="text-lg text-gray-900">{receipt.collector || 'Not specified'}</p>
+                <p className="text-sm text-gray-500">Loại thu</p>
+                <p className="text-base text-gray-900">{receipt.transactionType}</p>
               </div>
-
-              {receipt.notes && (
-                <div>
-                  <div className="flex items-center text-gray-600 mb-1">
-                    <FileText className="w-4 h-4 mr-2" />
-                    <span className="text-sm">Notes</span>
-                  </div>
-                  <p className="text-lg text-gray-900 whitespace-pre-line">
-                    {receipt.notes}
-                  </p>
-                </div>
-              )}
             </div>
+
+            {receipt.collector && (
+              <div className="flex items-center">
+                <User className="w-5 h-5 text-gray-400 mr-3" />
+                <div>
+                  <p className="text-sm text-gray-500">Người thu</p>
+                  <p className="text-base text-gray-900">{receipt.collector}</p>
+                </div>
+              </div>
+            )}
+
+            {receipt.order && (
+              <div className="flex items-center">
+                <Receipt className="w-5 h-5 text-gray-400 mr-3" />
+                <div>
+                  <p className="text-sm text-gray-500">Đơn hàng</p>
+                  <p className="text-base text-gray-900">{receipt.order}</p>
+                </div>
+              </div>
+            )}
+
+            {receipt.notes && (
+              <div className="flex items-start">
+                <FileText className="w-5 h-5 text-gray-400 mr-3 mt-0.5" />
+                <div>
+                  <p className="text-sm text-gray-500">Ghi chú</p>
+                  <p className="text-base text-gray-900 whitespace-pre-line">{receipt.notes}</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
+      </div>
+
+      {/* Floating Action Buttons */}
+      <div className="fixed bottom-4 right-4 flex flex-col gap-2">
+        <button
+          onClick={() => navigate('/cash-receipts')}
+          className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        >
+          <ArrowLeft className="h-6 w-6" />
+        </button>
+        
+        <button
+          onClick={handleEdit}
+          className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        >
+          <Pencil className="h-6 w-6" />
+        </button>
+
+        <button
+          onClick={handleDelete}
+          className="p-3 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+        >
+          <Trash2 className="h-6 w-6" />
+        </button>
       </div>
     </div>
   );

@@ -115,34 +115,17 @@ export default function TransferReceiptAdd() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="bg-white rounded-lg shadow-md p-6">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Thêm mới phiếu thu chuyển khoản</h1>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => navigate('/transfer-receipts')}
-              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-            >
-              <ArrowLeft className="w-5 h-5 inline-block mr-1" />
-              Quay lại
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={isLoading}
-              className="px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700"
-            >
-              <Save className="w-5 h-5 inline-block mr-1" />
-              {isLoading ? 'Đang lưu...' : 'Lưu'}
-            </button>
-          </div>
+    <div className="min-h-screen bg-gray-50 pb-20">
+      {/* Fixed Header */}
+      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
+        <div className="px-4 py-3">
+          <h1 className="text-lg font-semibold text-gray-900">Thêm mới</h1>
         </div>
+      </div>
 
-        {/* Form */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Main Content */}
+      <div className="pt-4 px-4">
+        <div className="space-y-4">
           {/* Date */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -153,7 +136,7 @@ export default function TransferReceiptAdd() {
                 type="datetime-local"
                 value={formData.date.slice(0, 16)}
                 onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               />
               <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
@@ -174,7 +157,7 @@ export default function TransferReceiptAdd() {
                   customerId: '12e8c6f0-d253-11ef-9602-f2202b293748' // Mock ID for demo
                 }))}
                 placeholder="Chọn khách hàng..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               />
               <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
@@ -193,7 +176,7 @@ export default function TransferReceiptAdd() {
                   operationKindId: e.target.value,
                   operationKindName: e.target.options[e.target.selectedIndex].text 
                 }))}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="FromSupplier">Từ người bán</option>
                 <option value="FromCustomer">Từ khách hàng</option>
@@ -214,7 +197,7 @@ export default function TransferReceiptAdd() {
                 onChange={(e) => setFormData(prev => ({ ...prev, amount: Number(e.target.value) }))}
                 min="0"
                 step="1000"
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               />
               <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
@@ -233,7 +216,7 @@ export default function TransferReceiptAdd() {
                   bankAccountId: e.target.value,
                   bankAccountName: e.target.options[e.target.selectedIndex].text 
                 }))}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="583efa7c-6237-11ef-a699-00155d058802">Tài khoản VND</option>
               </select>
@@ -256,14 +239,14 @@ export default function TransferReceiptAdd() {
                   documentBasisId: e.target.value ? '88956252-f459-11ef-9602-f2202b293748' : '' // Mock ID for demo
                 }))}
                 placeholder="Chọn chứng từ..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               />
               <Receipt className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
           </div>
 
           {/* Notes */}
-          <div className="md:col-span-2">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Ghi chú
             </label>
@@ -272,7 +255,7 @@ export default function TransferReceiptAdd() {
                 value={formData.comment}
                 onChange={(e) => setFormData(prev => ({ ...prev, comment: e.target.value }))}
                 rows={3}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
                 placeholder="Nhập ghi chú..."
               />
               <FileText className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
@@ -281,27 +264,45 @@ export default function TransferReceiptAdd() {
         </div>
       </div>
 
+      {/* Floating Action Buttons */}
+      <div className="fixed bottom-4 right-4 flex flex-col gap-2">
+        <button
+          onClick={() => navigate('/transfer-receipts')}
+          className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        >
+          <ArrowLeft className="h-6 w-6" />
+        </button>
+        
+        <button
+          onClick={handleSubmit}
+          disabled={isLoading}
+          className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+        >
+          <Save className="h-6 w-6" />
+        </button>
+      </div>
+
       {/* Confirmation Modal */}
       {showConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
-              Xác nhận tạo phiếu thu chuyển khoản
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-lg p-4 w-full max-w-sm">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Xác nhận tạo phiếu thu
             </h3>
             <p className="text-sm text-gray-500 mb-4">
               Bạn có chắc chắn muốn tạo phiếu thu chuyển khoản này không?
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowConfirmation(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+                className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
               >
                 Hủy
               </button>
               <button
                 onClick={handleConfirmSubmit}
                 disabled={isLoading}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md disabled:opacity-50"
+                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md disabled:opacity-50"
               >
                 {isLoading ? 'Đang xử lý...' : 'Xác nhận'}
               </button>

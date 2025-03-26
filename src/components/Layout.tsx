@@ -1,3 +1,4 @@
+// src/components/Layout.tsx
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
@@ -21,6 +22,7 @@ import { logout } from '../services/auth';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
+import { clearSession } from '../utils/storage';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -54,23 +56,28 @@ export default function Layout({ children }: LayoutProps) {
 
   const handleLogout = async () => {
     try {
-      await logout(user);
+      if (user) {
+        await logout(user);
+      }
       setUser(null);
+      clearSession();
       toast.success(t('message.logoutSuccess'));
       navigate('/');
     } catch (error) {
+      console.error('Logout error in Layout:', error);
+      setUser(null);
+      clearSession();
       toast.error(t('message.logoutFailed'));
     }
   };
 
   const handleMenuItemClick = (path: string) => {
     navigate(path);
-    setIsMenuOpen(false); // Close mobile menu after navigation
+    setIsMenuOpen(false);
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Desktop Sidebar */}
       <div className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0">
         <div className="flex flex-col flex-grow bg-white border-r border-gray-200 pt-5">
           <div className="flex items-center justify-between px-4 mb-5">
@@ -109,9 +116,7 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       </div>
 
-      {/* Mobile menu */}
       <div className="md:hidden">
-        {/* Mobile top bar */}
         <div className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between">
           <button
             onClick={() => setIsMenuOpen(true)}
@@ -120,10 +125,9 @@ export default function Layout({ children }: LayoutProps) {
             <MenuIcon className="h-6 w-6" />
           </button>
           <h1 className="text-lg font-bold text-gray-800">{getCurrentPageTitle()}</h1>
-          <div className="w-6" /> {/* Spacer for alignment */}
+          <div className="w-6" />
         </div>
 
-        {/* Mobile slide-out menu */}
         <div 
           className={`fixed inset-0 z-50 transition-opacity duration-300 ${
             isMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -175,7 +179,6 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       </div>
 
-      {/* Main content */}
       <div className="md:pl-64 flex flex-col flex-1">
         <main className="flex-1 relative z-0 overflow-y-auto focus:outline-none">
           <div className="py-16 md:py-6">

@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { createCurrency } from '../../services/currency';
-import type { CreateCurrencyData } from '../../services/currency';
 
 interface FormData {
   name: string;
@@ -68,19 +67,9 @@ export default function CurrencyAdd() {
   const handleConfirmSubmit = async () => {
     try {
       setIsLoading(true);
-
-      const createData: CreateCurrencyData = {
-        name: formData.name,
-        fullName: formData.fullName,
-        symbolicPresentation: formData.symbolicPresentation,
-        mainCurrencyId: formData.mainCurrencyId,
-        mainCurrencyName: formData.mainCurrencyName,
-        markup: formData.markup
-      };
-
-      const result = await createCurrency(createData);
+      await createCurrency(formData);
       toast.success('Tạo tiền tệ thành công');
-      navigate(`/currency/${result.id}`);
+      navigate('/currency');
     } catch (error) {
       toast.error('Không thể tạo tiền tệ');
     } finally {
@@ -90,34 +79,17 @@ export default function CurrencyAdd() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="bg-white rounded-lg shadow-md p-6">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Thêm mới tiền tệ</h1>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => navigate('/currency')}
-              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-            >
-              <ArrowLeft className="w-5 h-5 inline-block mr-1" />
-              Quay lại
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={isLoading}
-              className="px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700"
-            >
-              <Save className="w-5 h-5 inline-block mr-1" />
-              {isLoading ? 'Đang lưu...' : 'Lưu'}
-            </button>
-          </div>
+    <div className="min-h-screen bg-gray-50 pb-20">
+      {/* Fixed Header */}
+      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
+        <div className="px-4 py-3">
+          <h1 className="text-lg font-semibold text-gray-900">Thêm mới</h1>
         </div>
+      </div>
 
-        {/* Form */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Main Content */}
+      <div className="pt-4 px-4">
+        <div className="space-y-4">
           {/* Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -129,7 +101,7 @@ export default function CurrencyAdd() {
                 value={formData.name}
                 onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 placeholder="Nhập tên tiền tệ..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               />
               <Tag className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
@@ -146,7 +118,7 @@ export default function CurrencyAdd() {
                 value={formData.fullName}
                 onChange={(e) => setFormData(prev => ({ ...prev, fullName: e.target.value }))}
                 placeholder="Nhập tên đầy đủ..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               />
               <FileText className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
@@ -163,7 +135,7 @@ export default function CurrencyAdd() {
                 value={formData.symbolicPresentation}
                 onChange={(e) => setFormData(prev => ({ ...prev, symbolicPresentation: e.target.value }))}
                 placeholder="Nhập ký hiệu..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               />
               <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
@@ -182,7 +154,7 @@ export default function CurrencyAdd() {
                   mainCurrencyId: e.target.value,
                   mainCurrencyName: e.target.options[e.target.selectedIndex].text
                 }))}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="cd8e4a47-6236-11ef-a699-00155d058802">CNY</option>
                 <option value="c26a4d87-c6e2-4aca-ab05-1b02be6ecaec">VND</option>
@@ -203,7 +175,7 @@ export default function CurrencyAdd() {
                 onChange={(e) => setFormData(prev => ({ ...prev, markup: Number(e.target.value) }))}
                 min="0"
                 step="0.01"
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               />
               <Calculator className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
@@ -211,27 +183,45 @@ export default function CurrencyAdd() {
         </div>
       </div>
 
+      {/* Floating Action Buttons */}
+      <div className="fixed bottom-4 right-4 flex flex-col gap-2">
+        <button
+          onClick={() => navigate('/currency')}
+          className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        >
+          <ArrowLeft className="h-6 w-6" />
+        </button>
+        
+        <button
+          onClick={handleSubmit}
+          disabled={isLoading}
+          className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+        >
+          <Save className="h-6 w-6" />
+        </button>
+      </div>
+
       {/* Confirmation Modal */}
       {showConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
-              Xác nhận tạo tiền tệ
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-lg p-4 w-full max-w-sm">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Xác nhận thêm tiền tệ
             </h3>
             <p className="text-sm text-gray-500 mb-4">
-              Bạn có chắc chắn muốn tạo tiền tệ này không?
+              Bạn có chắc chắn muốn thêm tiền tệ này không?
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowConfirmation(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+                className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
               >
                 Hủy
               </button>
               <button
                 onClick={handleConfirmSubmit}
                 disabled={isLoading}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md disabled:opacity-50"
+                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md disabled:opacity-50"
               >
                 {isLoading ? 'Đang xử lý...' : 'Xác nhận'}
               </button>

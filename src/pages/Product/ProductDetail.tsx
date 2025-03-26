@@ -6,13 +6,18 @@ import {
   Trash2,
   Loader2,
   AlertCircle,
-  Package
+  Package,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  FileDown
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getProductDetail } from '../../services/product';
-import type { ProductDetail } from '../../services/product';
+import type { ProductDetail, ProductImage } from '../../services/product';
 import { formatCurrency } from '../../utils/currency';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { DEFAULT_IMAGE_URL } from '../../services/file';
 
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
@@ -20,12 +25,13 @@ export default function ProductDetail() {
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const { t } = useLanguage();
 
   useEffect(() => {
     const fetchProductDetail = async () => {
       if (!id) {
-        setError('Product ID is missing');
+        setError('ID sản phẩm không tồn tại');
         setIsLoading(false);
         return;
       }
@@ -36,7 +42,7 @@ export default function ProductDetail() {
         const data = await getProductDetail(id);
         setProduct(data);
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : t('product.detail.loadError');
+        const errorMessage = error instanceof Error ? error.message : 'Không thể tải thông tin sản phẩm';
         setError(errorMessage);
         toast.error(errorMessage);
       } finally {
@@ -45,20 +51,64 @@ export default function ProductDetail() {
     };
 
     fetchProductDetail();
-  }, [id, t]);
+  }, [id]);
 
-  const handleEdit = () => {
-    if (id) {
-      navigate(`/products/edit/${id}`);
+  // Auto-scroll images every 3 seconds if there are multiple images
+  useEffect(() => {
+    if (!product?.images.length || product.images.length <= 1) return;
+    
+    const interval = setInterval(() => {
+      setCurrentImageIndex(current => (current + 1) % product.images.length);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [product?.images.length]);
+
+  const handlePrevImage = () => {
+    if (!product?.images.length) return;
+    setCurrentImageIndex(current => 
+      current === 0 ? product.images.length - 1 : current - 1
+    );
+  };
+
+  const handleNextImage = () => {
+    if (!product?.images.length) return;
+    setCurrentImageIndex(current => 
+      (current + 1) % product.images.length
+    );
+  };
+
+  const downloadImage = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      toast.error('Không thể tải ảnh');
     }
   };
 
-  const handleDelete = () => {
-    toast.error('Delete functionality not implemented yet');
+  const handleDownloadCurrent = () => {
+    if (!product?.images[currentImageIndex]) return;
+    const currentImage = product.images[currentImageIndex];
+    const filename = `product-${product.code}-${currentImageIndex + 1}.jpg`;
+    downloadImage(currentImage.url, filename);
   };
 
-  const handleBack = () => {
-    navigate('/products');
+  const handleDownloadAll = async () => {
+    if (!product?.images.length) return;
+    
+    for (let i = 0; i < product.images.length; i++) {
+      const filename = `product-${product.code}-${i + 1}.jpg`;
+      await downloadImage(product.images[i].url, filename);
+    }
   };
 
   if (isLoading) {
@@ -75,55 +125,96 @@ export default function ProductDetail() {
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            {error || t('product.detail.notFound')}
+            {error || 'Không tìm thấy sản phẩm'}
           </h2>
-          <p className="text-gray-600 mb-4">
-            {t('product.detail.loadError')}
-          </p>
           <button
-            onClick={handleBack}
+            onClick={() => navigate('/products')}
             className="text-blue-600 hover:text-blue-800 flex items-center gap-2 mx-auto"
           >
             <ArrowLeft className="w-4 h-4" />
-            {t('product.detail.back')}
+            Quay lại danh sách
           </button>
         </div>
       </div>
     );
   }
 
+  const currentImage = product.images[currentImageIndex]?.url || DEFAULT_IMAGE_URL;
+
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Product Information */}
-      <div className="bg-white">
-        {/* Product Image */}
-        <div className="aspect-square bg-gray-100">
-          {product.imageUrl ? (
+      {/* Fixed Header */}
+      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
+        <div className="px-4 py-3">
+          <h1 className="text-lg font-semibold text-gray-900">Chi tiết sản phẩm</h1>
+          <p className="text-sm text-gray-500">{product.code}</p>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="pt-4">
+        {/* Image Slider */}
+        <div className="relative bg-gray-100">
+          <div className="aspect-square relative overflow-hidden">
             <img
-              src={product.imageUrl}
+              src={currentImage}
               alt={product.name}
               className="w-full h-full object-contain"
               onError={(e) => {
-                e.currentTarget.src = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc';
-                e.currentTarget.alt = 'Fallback product image';
+                e.currentTarget.src = DEFAULT_IMAGE_URL;
+                e.currentTarget.alt = 'Hình ảnh mặc định';
+                e.currentTarget.onerror = null;
               }}
             />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <Package className="w-16 h-16 text-gray-400" />
-            </div>
-          )}
+            
+            {product.images.length > 1 && (
+              <>
+                <button
+                  onClick={handlePrevImage}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-60"
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                </button>
+                <button
+                  onClick={handleNextImage}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-60"
+                >
+                  <ChevronRight className="w-6 h-6" />
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Image Controls */}
+          <div className="absolute bottom-4 right-4 flex gap-2">
+            <button
+              onClick={handleDownloadCurrent}
+              className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-50"
+              title="Tải ảnh hiện tại"
+            >
+              <Download className="w-5 h-5 text-gray-700" />
+            </button>
+            {product.images.length > 1 && (
+              <button
+                onClick={handleDownloadAll}
+                className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-50"
+                title="Tải tất cả ảnh"
+              >
+                <FileDown className="w-5 h-5 text-gray-700" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Product Details */}
-        <div className="p-4 space-y-4">
+        <div className="px-4 py-6 space-y-4">
           <div className="space-y-1">
-            <p className="text-sm text-gray-500">Mã</p>
+            <p className="text-sm text-gray-500">Mã sản phẩm</p>
             <p className="text-base text-gray-900">{product.code}</p>
           </div>
 
           <div className="space-y-1">
-            <p className="text-sm text-gray-500">Sản phẩm</p>
+            <p className="text-sm text-gray-500">Tên sản phẩm</p>
             <p className="text-base text-gray-900">{product.name}</p>
           </div>
 
@@ -133,7 +224,7 @@ export default function ProductDetail() {
           </div>
 
           <div className="space-y-1">
-            <p className="text-sm text-gray-500">Đơn vị</p>
+            <p className="text-sm text-gray-500">Đơn vị tính</p>
             <p className="text-base text-gray-900">{product.baseUnit}</p>
           </div>
 
@@ -168,21 +259,21 @@ export default function ProductDetail() {
       {/* Floating Action Buttons */}
       <div className="fixed bottom-4 right-4 flex flex-col gap-2">
         <button
-          onClick={handleBack}
+          onClick={() => navigate('/products')}
           className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
         >
           <ArrowLeft className="h-6 w-6" />
         </button>
         
         <button
-          onClick={handleEdit}
+          onClick={() => navigate(`/products/edit/${id}`)}
           className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
           <Pencil className="h-6 w-6" />
         </button>
 
         <button
-          onClick={handleDelete}
+          onClick={() => toast.error('Chức năng xóa chưa được triển khai')}
           className="p-3 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
         >
           <Trash2 className="h-6 w-6" />

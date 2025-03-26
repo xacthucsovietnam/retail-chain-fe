@@ -1,3 +1,4 @@
+// src/services/partner.ts
 import api from './axiosClient';
 import { ListRequest, PaginatedResponse } from './types';
 
@@ -49,6 +50,20 @@ export interface CreatePartnerData {
     notes: string;
     gender: string;
     picture: string;
+    // Thêm các trường mới
+    counterpartyKindId: string;
+    counterpartyKindPresentation: string;
+    employeeResponsibleId: string;
+    employeeResponsiblePresentation: string;
+    taxIdentifactionNumber: string;
+    invalid: boolean;
+    isCustomer: boolean;
+    isVendor: boolean;
+    otherRelations: boolean;
+    margin: number;
+    doOperationsByContracts: boolean;
+    doOperationsByOrders: boolean;
+    doOperationsByDocuments: boolean;
 }
 
 export interface UpdatePartnerData {
@@ -213,9 +228,9 @@ export const createPartner = async (data: CreatePartnerData): Promise<{ id: stri
                 descriptionFull: data.fullName,
                 counterpartyKind: {
                     _type: 'XTSObjectId',
-                    id: 'Individual',
                     dataType: 'XTSCounterpartyKind',
-                    presentation: 'Cá nhân',
+                    id: data.counterpartyKindId,
+                    presentation: data.counterpartyKindPresentation,
                     navigationRef: null
                 },
                 gender: {
@@ -227,18 +242,18 @@ export const createPartner = async (data: CreatePartnerData): Promise<{ id: stri
                 },
                 employeeResponsible: {
                     _type: 'XTSObjectId',
-                    dataType: 'XTSEmployeeResponsible',
-                    id: '',
-                    presentation: '',
+                    dataType: 'XTSEmployee',
+                    id: data.employeeResponsibleId,
+                    presentation: data.employeeResponsiblePresentation,
                     url: ''
                 },
                 comment: data.notes,
-                taxIdentifactionNumber: '',
-                invalid: false,
+                taxIdentifactionNumber: data.taxIdentifactionNumber,
+                invalid: data.invalid,
                 mainInfo: `${data.fullName}\n${data.phone}\n${data.email}\n${data.notes}`,
-                customer: true,
-                vendor: false,
-                otherRelations: false,
+                customer: data.isCustomer,
+                vendor: data.isVendor,
+                otherRelations: data.otherRelations,
                 phone: data.phone,
                 email: data.email,
                 address: data.address,
@@ -250,10 +265,10 @@ export const createPartner = async (data: CreatePartnerData): Promise<{ id: stri
                     presentation: '',
                     url: data.picture
                 },
-                margin: 0,
-                doOperationsByContracts: false,
-                doOperationsByOrders: true,
-                doOperationsByDocuments: true
+                margin: data.margin,
+                doOperationsByContracts: data.doOperationsByContracts,
+                doOperationsByOrders: data.doOperationsByOrders,
+                doOperationsByDocuments: data.doOperationsByDocuments
             }
         ]
     };

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Plus, X, ChevronDown } from 'lucide-react';
+import { Search, Filter, Plus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getProducts } from '../../services/product';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { DEFAULT_IMAGE_URL } from '../../services/file';
 
 interface Product {
   id: string;
@@ -45,7 +46,6 @@ export default function Products() {
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
       
-      // Show/hide header based on scroll direction
       if (currentScrollY < lastScrollY.current - 20) {
         setIsHeaderVisible(true);
       } else if (currentScrollY > lastScrollY.current + 20) {
@@ -145,7 +145,7 @@ export default function Products() {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Tìm kiếm sản phẩm..."
-                    className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-base focus:ring-blue-500 focus:border-blue-500"
                     autoFocus
                   />
                   <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
@@ -181,11 +181,10 @@ export default function Products() {
         </div>
       </div>
 
-      {/* Main Content - Reduced top padding */}
+      {/* Main Content */}
       <div className="pt-16 px-4 pb-20">
         <div className="grid grid-cols-2 gap-3">
           {isLoading ? (
-            // Loading Skeletons
             Array.from({ length: 4 }).map((_, index) => (
               <div key={index} className="bg-white rounded-lg shadow animate-pulse">
                 <div className="h-32 bg-gray-200 rounded-t-lg" />
@@ -197,7 +196,6 @@ export default function Products() {
               </div>
             ))
           ) : (
-            // Product Grid
             products.map((product, index) => (
               <div
                 key={product.id}
@@ -207,12 +205,14 @@ export default function Products() {
               >
                 <div className="aspect-square">
                   <img
-                    src={product.imageUrl || 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc'}
-                    alt={product.name}
+                    src={product.imageUrl || DEFAULT_IMAGE_URL}
+                    alt={`${product.name || 'Sản phẩm'}`}
                     className="w-full h-full object-cover"
                     loading="lazy"
                     onError={(e) => {
-                      e.currentTarget.src = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc';
+                      e.currentTarget.src = DEFAULT_IMAGE_URL;
+                      e.currentTarget.alt = 'Hình ảnh mặc định';
+                      e.currentTarget.onerror = null;
                     }}
                   />
                 </div>
@@ -297,7 +297,7 @@ export default function Products() {
         </div>
       )}
 
-      {/* Floating Action Button - Always visible */}
+      {/* Floating Action Button */}
       <button
         onClick={() => navigate('/products/add')}
         className="fixed right-4 bottom-4 p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"

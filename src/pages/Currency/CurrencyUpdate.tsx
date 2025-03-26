@@ -49,7 +49,7 @@ export default function CurrencyUpdate() {
   useEffect(() => {
     const fetchCurrencyDetail = async () => {
       if (!id) {
-        setError('Currency ID is missing');
+        setError('ID tiền tệ không tồn tại');
         setIsLoading(false);
         return;
       }
@@ -70,7 +70,7 @@ export default function CurrencyUpdate() {
           markup: Number(data.markup) || 1
         });
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to load currency details';
+        const errorMessage = error instanceof Error ? error.message : 'Không thể tải thông tin tiền tệ';
         setError(errorMessage);
         toast.error(errorMessage);
       } finally {
@@ -118,19 +118,7 @@ export default function CurrencyUpdate() {
   const handleConfirmSubmit = async () => {
     try {
       setIsSaving(true);
-
-      const updateData: UpdateCurrencyData = {
-        id: formData.id,
-        code: formData.code,
-        name: formData.name,
-        fullName: formData.fullName,
-        symbolicPresentation: formData.symbolicPresentation,
-        mainCurrencyId: formData.mainCurrencyId,
-        mainCurrencyName: formData.mainCurrencyName,
-        markup: formData.markup
-      };
-
-      await updateCurrency(updateData);
+      await updateCurrency(formData);
       toast.success('Cập nhật tiền tệ thành công');
       navigate(`/currency/${formData.id}`);
     } catch (error) {
@@ -165,17 +153,14 @@ export default function CurrencyUpdate() {
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            {error || 'Currency Not Found'}
+            {error || 'Không tìm thấy tiền tệ'}
           </h2>
-          <p className="text-gray-600 mb-4">
-            The currency you're looking for could not be found or an error occurred.
-          </p>
           <button
             onClick={() => navigate('/currency')}
             className="text-blue-600 hover:text-blue-800 flex items-center gap-2 mx-auto"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to Currencies
+            Quay lại danh sách
           </button>
         </div>
       </div>
@@ -183,37 +168,18 @@ export default function CurrencyUpdate() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="bg-white rounded-lg shadow-md p-6">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Cập nhật tiền tệ</h1>
-            <p className="text-sm text-gray-500">{formData.name}</p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleBack}
-              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-            >
-              <ArrowLeft className="w-5 h-5 inline-block mr-1" />
-              Quay lại
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={!isDirty || isSaving}
-              className={`px-4 py-2 text-white rounded-md ${
-                isDirty ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'
-              }`}
-            >
-              <Save className="w-5 h-5 inline-block mr-1" />
-              {isSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
-            </button>
-          </div>
+    <div className="min-h-screen bg-gray-50 pb-20">
+      {/* Fixed Header */}
+      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
+        <div className="px-4 py-3">
+          <h1 className="text-lg font-semibold text-gray-900">Cập nhật tiền tệ</h1>
+          <p className="text-sm text-gray-500">{formData.name}</p>
         </div>
+      </div>
 
-        {/* Form */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Main Content */}
+      <div className="pt-4 px-4">
+        <div className="space-y-4">
           {/* Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -225,7 +191,7 @@ export default function CurrencyUpdate() {
                 value={formData.name}
                 onChange={(e) => handleInputChange('name', e.target.value)}
                 placeholder="Nhập tên tiền tệ..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               />
               <Tag className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
@@ -242,7 +208,7 @@ export default function CurrencyUpdate() {
                 value={formData.fullName}
                 onChange={(e) => handleInputChange('fullName', e.target.value)}
                 placeholder="Nhập tên đầy đủ..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               />
               <FileText className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
@@ -259,7 +225,7 @@ export default function CurrencyUpdate() {
                 value={formData.symbolicPresentation}
                 onChange={(e) => handleInputChange('symbolicPresentation', e.target.value)}
                 placeholder="Nhập ký hiệu..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               />
               <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
@@ -277,7 +243,7 @@ export default function CurrencyUpdate() {
                   handleInputChange('mainCurrencyId', e.target.value);
                   handleInputChange('mainCurrencyName', e.target.options[e.target.selectedIndex].text);
                 }}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="cd8e4a47-6236-11ef-a699-00155d058802">CNY</option>
                 <option value="c26a4d87-c6e2-4aca-ab05-1b02be6ecaec">VND</option>
@@ -298,7 +264,7 @@ export default function CurrencyUpdate() {
                 onChange={(e) => handleInputChange('markup', Number(e.target.value))}
                 min="0"
                 step="0.01"
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               />
               <Calculator className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
@@ -306,27 +272,47 @@ export default function CurrencyUpdate() {
         </div>
       </div>
 
+      {/* Floating Action Buttons */}
+      <div className="fixed bottom-4 right-4 flex flex-col gap-2">
+        <button
+          onClick={handleBack}
+          className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        >
+          <ArrowLeft className="h-6 w-6" />
+        </button>
+        
+        <button
+          onClick={handleSubmit}
+          disabled={!isDirty || isSaving}
+          className={`p-3 rounded-full shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+            isDirty ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500' : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+          }`}
+        >
+          <Save className="h-6 w-6" />
+        </button>
+      </div>
+
       {/* Confirmation Modal */}
       {showConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-lg p-4 w-full max-w-sm">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
               Xác nhận cập nhật tiền tệ
             </h3>
             <p className="text-sm text-gray-500 mb-4">
               Bạn có chắc chắn muốn cập nhật tiền tệ này không?
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowConfirmation(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+                className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
               >
                 Hủy
               </button>
               <button
                 onClick={handleConfirmSubmit}
                 disabled={isSaving}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md disabled:opacity-50"
+                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md disabled:opacity-50"
               >
                 {isSaving ? 'Đang xử lý...' : 'Xác nhận'}
               </button>

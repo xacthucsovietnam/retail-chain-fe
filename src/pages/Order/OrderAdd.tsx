@@ -1,13 +1,16 @@
+// src/pages/orderAdd.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   Save,
   Package,
   Trash2,
   Search,
-  X
+  X,
+  PlusCircle
 } from 'lucide-react';
+import Select from 'react-select';
 import toast from 'react-hot-toast';
 import { 
   createOrder, 
@@ -19,6 +22,8 @@ import {
   type ProductDropdownItem,
   type CreateOrderProduct
 } from '../../services/order';
+import { createPartner } from '../../services/partner';
+import { getSession } from '../../utils/storage';
 
 interface FormData {
   customerId: string;
@@ -41,6 +46,24 @@ interface FormData {
   }>;
 }
 
+interface OrderPreloadData {
+  customerId: string;
+  customerName: string;
+  employeeId: string;
+  employeeName: string;
+  deliveryAddress: string;
+  isReturnOrder: boolean;
+  originalProducts?: Array<{
+    productId: string;
+    productName: string;
+    sku: string;
+    unit: string;
+    quantity: number;
+    price: number;
+    coefficient: number;
+  }>;
+}
+
 const initialFormData: FormData = {
   customerId: '',
   customerName: '',
@@ -59,43 +82,36 @@ interface DropdownState {
 
 export default function OrderAdd() {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState<FormData>(initialFormData);
+  const location = useLocation();
+  const session = getSession();
+  const defaultValues = session?.defaultValues || {};
+
+  const [formData, setFormData] = useState<FormData>({
+    ...initialFormData,
+    employeeId: defaultValues.employeeResponsible?.id || '',
+    employeeName: defaultValues.employeeResponsible?.presentation || ''
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [customers, setCustomers] = useState<CustomerDropdownItem[]>([]);
   const [employees, setEmployees] = useState<EmployeeDropdownItem[]>([]);
   const [products, setProducts] = useState<ProductDropdownItem[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isReturnOrder, setIsReturnOrder] = useState(false);
+  const [availableProducts, setAvailableProducts] = useState<ProductDropdownItem[]>([]);
+  const [showCreateCustomerPopup, setShowCreateCustomerPopup] = useState(false); // State cho popup Tạo khách hàng
+  const [customerName, setCustomerName] = useState(''); // State cho ô Tên khách hàng
+  const [customerPhone, setCustomerPhone] = useState(''); // State cho ô Số điện thoại
+  const [customerAddress, setCustomerAddress] = useState(''); // State cho ô Địa chỉ
 
   // Dropdown states
-  const [customerDropdown, setCustomerDropdown] = useState<DropdownState>({
-    isOpen: false,
-    search: ''
-  });
-  const [employeeDropdown, setEmployeeDropdown] = useState<DropdownState>({
-    isOpen: false,
-    search: ''
-  });
   const [productDropdowns, setProductDropdowns] = useState<{[key: number]: DropdownState}>({});
 
   // Refs for click outside handling
-  const customerRef = useRef<HTMLDivElement>(null);
-  const employeeRef = useRef<HTMLDivElement>(null);
   const productRefs = useRef<{[key: number]: HTMLDivElement | null}>({});
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      // Handle customer dropdown
-      if (customerRef.current && !customerRef.current.contains(event.target as Node)) {
-        setCustomerDropdown(prev => ({ ...prev, isOpen: false }));
-      }
-      
-      // Handle employee dropdown
-      if (employeeRef.current && !employeeRef.current.contains(event.target as Node)) {
-        setEmployeeDropdown(prev => ({ ...prev, isOpen: false }));
-      }
-      
-      // Handle product dropdowns
       Object.entries(productRefs.current).forEach(([index, ref]) => {
         if (ref && !ref.contains(event.target as Node)) {
           setProductDropdowns(prev => ({
@@ -122,6 +138,50 @@ export default function OrderAdd() {
         setCustomers(customerData);
         setEmployees(employeeData);
         setProducts(productData);
+
+        // Check for pre-populated data
+        const savedData = sessionStorage.getItem('newOrderData');
+        if (savedData) {
+          try {
+            const parsedData = JSON.parse(savedData) as OrderPreloadData;
+            
+            setFormData(prev => ({
+              ...prev,
+              customerId: parsedData.customerId,
+              customerName: parsedData.customerName,
+              employeeId: parsedData.employeeId || defaultValues.employeeResponsible?.id || '',
+              employeeName: parsedData.employeeName || defaultValues.employeeResponsible?.presentation || '',
+              deliveryAddress: parsedData.deliveryAddress,
+              products: []
+            }));
+
+            setIsReturnOrder(parsedData.isReturnOrder);
+
+            if (parsedData.isReturnOrder && Array.isArray(parsedData.originalProducts)) {
+              // Filter available products to only those from the original order
+              const filteredProducts = productData.filter(p => 
+                parsedData.originalProducts?.some(op => op.productId === p.id)
+              );
+              
+              // Merge original product data with product details
+              const enhancedProducts = filteredProducts.map(p => {
+                const originalProduct = parsedData.originalProducts?.find(op => op.productId === p.id);
+                return {
+                  ...p,
+                  originalQuantity: originalProduct?.quantity || 0,
+                  originalPrice: originalProduct?.price || 0
+                };
+              });
+
+              setAvailableProducts(enhancedProducts);
+            }
+
+            // Clear the saved data
+            sessionStorage.removeItem('newOrderData');
+          } catch (error) {
+            console.error('Error parsing saved order data:', error);
+          }
+        }
       } catch (error) {
         toast.error('Không thể tải dữ liệu. Vui lòng thử lại sau.');
       } finally {
@@ -196,24 +256,10 @@ export default function OrderAdd() {
     });
   };
 
-  const getFilteredCustomers = () => {
-    const search = customerDropdown.search.toLowerCase();
-    return customers.filter(customer => 
-      customer.name.toLowerCase().includes(search) ||
-      customer.code.toLowerCase().includes(search)
-    );
-  };
-
-  const getFilteredEmployees = () => {
-    const search = employeeDropdown.search.toLowerCase();
-    return employees.filter(employee => 
-      employee.name.toLowerCase().includes(search)
-    );
-  };
-
   const getFilteredProducts = (index: number) => {
     const search = (productDropdowns[index]?.search || '').toLowerCase();
-    return products.filter(product => 
+    const productsToFilter = isReturnOrder ? availableProducts : products;
+    return productsToFilter.filter(product => 
       product.name.toLowerCase().includes(search) ||
       product.code.toLowerCase().includes(search)
     );
@@ -306,6 +352,112 @@ export default function OrderAdd() {
     }
   };
 
+  // Định dạng options cho react-select (Khách hàng)
+  const customerOptions = [
+    { value: 'create-customer', label: 'Tạo khách hàng', isCreateOption: true },
+    ...customers.map(customer => ({
+      value: customer.id,
+      label: customer.name
+    }))
+  ];
+
+  // Custom Option cho react-select để hiển thị icon "Tạo khách hàng"
+  const CustomOption = (props: any) => {
+    const { data, innerRef, innerProps } = props;
+    return (
+      <div
+        ref={innerRef}
+        {...innerProps}
+        className="flex items-center px-3 py-2 cursor-pointer hover:bg-gray-100"
+      >
+        {data.isCreateOption ? (
+          <>
+            <PlusCircle className="h-4 w-4 mr-2 text-blue-600" />
+            <span className="text-blue-600">{data.label}</span>
+          </>
+        ) : (
+          <span>{data.label}</span>
+        )}
+      </div>
+    );
+  };
+
+  // Xử lý khi chọn "Khách hàng"
+  const handleCustomerChange = (selectedOption: any) => {
+    if (selectedOption?.value === 'create-customer') {
+      setShowCreateCustomerPopup(true);
+      return;
+    }
+
+    const selectedCustomer = customers.find(c => c.id === selectedOption?.value);
+    setFormData(prev => ({
+      ...prev,
+      customerId: selectedOption ? selectedOption.value : '',
+      customerName: selectedCustomer ? selectedCustomer.name : ''
+    }));
+  };
+
+  // Xử lý đóng popup Tạo khách hàng
+  const handleCloseCreateCustomerPopup = () => {
+    setShowCreateCustomerPopup(false);
+    setCustomerName('');
+    setCustomerPhone('');
+    setCustomerAddress('');
+  };
+
+  // Xử lý xác nhận tạo khách hàng
+  const handleConfirmCreateCustomer = async () => {
+    // Validate input
+    if (!customerName.trim()) {
+      toast.error('Vui lòng nhập Tên khách hàng');
+      return;
+    }
+
+    try {
+      const newCustomer = await createPartner({
+        name: customerName,
+        fullName: '',
+        dateOfBirth: '',
+        phone: customerPhone,
+        email: '',
+        address: customerAddress,
+        notes: '',
+        gender: '',
+        picture: '',
+        counterpartyKindId: defaultValues.counterpartyKind?.id || '',
+        counterpartyKindPresentation: defaultValues.counterpartyKind?.presentation || '',
+        employeeResponsibleId: defaultValues.employeeResponsible?.id || '',
+        employeeResponsiblePresentation: defaultValues.employeeResponsible?.presentation || '',
+        taxIdentifactionNumber: '',
+        invalid: false,
+        isCustomer: true,
+        isVendor: false,
+        otherRelations: false,
+        margin: 0,
+        doOperationsByContracts: false,
+        doOperationsByOrders: false,
+        doOperationsByDocuments: false
+      });
+
+      // Cập nhật danh sách khách hàng
+      const updatedCustomers = [...customers, { id: newCustomer.id, name: customerName, code: newCustomer.code || '' }];
+      setCustomers(updatedCustomers);
+
+      // Chọn khách hàng vừa tạo
+      setFormData(prev => ({
+        ...prev,
+        customerId: newCustomer.id,
+        customerName: customerName
+      }));
+
+      toast.success('Tạo khách hàng thành công');
+      handleCloseCreateCustomerPopup();
+    } catch (error) {
+      toast.error('Không thể tạo khách hàng');
+      console.error('Error creating customer:', error);
+    }
+  };
+
   if (isLoadingData) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -331,132 +483,34 @@ export default function OrderAdd() {
         {/* Order Information */}
         <div className="space-y-4 mb-6">
           {/* Customer Selection */}
-          <div ref={customerRef} className="relative">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Khách hàng *
             </label>
-            <div 
-              onClick={() => setCustomerDropdown(prev => ({ ...prev, isOpen: true }))}
-              className="relative cursor-pointer"
-            >
-              <input
-                type="text"
-                value={customerDropdown.isOpen ? customerDropdown.search : formData.customerName || 'Chọn khách hàng...'}
-                onChange={(e) => setCustomerDropdown(prev => ({ ...prev, search: e.target.value }))}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Tìm kiếm khách hàng..."
-                readOnly={!customerDropdown.isOpen}
-              />
-              {formData.customerName && !customerDropdown.isOpen && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setFormData(prev => ({ ...prev, customerId: '', customerName: '' }));
-                  }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
-                >
-                  <X className="h-4 w-4 text-gray-400" />
-                </button>
-              )}
-            </div>
-            {customerDropdown.isOpen && (
-              <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg max-h-60 overflow-auto">
-                <div className="sticky top-0 bg-white p-2 border-b">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={customerDropdown.search}
-                      onChange={(e) => setCustomerDropdown(prev => ({ ...prev, search: e.target.value }))}
-                      className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Tìm kiếm..."
-                      autoFocus
-                    />
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  </div>
-                </div>
-                {getFilteredCustomers().map(customer => (
-                  <div
-                    key={customer.id}
-                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                    onClick={() => {
-                      setFormData(prev => ({
-                        ...prev,
-                        customerId: customer.id,
-                        customerName: customer.name
-                      }));
-                      setCustomerDropdown({ isOpen: false, search: '' });
-                    }}
-                  >
-                    <div className="text-sm font-medium text-gray-900">{customer.name}</div>
-                    <div className="text-xs text-gray-500">{customer.code}</div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <Select
+              options={customerOptions}
+              value={customerOptions.find(option => option.value === formData.customerId) || null}
+              onChange={handleCustomerChange}
+              placeholder="Chọn khách hàng"
+              isClearable
+              isSearchable
+              className="text-sm"
+              classNamePrefix="select"
+              components={{ Option: CustomOption }}
+            />
           </div>
 
           {/* Employee Selection */}
-          <div ref={employeeRef} className="relative">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Người bán
             </label>
-            <div 
-              onClick={() => setEmployeeDropdown(prev => ({ ...prev, isOpen: true }))}
-              className="relative cursor-pointer"
-            >
-              <input
-                type="text"
-                value={employeeDropdown.isOpen ? employeeDropdown.search : formData.employeeName || 'Chọn người bán...'}
-                onChange={(e) => setEmployeeDropdown(prev => ({ ...prev, search: e.target.value }))}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Tìm kiếm người bán..."
-                readOnly={!employeeDropdown.isOpen}
-              />
-              {formData.employeeName && !employeeDropdown.isOpen && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setFormData(prev => ({ ...prev, employeeId: '', employeeName: '' }));
-                  }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
-                >
-                  <X className="h-4 w-4 text-gray-400" />
-                </button>
-              )}
-            </div>
-            {employeeDropdown.isOpen && (
-              <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg max-h-60 overflow-auto">
-                <div className="sticky top-0 bg-white p-2 border-b">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={employeeDropdown.search}
-                      onChange={(e) => setEmployeeDropdown(prev => ({ ...prev, search: e.target.value }))}
-                      className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Tìm kiếm..."
-                      autoFocus
-                    />
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  </div>
-                </div>
-                {getFilteredEmployees().map(employee => (
-                  <div
-                    key={employee.id}
-                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                    onClick={() => {
-                      setFormData(prev => ({
-                        ...prev,
-                        employeeId: employee.id,
-                        employeeName: employee.name
-                      }));
-                      setEmployeeDropdown({ isOpen: false, search: '' });
-                    }}
-                  >
-                    <div className="text-sm text-gray-900">{employee.name}</div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <input
+              type="text"
+              value={formData.employeeName || 'Không xác định'}
+              disabled
+              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50"
+            />
           </div>
 
           {/* Order Status */}
@@ -680,6 +734,69 @@ export default function OrderAdd() {
                 className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md disabled:opacity-50"
               >
                 {isLoading ? 'Đang xử lý...' : 'Xác nhận'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Customer Popup */}
+      {showCreateCustomerPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-lg p-4 w-full max-w-sm">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Tạo khách hàng mới
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tên khách hàng *
+                </label>
+                <input
+                  type="text"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Nhập tên khách hàng"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Số điện thoại
+                </label>
+                <input
+                  type="text"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Nhập số điện thoại"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Địa chỉ
+                </label>
+                <input
+                  type="text"
+                  value={customerAddress}
+                  onChange={(e) => setCustomerAddress(e.target.value)}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Nhập địa chỉ"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={handleCloseCreateCustomerPopup}
+                className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={handleConfirmCreateCustomer}
+                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+              >
+                Xác nhận
               </button>
             </div>
           </div>

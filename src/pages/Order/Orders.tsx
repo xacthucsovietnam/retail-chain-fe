@@ -189,10 +189,24 @@ export default function Orders() {
 
   const getStatusColor = (status: string) => {
     const statusLower = status.toLowerCase();
-    if (statusLower.includes('new')) return 'bg-blue-100 text-blue-800';
-    if (statusLower.includes('processing')) return 'bg-yellow-100 text-yellow-800';
-    if (statusLower.includes('completed')) return 'bg-green-100 text-green-800';
-    if (statusLower.includes('cancelled')) return 'bg-red-100 text-red-800';
+    if (statusLower.includes('đang soạn')) {
+      return 'bg-[#FFC107]/10 text-[#FFC107]';
+    }
+    if (statusLower.includes('đã giao hàng')) {
+      return 'bg-[#FF9800]/10 text-[#FF9800]';
+    }
+    if (statusLower.includes('chờ trả trước')) {
+      return 'bg-[#2196F3]/10 text-[#2196F3]';
+    }
+    if (statusLower.includes('đang chuẩn bị')) {
+      return 'bg-[#4CAF50]/10 text-[#4CAF50]';
+    }
+    if (statusLower.includes('đã hủy')) {
+      return 'bg-[#F44336]/10 text-[#F44336]';
+    }
+    if (statusLower.includes('đã hoàn thành')) {
+      return 'bg-[#9C27B0]/10 text-[#9C27B0]';
+    }
     return 'bg-gray-100 text-gray-800';
   };
 
@@ -375,10 +389,12 @@ export default function Orders() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="">Tất cả trạng thái</option>
-                  <option value="New">Mới</option>
-                  <option value="Processing">Đang xử lý</option>
-                  <option value="Completed">Hoàn thành</option>
-                  <option value="Cancelled">Đã hủy</option>
+                  <option value="Đang soạn">Đang soạn</option>
+                  <option value="Đã giao hàng">Đã giao hàng</option>
+                  <option value="Chờ trả trước">Chờ trả trước</option>
+                  <option value="Đang chuẩn bị">Đang chuẩn bị</option>
+                  <option value="Đã hủy">Đã hủy</option>
+                  <option value="Đã hoàn thành">Đã hoàn thành</option>
                 </select>
               </div>
 

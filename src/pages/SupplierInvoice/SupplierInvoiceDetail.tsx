@@ -8,15 +8,15 @@ import {
   Loader2,
   AlertCircle,
   Package,
-  Tag,
   DollarSign,
   User,
   Building,
-  FileCheck,
-  Receipt
+  Receipt,
+  Save
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getSupplierInvoiceDetail } from '../../services/supplierInvoice';
+import { getProductPrices, createProductPrice } from '../../utils/productPrice';
 import type { SupplierInvoiceDetail as ISupplierInvoiceDetail } from '../../services/supplierInvoice';
 import { formatCurrency } from '../../utils/currency';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -25,14 +25,21 @@ export default function SupplierInvoiceDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [invoice, setInvoice] = useState<ISupplierInvoiceDetail | null>(null);
+  const [productPrices, setProductPrices] = useState<Map<string, { price?: number; oldPrice?: number }>>(new Map());
+  const [originalProductPrices, setOriginalProductPrices] = useState<Map<string, { price?: number; oldPrice?: number }>>(new Map());
+  const [isPriceChanged, setIsPriceChanged] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isPriceModalOpen, setIsPriceModalOpen] = useState(false);
+  const [exchangeRate, setExchangeRate] = useState<number>(0);
+  const [profitMargin, setProfitMargin] = useState<number>(1.1);
+  const [fillExistingPrices, setFillExistingPrices] = useState(false);
   const { t } = useLanguage();
 
   useEffect(() => {
-    const fetchInvoiceDetail = async () => {
+    const fetchData = async () => {
       if (!id) {
-        setError('Invoice ID is missing');
+        setError('ID đơn nhận hàng không tồn tại');
         setIsLoading(false);
         return;
       }
@@ -40,10 +47,18 @@ export default function SupplierInvoiceDetail() {
       try {
         setIsLoading(true);
         setError(null);
-        const data = await getSupplierInvoiceDetail(id);
-        setInvoice(data);
+        
+        const invoiceData = await getSupplierInvoiceDetail(id);
+        setInvoice(invoiceData);
+
+        const productIds = invoiceData.products.map(product => product.productId);
+        const pricesMap = await getProductPrices(productIds);
+        console.log('Product prices response:', Array.from(pricesMap.entries()));
+        setProductPrices(pricesMap);
+        setOriginalProductPrices(new Map(pricesMap));
+        
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to load invoice details';
+        const errorMessage = error instanceof Error ? error.message : 'Không thể tải thông tin đơn nhận hàng';
         setError(errorMessage);
         toast.error(errorMessage);
       } finally {
@@ -51,8 +66,23 @@ export default function SupplierInvoiceDetail() {
       }
     };
 
-    fetchInvoiceDetail();
+    fetchData();
   }, [id]);
+
+  const areMapsEqual = (map1: Map<string, { price?: number; oldPrice?: number }>, map2: Map<string, { price?: number; oldPrice?: number }>) => {
+    if (map1.size !== map2.size) return false;
+    for (const [key, value] of map1) {
+      const map2Value = map2.get(key);
+      if (map2Value === undefined || value.price !== map2Value.price || value.oldPrice !== map2Value.oldPrice) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const calculateSellingPrice = (price: number, exchangeRate: number, profitMargin: number): number => {
+    return price * exchangeRate * profitMargin;
+  };
 
   const handleEdit = () => {
     if (id) {
@@ -61,7 +91,143 @@ export default function SupplierInvoiceDetail() {
   };
 
   const handleDelete = () => {
-    toast.error('Delete functionality not implemented yet');
+    toast.error('Chức năng xóa chưa được triển khai');
+  };
+
+  const handleSetPrices = () => {
+    setIsPriceModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsPriceModalOpen(false);
+  };
+
+  const handleConfirmPrices = () => {
+    if (!invoice) return;
+
+    // Sử dụng giá trị mặc định nếu exchangeRate hoặc profitMargin là NaN
+    const newExchangeRate = isNaN(exchangeRate) ? 0 : exchangeRate;
+    const newProfitMargin = isNaN(profitMargin) ? 1.1 : profitMargin;
+
+    // Kiểm tra giá trị hợp lệ
+    if (newExchangeRate < 0) {
+      toast.error('Tỷ giá không được nhỏ hơn 0');
+      return;
+    }
+    if (newProfitMargin < 1.01) {
+      toast.error('Hệ số lợi nhuận phải lớn hơn 1');
+      return;
+    }
+
+    const shouldFillExistingPrices = fillExistingPrices;
+    const newProductPrices = new Map(productPrices);
+
+    invoice.products.forEach(product => {
+      const currentPriceData = newProductPrices.get(product.productId);
+      if (shouldFillExistingPrices || !currentPriceData?.price) {
+        const sellingPrice = calculateSellingPrice(product.price, newExchangeRate, newProfitMargin);
+        newProductPrices.set(product.productId, {
+          price: sellingPrice,
+          oldPrice: currentPriceData?.oldPrice
+        });
+      }
+    });
+
+    const hasChanged = !areMapsEqual(newProductPrices, originalProductPrices);
+    setIsPriceChanged(hasChanged);
+
+    setProductPrices(newProductPrices);
+    setIsPriceModalOpen(false);
+  };
+
+  const handleSavePrices = async () => {
+    if (!invoice || !id) return;
+
+    try {
+      const kindOfPriceId = "1a1fb49c-5b28-11ef-a699-00155d058802";
+      const documentBasisId = id;
+      const currencyId = invoice.currency.id;
+
+      // Thu thập tất cả sản phẩm cần đăng ký giá vào một mảng
+      const productsToRegister = invoice.products
+        .map(product => {
+          const priceData = productPrices.get(product.productId);
+          if (priceData?.price !== undefined && priceData?.price !== null) {
+            return {
+              productId: product.productId,
+              characteristicId: "",
+              measurementUnitId: "5736c39c-5b28-11ef-a699-00155d058802",
+              kindOfPriceId: kindOfPriceId,
+              price: priceData.price,
+              oldPrice: priceData.oldPrice || 0,
+              currencyId: currencyId,
+              currencyOldId: ""
+            };
+          }
+          return null;
+        })
+        .filter((product): product is NonNullable<typeof product> => product !== null);
+
+      // Nếu không có sản phẩm nào để đăng ký, thoát hàm
+      if (productsToRegister.length === 0) {
+        toast.error('Không có sản phẩm nào để đăng ký giá');
+        return;
+      }
+
+      // Kiểm tra và loại bỏ sản phẩm trùng lặp dựa trên productId
+      const uniqueProductsMap = new Map<string, typeof productsToRegister[0]>();
+      productsToRegister.forEach(product => {
+        uniqueProductsMap.set(product.productId, product); // Giữ lại bản ghi cuối cùng nếu có trùng lặp
+      });
+
+      const uniqueProducts = Array.from(uniqueProductsMap.values());
+
+      // Nếu sau khi loại bỏ trùng lặp, không còn sản phẩm nào, thoát hàm
+      if (uniqueProducts.length === 0) {
+        toast.error('Không có sản phẩm hợp lệ để đăng ký giá sau khi loại bỏ trùng lặp');
+        return;
+      }
+
+      // Gọi API createProductPrice một lần với inventory là mảng
+      await createProductPrice({
+        documentBasisId: documentBasisId,
+        products: uniqueProducts,
+        comment: "Cập nhật giá bán từ SupplierInvoiceDetail"
+      });
+
+      // Cập nhật lại dữ liệu sau khi lưu giá
+      const updatedInvoice = await getSupplierInvoiceDetail(id);
+      setInvoice(updatedInvoice);
+
+      const productIds = updatedInvoice.products.map(product => product.productId);
+      const updatedPricesMap = await getProductPrices(productIds);
+      setProductPrices(updatedPricesMap);
+      setOriginalProductPrices(new Map(updatedPricesMap));
+
+      // Reset giá trị Tỷ giá và Hệ số lợi nhuận sau khi lưu
+      setExchangeRate(0);
+      setProfitMargin(1.1);
+
+      toast.success('Lưu giá bán thành công');
+      setIsPriceChanged(false);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Lưu giá bán thất bại';
+      toast.error(errorMessage);
+    }
+  };
+
+  const handlePriceChange = (productId: string, newPrice: number) => {
+    const newProductPrices = new Map(productPrices);
+    const currentPriceData = newProductPrices.get(productId) || { oldPrice: 0 };
+    newProductPrices.set(productId, {
+      price: newPrice,
+      oldPrice: currentPriceData.oldPrice
+    });
+    setProductPrices(newProductPrices);
+
+    // Cập nhật trạng thái isPriceChanged
+    const hasChanged = !areMapsEqual(newProductPrices, originalProductPrices);
+    setIsPriceChanged(hasChanged);
   };
 
   const formatDate = (dateString: string) => {
@@ -88,17 +254,14 @@ export default function SupplierInvoiceDetail() {
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            {error || 'Invoice Not Found'}
+            {error || 'Không tìm thấy đơn nhận hàng'}
           </h2>
-          <p className="text-gray-600 mb-4">
-            The supplier invoice you're looking for could not be found or an error occurred.
-          </p>
           <button
             onClick={() => navigate('/supplier-invoices')}
             className="text-blue-600 hover:text-blue-800 flex items-center gap-2 mx-auto"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to Supplier Invoices
+            Quay lại danh sách
           </button>
         </div>
       </div>
@@ -106,228 +269,296 @@ export default function SupplierInvoiceDetail() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="mb-6 flex justify-between items-center">
-        <button
-          onClick={() => navigate('/supplier-invoices')}
-          className="text-gray-600 hover:text-gray-800 flex items-center gap-2"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          Back to Supplier Invoices
-        </button>
-        <div className="flex gap-2">
-          <button
-            onClick={handleEdit}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <Pencil className="w-4 h-4 mr-2" />
-            Edit
-          </button>
-          <button
-            onClick={handleDelete}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Delete
-          </button>
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
+        <div className="px-4 py-3">
+          <h1 className="text-lg font-semibold text-gray-900">Chi tiết đơn nhận hàng</h1>
+          <p className="text-sm text-gray-500">#{invoice.number}</p>
         </div>
       </div>
 
-      {/* Invoice Information */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="flex justify-between items-start mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800">#{invoice.number}</h2>
-            <p className="text-sm text-gray-500">{formatDate(invoice.date)}</p>
-          </div>
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-            invoice.posted
-              ? 'bg-green-100 text-green-800'
-              : 'bg-yellow-100 text-yellow-800'
-          }`}>
-            {invoice.posted ? t('supplierInvoices.status.posted') : t('supplierInvoices.status.draft')}
-          </span>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-4">
+      <div className="pt-4 px-4">
+        <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
+          <div className="flex justify-between items-start mb-4">
             <div>
-              <div className="flex items-center text-gray-600 mb-1">
-                <User className="w-4 h-4 mr-2" />
-                <span className="text-sm">{t('supplierInvoices.author')}</span>
-              </div>
-              <p className="text-lg text-gray-900">{invoice.author}</p>
+              <p className="text-sm text-gray-500">Ngày tạo</p>
+              <p className="text-base text-gray-900">{formatDate(invoice.date)}</p>
             </div>
-
-            {invoice.contract && (
-              <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <FileText className="w-4 h-4 mr-2" />
-                  <span className="text-sm">{t('supplierInvoices.contract')}</span>
-                </div>
-                <p className="text-lg text-gray-900">{invoice.contract}</p>
-              </div>
-            )}
-
-            <div>
-              <div className="flex items-center text-gray-600 mb-1">
-                <Building className="w-4 h-4 mr-2" />
-                <span className="text-sm">{t('supplierInvoices.counterparty')}</span>
-              </div>
-              <p className="text-lg text-gray-900">{invoice.counterparty}</p>
-            </div>
-
-            <div>
-              <div className="flex items-center text-gray-600 mb-1">
-                <Tag className="w-4 h-4 mr-2" />
-                <span className="text-sm">Operation Type</span>
-              </div>
-              <p className="text-lg text-gray-900">{invoice.operationType}</p>
-            </div>
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+              invoice.posted
+                ? 'bg-green-100 text-green-800'
+                : 'bg-yellow-100 text-yellow-800'
+            }`}>
+              {invoice.posted ? 'Đã ghi sổ' : 'Nháp'}
+            </span>
           </div>
 
           <div className="space-y-4">
-            <div>
-              <div className="flex items-center text-gray-600 mb-1">
-                <DollarSign className="w-4 h-4 mr-2" />
-                <span className="text-sm">Total Amount</span>
+            <div className="flex items-center">
+              <User className="w-5 h-5 text-gray-400 mr-3" />
+              <div>
+                <p className="text-sm text-gray-500">Người lập</p>
+                <p className="text-base text-gray-900">{invoice.author.presentation}</p>
               </div>
-              <p className="text-xl font-bold text-blue-600">
-                {formatCurrency(invoice.amount, invoice.currency)}
-              </p>
             </div>
 
-            {invoice.employeeResponsible && (
+            <div className="flex items-center">
+              <Building className="w-5 h-5 text-gray-400 mr-3" />
               <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <User className="w-4 h-4 mr-2" />
-                  <span className="text-sm">{t('supplierInvoices.responsible')}</span>
-                </div>
-                <p className="text-lg text-gray-900">{invoice.employeeResponsible}</p>
+                <p className="text-sm text-gray-500">Nhà cung cấp</p>
+                <p className="text-base text-gray-900">{invoice.counterparty.presentation}</p>
               </div>
-            )}
+            </div>
 
-            {invoice.vatTaxation && (
+            <div className="flex items-center">
+              <DollarSign className="w-5 h-5 text-gray-400 mr-3" />
               <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <FileCheck className="w-4 h-4 mr-2" />
-                  <span className="text-sm">{t('supplierInvoices.vat')}</span>
-                </div>
-                <p className="text-lg text-gray-900">{invoice.vatTaxation}</p>
+                <p className="text-sm text-gray-500">Tổng tiền</p>
+                <p className="text-base font-medium text-blue-600">
+                  {formatCurrency(invoice.amount, invoice.currency.presentation)}
+                </p>
               </div>
-            )}
+            </div>
 
             {invoice.orderBasis && (
-              <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <Receipt className="w-4 h-4 mr-2" />
-                  <span className="text-sm">{t('supplierInvoices.order')}</span>
+              <div className="flex items-center">
+                <Receipt className="w-5 h-5 text-gray-400 mr-3" />
+                <div>
+                  <p className="text-sm text-gray-500">Đơn đặt hàng</p>
+                  <p className="text-base text-gray-900">{invoice.orderBasis.presentation}</p>
                 </div>
-                <p className="text-lg text-gray-900">{invoice.orderBasis}</p>
               </div>
             )}
 
             {invoice.comment && (
-              <div>
-                <div className="flex items-center text-gray-600 mb-1">
-                  <FileText className="w-4 h-4 mr-2" />
-                  <span className="text-sm">Notes</span>
+              <div className="flex items-start">
+                <FileText className="w-5 h-5 text-gray-400 mr-3 mt-0.5" />
+                <div>
+                  <p className="text-sm text-gray-500">Ghi chú</p>
+                  <p className="text-base text-gray-900 whitespace-pre-line">{invoice.comment}</p>
                 </div>
-                <p className="text-lg text-gray-900 whitespace-pre-line">{invoice.comment}</p>
               </div>
             )}
           </div>
         </div>
-      </div>
 
-      {/* Products List */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Products</h2>
-        
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead>
-              <tr>
-                <th className="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  No.
-                </th>
-                <th className="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Product
-                </th>
-                <th className="px-6 py-3 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Unit
-                </th>
-                <th className="px-6 py-3 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Unit Price
-                </th>
-                <th className="px-6 py-3 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Quantity
-                </th>
-                <th className="px-6 py-3 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Total
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {invoice.products.map((product) => (
-                <tr key={product.lineNumber} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {product.lineNumber}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center">
+        <div className="bg-white rounded-lg shadow-sm p-4">
+          <h2 className="text-lg font-medium text-gray-900 mb-4">Danh sách sản phẩm</h2>
+          
+          <div className="space-y-4">
+            {invoice.products.map((product) => {
+              const priceData = productPrices.get(product.productId);
+              const sellingPrice = priceData?.price;
+
+              return (
+                <div key={product.lineNumber} className="border-b border-gray-100 last:border-0 pb-4 last:pb-0">
+                  <div className="flex gap-3">
+                    <div className="h-16 w-16 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
                       {product.picture ? (
                         <img
                           src={product.picture}
                           alt={product.productName}
-                          className="h-10 w-10 rounded-full object-cover"
-                          loading="lazy"
+                          className="h-full w-full object-cover rounded-lg"
                           onError={(e) => {
                             e.currentTarget.src = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc';
-                            e.currentTarget.alt = 'Fallback product image';
+                            e.currentTarget.alt = 'Hình ảnh mặc định';
                           }}
                         />
                       ) : (
-                        <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                          <Package className="h-6 w-6 text-gray-400" />
-                        </div>
+                        <Package className="h-8 w-8 text-gray-400" />
                       )}
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">
-                          {product.productName}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-medium text-gray-900 mb-1">
+                        {product.productName}
+                      </h3>
+                      
+                      <div className="text-sm text-gray-500 space-y-1">
+                        <div className="flex justify-between">
+                          <span>SKU:</span>
+                          <span>{product.code}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Số lượng:</span>
+                          <span>{product.quantity} {product.unit}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Hệ số:</span>
+                          <span>{product.coefficient}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Đơn giá nhập/chiếc:</span>
+                          <span>{formatCurrency(product.price, invoice.currency.presentation)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Đơn giá bán/chiếc:</span>
+                          {isPriceChanged ? (
+                            <input
+                              type="number"
+                              value={sellingPrice !== undefined && sellingPrice !== null ? sellingPrice : ''}
+                              onChange={(e) => {
+                                const newPrice = Number(e.target.value);
+                                if (!isNaN(newPrice) && newPrice >= 0) {
+                                  handlePriceChange(product.productId, newPrice);
+                                }
+                              }}
+                              className="w-32 text-right border rounded-md px-2 py-1 focus:border-blue-500 focus:ring-blue-500"
+                            />
+                          ) : (
+                            <span className={sellingPrice === undefined || sellingPrice === null ? 'text-red-500' : ''}>
+                              {sellingPrice !== undefined && sellingPrice !== null 
+                                ? formatCurrency(sellingPrice, invoice.currency.presentation)
+                                : 'Chưa có giá bán'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex justify-between font-medium text-blue-600">
+                          <span>Thành tiền:</span>
+                          <span>{formatCurrency(product.total, invoice.currency.presentation)}</span>
                         </div>
                       </div>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                    {product.unit}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                    {formatCurrency(product.price, invoice.currency)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                    {product.quantity}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-blue-600">
-                    {formatCurrency(product.total, invoice.currency)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="bg-gray-50">
-                <td colSpan={5} className="px-6 py-4 text-right text-sm font-medium text-gray-900">
-                  Total Amount
-                </td>
-                <td className="px-6 py-4 text-right text-sm font-bold text-blue-600">
-                  {formatCurrency(invoice.amount, invoice.currency)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium text-gray-900">Tổng cộng</span>
+              <span className="text-lg font-semibold text-blue-600">
+                {formatCurrency(invoice.amount, invoice.currency.presentation)}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
+
+      <div className="fixed bottom-4 right-4 flex flex-col gap-2">
+        <button
+          onClick={() => navigate('/supplier-invoices')}
+          className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        >
+          <ArrowLeft className="h-6 w-6" />
+        </button>
+        
+        <button
+          onClick={handleEdit}
+          className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        >
+          <Pencil className="h-6 w-6" />
+        </button>
+
+        <button
+          onClick={handleDelete}
+          className="p-3 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+        >
+          <Trash2 className="h-6 w-6" />
+        </button>
+
+        <button
+          onClick={handleSetPrices}
+          className="p-3 bg-green-600 text-white rounded-full shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+        >
+          <DollarSign className="h-6 w-6" />
+        </button>
+
+        {isPriceChanged && (
+          <button
+            onClick={handleSavePrices}
+            className="p-3 bg-purple-600 text-white rounded-full shadow-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+          >
+            <Save className="h-6 w-6" />
+          </button>
+        )}
+      </div>
+
+      {isPriceModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Đặt giá bán</h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Tỷ giá</label>
+                <input
+                  type="number"
+                  value={exchangeRate}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '') {
+                      setExchangeRate(NaN);
+                    } else {
+                      setExchangeRate(Number(value));
+                    }
+                  }}
+                  onFocus={(e) => {
+                    if (exchangeRate === 0 || isNaN(exchangeRate)) {
+                      setExchangeRate(NaN);
+                      e.target.value = '';
+                    }
+                  }}
+                  min="0"
+                  step="0.01"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Hệ số lợi nhuận</label>
+                <input
+                  type="number"
+                  value={profitMargin}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '') {
+                      setProfitMargin(NaN);
+                    } else {
+                      setProfitMargin(Number(value));
+                    }
+                  }}
+                  onFocus={(e) => {
+                    if (profitMargin === 1.1 || isNaN(profitMargin)) {
+                      setProfitMargin(NaN);
+                      e.target.value = '';
+                    }
+                  }}
+                  min="1.01"
+                  step="0.01"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={fillExistingPrices}
+                  onChange={(e) => setFillExistingPrices(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 text-sm text-gray-700">Điền lại những mặt hàng có giá</label>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                onClick={handleCloseModal}
+                className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={handleConfirmPrices}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                Xác nhận
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -6,14 +6,22 @@ import {
   Upload,
   X,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Plus,
+  Download
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getProductDetail, updateProduct, getCategories, getMeasurementUnits } from '../../services/product';
 import type { ProductDetail, Category, MeasurementUnit, UpdateProductData } from '../../services/product';
+import { DEFAULT_IMAGE_URL } from '../../services/file';
 
 const MAX_IMAGES = 5;
 const MAX_DESCRIPTION_LENGTH = 500;
+
+interface FormData extends UpdateProductData {
+  newImages: File[];
+  deletedImageIds: string[];
+}
 
 export default function ProductUpdate() {
   const { id } = useParams<{ id: string }>();
@@ -26,10 +34,9 @@ export default function ProductUpdate() {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [formData, setFormData] = useState<UpdateProductData>({
+  const [formData, setFormData] = useState<FormData>({
     id: '',
     name: '',
     code: '',
@@ -39,7 +46,9 @@ export default function ProductUpdate() {
     riCoefficient: 1,
     price: 0,
     comment: '',
-    picture: ''
+    picture: '',
+    newImages: [],
+    deletedImageIds: []
   });
 
   useEffect(() => {
@@ -64,7 +73,6 @@ export default function ProductUpdate() {
         setProduct(productData);
         setCategories(categoryData);
         setMeasurementUnits(unitData);
-        setPreviewUrl(productData.imageUrl || '');
 
         setFormData({
           id: productData.id,
@@ -76,7 +84,9 @@ export default function ProductUpdate() {
           riCoefficient: productData.riCoefficient,
           price: productData.price,
           comment: productData.comment,
-          picture: productData.imageUrl || ''
+          picture: productData.imageUrl || '',
+          newImages: [],
+          deletedImageIds: []
         });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to load product details';
@@ -91,30 +101,58 @@ export default function ProductUpdate() {
   }, [id]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Ảnh không được vượt quá 5MB');
-        return;
-      }
+    const files = Array.from(e.target.files || []);
+    
+    // Validate total number of images
+    const currentImageCount = (product?.images?.length || 0) - formData.deletedImageIds.length + formData.newImages.length;
+    if (currentImageCount + files.length > MAX_IMAGES) {
+      toast.error(`Chỉ được tải tối đa ${MAX_IMAGES} ảnh`);
+      return;
+    }
 
+    // Validate each file
+    const validFiles = files.filter(file => {
+      // Check file type
       if (!file.type.match(/^image\/(jpeg|jpg|png)$/)) {
-        toast.error('Chỉ chấp nhận file ảnh JPG hoặc PNG');
-        return;
+        toast.error(`${file.name} không phải là file ảnh hợp lệ`);
+        return false;
       }
 
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        setPreviewUrl(result);
-        setFormData(prev => ({ ...prev, picture: result }));
-        setIsDirty(true);
-      };
-      reader.readAsDataURL(file);
+      // Check file size (5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`${file.name} vượt quá kích thước cho phép (5MB)`);
+        return false;
+      }
+
+      return true;
+    });
+
+    if (validFiles.length) {
+      setFormData(prev => ({
+        ...prev,
+        newImages: [...prev.newImages, ...validFiles]
+      }));
+      setIsDirty(true);
     }
   };
 
-  const handleInputChange = (field: keyof UpdateProductData, value: string | number) => {
+  const handleDeleteImage = (imageId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      deletedImageIds: [...prev.deletedImageIds, imageId]
+    }));
+    setIsDirty(true);
+  };
+
+  const handleRemoveNewImage = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      newImages: prev.newImages.filter((_, i) => i !== index)
+    }));
+    setIsDirty(true);
+  };
+
+  const handleInputChange = (field: keyof FormData, value: string | number) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setIsDirty(true);
   };
@@ -172,6 +210,16 @@ export default function ProductUpdate() {
     }
   };
 
+  const handleBack = () => {
+    if (isDirty) {
+      if (window.confirm('Bạn có thay đổi chưa lưu. Bạn có chắc chắn muốn thoát?')) {
+        navigate(`/products/${id}`);
+      }
+    } else {
+      navigate(`/products/${id}`);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -200,55 +248,90 @@ export default function ProductUpdate() {
     );
   }
 
+  const remainingImageCount = MAX_IMAGES - 
+    ((product.images?.length || 0) - formData.deletedImageIds.length + formData.newImages.length);
+
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* Fixed Header */}
       <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
         <div className="px-4 py-3">
-          <h1 className="text-lg font-semibold text-gray-900">Sửa sản phẩm</h1>
+          <h1 className="text-lg font-semibold text-gray-900">Cập nhật sản phẩm</h1>
+          <p className="text-sm text-gray-500">{product.code}</p>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="pt-4 px-4">
-        {/* Image Upload */}
+        {/* Image Gallery */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Hình ảnh (Tải tối đa 5 ảnh)
+            Hình ảnh ({MAX_IMAGES - remainingImageCount}/{MAX_IMAGES})
           </label>
           <div className="grid grid-cols-3 gap-2">
-            {previewUrl && (
-              <div className="relative aspect-square">
+            {/* Existing Images */}
+            {product.images
+              .filter(img => !formData.deletedImageIds.includes(img.id))
+              .map((image) => (
+                <div key={image.id} className="relative aspect-square">
+                  <img
+                    src={image.url}
+                    alt={product.name}
+                    className="w-full h-full object-cover rounded-lg"
+                  />
+                  <div className="absolute top-1 right-1 flex gap-1">
+                    <button
+                      onClick={() => window.open(image.url, '_blank')}
+                      className="p-1 bg-white rounded-full shadow-md hover:bg-gray-100"
+                      title="Tải xuống"
+                    >
+                      <Download className="w-4 h-4 text-gray-600" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteImage(image.id)}
+                      className="p-1 bg-red-500 text-white rounded-full shadow-md hover:bg-red-600"
+                      title="Xóa"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+            {/* New Images */}
+            {formData.newImages.map((file, index) => (
+              <div key={index} className="relative aspect-square">
                 <img
-                  src={previewUrl}
-                  alt="Preview"
+                  src={URL.createObjectURL(file)}
+                  alt={`New image ${index + 1}`}
                   className="w-full h-full object-cover rounded-lg"
                 />
                 <button
-                  onClick={() => {
-                    setPreviewUrl('');
-                    setFormData(prev => ({ ...prev, picture: '' }));
-                    setIsDirty(true);
-                  }}
-                  className="absolute -top-1 -right-1 p-0.5 bg-red-500 text-white rounded-full hover:bg-red-600"
+                  onClick={() => handleRemoveNewImage(index)}
+                  className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full shadow-md hover:bg-red-600"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
-            )}
-            {!previewUrl && (
+            ))}
+
+            {/* Upload Button */}
+            {remainingImageCount > 0 && (
               <div className="aspect-square">
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   className="w-full h-full flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400"
                 >
-                  <Upload className="w-6 h-6 text-gray-400" />
-                  <span className="mt-1 text-xs text-gray-500">Tải ảnh</span>
+                  <Plus className="w-6 h-6 text-gray-400" />
+                  <span className="mt-1 text-xs text-gray-500">
+                    Thêm ảnh ({remainingImageCount} còn lại)
+                  </span>
                 </button>
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept="image/jpeg,image/png"
+                  multiple
                   onChange={handleImageChange}
                   className="hidden"
                 />
@@ -261,7 +344,7 @@ export default function ProductUpdate() {
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Mã *
+              Mã sản phẩm *
             </label>
             <input
               type="text"
@@ -313,14 +396,13 @@ export default function ProductUpdate() {
               onChange={(e) => handleInputChange('price', Number(e.target.value))}
               min="0"
               step="1000"
-              placeholder="Nhập giá bán"
               className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Đơn vị *
+              Đơn vị tính *
             </label>
             <select
               value={formData.measurementUnit}
@@ -346,7 +428,6 @@ export default function ProductUpdate() {
               onChange={(e) => handleInputChange('riCoefficient', Number(e.target.value))}
               min="1"
               step="1"
-              placeholder="Nhập hệ số ri"
               className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
@@ -376,7 +457,7 @@ export default function ProductUpdate() {
       {/* Floating Action Buttons */}
       <div className="fixed bottom-4 right-4 flex flex-col gap-2">
         <button
-          onClick={() => navigate(`/products/${id}`)}
+          onClick={handleBack}
           className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
         >
           <ArrowLeft className="h-6 w-6" />

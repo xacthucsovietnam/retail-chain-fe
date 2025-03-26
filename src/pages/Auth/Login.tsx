@@ -1,3 +1,4 @@
+// src/pages/Login.tsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, User } from 'lucide-react';
@@ -25,6 +26,7 @@ export default function Login() {
       toast.success(t('message.loginSuccess'));
       navigate('/dashboard');
     } catch (error) {
+      console.error('Login error in Login.tsx:', error);
       toast.error(t('message.loginFailed'));
     } finally {
       setIsLoading(false);
@@ -56,8 +58,7 @@ export default function Login() {
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder={t('login.username')}
                 className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-             />
-             
+              />
             </div>
 
             <div className="relative">
