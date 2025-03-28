@@ -469,7 +469,7 @@ export default function OrderDetail() {
     );
   }
 
-  const pdfUrl = `https://app.xts.vn/dungbaby-service/hs/apps/files/${id}.pdf?print-form-id=${id}&data-type=XTSOrder&template-name=ExternalPrintForm.PF_SalesOrder`;
+  const pdfUrl = `${import.meta.env.VITE_FILE_BASE_URL}/${id}.pdf?print-form-id=${id}&data-type=XTSOrder&template-name=ExternalPrintForm.PF_SalesOrder`;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">

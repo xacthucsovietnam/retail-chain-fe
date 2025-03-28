@@ -780,21 +780,23 @@ export default function SupplierInvoiceAdd() {
         </div>
       </div>
 
-      <div className="fixed bottom-4 right-4 flex flex-col gap-2">
+      <div className="fixed bottom-4 right-4 flex flex-row gap-2 z-50">
         <button
           onClick={() => navigate('/supplier-invoices')}
-          className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+          className="p-2 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50"
           disabled={isProcessingImages || isSavingFromPopup}
+          title="Quay lại danh sách"
         >
-          <ArrowLeft className="h-6 w-6" />
+          <ArrowLeft className="h-5 w-5" />
         </button>
         
         <button
           onClick={handleSubmit}
           disabled={isLoading || isProcessingImages || isSavingFromPopup}
-          className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+          className="p-2 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+          title="Lưu đơn nhận hàng"
         >
-          <Save className="h-6 w-6" />
+          <Save className="h-5 w-5" />
         </button>
       </div>
 

@@ -77,11 +77,11 @@ export default function SupplierInvoiceDetail() {
         setIsLoading(false);
         return;
       }
-      
+
       try {
         setIsLoading(true);
         setError(null);
-        
+
         const invoiceData = await getSupplierInvoiceDetail(id);
         setInvoice(invoiceData);
 
@@ -90,7 +90,7 @@ export default function SupplierInvoiceDetail() {
         console.log('Product prices response:', Array.from(pricesMap.entries()));
         setProductPrices(pricesMap);
         setOriginalProductPrices(new Map(pricesMap));
-        
+
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Không thể tải thông tin đơn nhận hàng';
         setError(errorMessage);
@@ -332,7 +332,7 @@ export default function SupplierInvoiceDetail() {
     );
   }
 
-  const pdfUrl = `https://app.xts.vn/dungbaby-service/hs/apps/files/${id}.pdf?print-form-id=${id}&data-type=XTSSupplierInvoice&template-name=ExternalPrintForm.PF_SupplierInvoice`;
+  const pdfUrl = `${import.meta.env.VITE_FILE_BASE_URL}/${id}.pdf?print-form-id=${id}&data-type=XTSSupplierInvoice&template-name=ExternalPrintForm.PF_SupplierInvoice`;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -350,11 +350,10 @@ export default function SupplierInvoiceDetail() {
               <p className="text-sm text-gray-500">Ngày tạo</p>
               <p className="text-base text-gray-900">{formatDate(invoice.date)}</p>
             </div>
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-              invoice.posted
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${invoice.posted
                 ? 'bg-green-100 text-green-800'
                 : 'bg-yellow-100 text-yellow-800'
-            }`}>
+              }`}>
               {invoice.posted ? 'Đã ghi sổ' : 'Chưa ghi sổ'}
             </span>
           </div>
@@ -410,7 +409,7 @@ export default function SupplierInvoiceDetail() {
 
         <div className="bg-white rounded-lg shadow-sm p-4">
           <h2 className="text-lg font-medium text-gray-900 mb-4">Danh sách sản phẩm</h2>
-          
+
           <div className="space-y-4">
             {invoice.products.map((product) => {
               const priceData = productPrices.get(product.productId);
@@ -434,12 +433,12 @@ export default function SupplierInvoiceDetail() {
                         <Package className="h-8 w-8 text-gray-400" />
                       )}
                     </div>
-                    
+
                     <div className="flex-1 min-w-0">
                       <h3 className="text-sm font-medium text-gray-900 mb-1">
                         {product.productName}
                       </h3>
-                      
+
                       <div className="text-sm text-gray-500 space-y-1">
                         <div className="flex justify-between">
                           <span>SKU:</span>
@@ -473,7 +472,7 @@ export default function SupplierInvoiceDetail() {
                             />
                           ) : (
                             <span className={sellingPrice === undefined || sellingPrice === null ? 'text-red-500' : ''}>
-                              {sellingPrice !== undefined && sellingPrice !== null 
+                              {sellingPrice !== undefined && sellingPrice !== null
                                 ? formatCurrency(sellingPrice, invoice.currency.presentation)
                                 : 'Chưa có giá bán'}
                             </span>
@@ -502,50 +501,56 @@ export default function SupplierInvoiceDetail() {
         </div>
       </div>
 
-      <div className="fixed bottom-4 right-4 flex flex-col gap-2">
+      <div className="fixed bottom-4 right-4 flex flex-row gap-2 z-50">
         <button
           onClick={() => navigate('/supplier-invoices')}
-          className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+          className="p-2 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+          title="Quay lại danh sách"
         >
-          <ArrowLeft className="h-6 w-6" />
+          <ArrowLeft className="h-5 w-5" />
         </button>
-        
+
         <button
           onClick={handleEdit}
-          className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          className="p-2 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          title="Chỉnh sửa"
         >
-          <Pencil className="h-6 w-6" />
+          <Pencil className="h-5 w-5" />
         </button>
 
         <button
           onClick={handleDelete}
-          className="p-3 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+          className="p-2 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+          title="Xóa"
         >
-          <Trash2 className="h-6 w-6" />
+          <Trash2 className="h-5 w-5" />
         </button>
 
         <button
           onClick={handleSetPrices}
-          className="p-3 bg-green-600 text-white rounded-full shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+          className="p-2 bg-green-600 text-white rounded-full shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+          title="Đặt giá bán"
         >
-          <DollarSign className="h-6 w-6" />
+          <DollarSign className="h-5 w-5" />
         </button>
 
         {invoice.posted && (
           <button
             onClick={handlePrint}
-            className="p-3 bg-purple-600 text-white rounded-full shadow-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+            className="p-2 bg-purple-600 text-white rounded-full shadow-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+            title="In"
           >
-            <Printer className="h-6 w-6" />
+            <Printer className="h-5 w-5" />
           </button>
         )}
 
         {isPriceChanged && (
           <button
             onClick={handleSavePrices}
-            className="p-3 bg-purple-600 text-white rounded-full shadow-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+            className="p-2 bg-purple-600 text-white rounded-full shadow-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+            title="Lưu giá bán"
           >
-            <Save className="h-6 w-6" />
+            <Save className="h-5 w-5" />
           </button>
         )}
       </div>

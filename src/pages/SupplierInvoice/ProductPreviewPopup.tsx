@@ -98,8 +98,8 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
   const handleNotExistChange = (index: number, field: keyof ProcessedImageData, value: string) => {
     const updatedNotExist = [...localNotExist];
     updatedNotExist[index] = { ...updatedNotExist[index], [field]: value };
-    if (field === 'quantity') {
-      const quantity = parseFloat(value) || 0;
+    if (field === 'quantity' || field === 'coefficient') {
+      const quantity = parseFloat(updatedNotExist[index].quantity) || 0;
       const price = parseFloat(updatedNotExist[index].price) || 0;
       updatedNotExist[index].total = (quantity * price).toFixed(2);
     }
@@ -109,8 +109,8 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
   const handleExistedChange = (index: number, field: string, value: string) => {
     const updatedExisted = [...localExisted];
     updatedExisted[index] = { ...updatedExisted[index], [field]: value };
-    if (field === 'quantity') {
-      const quantity = parseFloat(value) || 0;
+    if (field === 'quantity' || field === 'coefficient') {
+      const quantity = parseFloat(updatedExisted[index].quantity) || 0;
       const price = parseFloat(updatedExisted[index].price) || 0;
       updatedExisted[index].total = (quantity * price).toFixed(2);
     }
@@ -156,6 +156,7 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
 
       return {
         ...item,
+        coefficient: parseFloat(quickFillCoefficient) || 1,
         discount: quickFillDiscount,
         price: newPrice.toString(),
         total: newTotal
@@ -216,7 +217,7 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
       supplierId
     };
 
-    onSave(localNotExist, localExisted, updatedGeneralInfo); // Truyền cả localExisted
+    onSave(localNotExist, localExisted, updatedGeneralInfo);
   };
 
   return (
@@ -348,7 +349,13 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
                       </div>
                       <div className="flex items-center gap-2 mb-2">
                         <label className="text-sm min-w-[60px]">Hệ số ri:</label>
-                        <span className="text-sm">{item.coefficient}</span>
+                        <input
+                          type="number"
+                          value={item.coefficient}
+                          onChange={(e) => handleExistedChange(index, 'coefficient', e.target.value)}
+                          className="w-20 p-1 border rounded text-sm"
+                          min="1"
+                        />
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <div className="flex items-center gap-2">
@@ -393,15 +400,17 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
                   <h3 className="text-sm font-medium text-gray-700 mb-2">Sản phẩm mới</h3>
                   {localNotExist.map((item, index) => (
                     <div key={index} className="bg-gray-50 p-3 rounded-lg shadow-sm mb-2 relative">
-                      <button
-                        onClick={() => handleRemoveNotExist(index)}
-                        className="absolute top-2 right-2 text-red-600 hover:text-red-800"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-sm font-medium">Sản phẩm: {item.lineNumber}</span>
-                        <span className="text-red-600 text-sm">Mới</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-red-600 text-sm">Mới</span>
+                          <button
+                            onClick={() => handleRemoveNotExist(index)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 mb-2">
                         <label className="text-sm min-w-[60px]">Mã:</label>
@@ -436,7 +445,7 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
                           type="number"
                           value={item.coefficient}
                           onChange={(e) => handleNotExistChange(index, 'coefficient', e.target.value)}
-                          className="flex-1 p-1 border rounded text-sm"
+                          className="w-20 p-1 border rounded text-sm"
                           min="1"
                         />
                       </div>
@@ -516,7 +525,7 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
                   />
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="block text-sm font-medium text-gray-７０0 min-w-[100px]">
+                  <label className="block text-sm font-medium text-gray-700 min-w-[100px]">
                     Hệ số ri
                   </label>
                   <input
