@@ -319,7 +319,7 @@ export default function SupplierInvoices() {
                       ? 'bg-green-100 text-green-800'
                       : 'bg-yellow-100 text-yellow-800'
                   }`}>
-                    {invoice.posted ? 'Đã ghi sổ' : 'Nháp'}
+                    {invoice.posted ? 'Đã ghi sổ' : 'Chưa ghi sổ'}
                   </span>
                 </div>
 
@@ -329,14 +329,9 @@ export default function SupplierInvoices() {
                     {invoice.counterparty}
                   </div>
 
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Tag className="h-4 w-4 mr-2" />
-                    {invoice.operationType}
-                  </div>
-
                   <div className="flex items-center text-sm font-medium text-blue-600">
                     <DollarSign className="h-4 w-4 mr-2" />
-                    {formatCurrency(invoice.amount, invoice.currency)}
+                    {invoice.amount} ¥
                   </div>
 
                   {invoice.employeeResponsible && (

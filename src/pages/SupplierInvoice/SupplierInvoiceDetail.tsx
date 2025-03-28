@@ -12,14 +12,23 @@ import {
   User,
   Building,
   Receipt,
-  Save
+  Save,
+  Printer,
+  X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getSupplierInvoiceDetail } from '../../services/supplierInvoice';
+import { getSupplierInvoiceDetail, updateSupplierInvoice } from '../../services/supplierInvoice';
 import { getProductPrices, createProductPrice } from '../../utils/productPrice';
 import type { SupplierInvoiceDetail as ISupplierInvoiceDetail } from '../../services/supplierInvoice';
 import { formatCurrency } from '../../utils/currency';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { Worker, Viewer } from '@react-pdf-viewer/core';
+import '@react-pdf-viewer/core/lib/styles/index.css';
+import { defaultLayoutPlugin } from '@react-pdf-viewer/default-layout';
+import '@react-pdf-viewer/default-layout/lib/styles/index.css';
+import { zoomPlugin } from '@react-pdf-viewer/zoom';
+import { printPlugin } from '@react-pdf-viewer/print';
+import { getFilePlugin } from '@react-pdf-viewer/get-file';
 
 export default function SupplierInvoiceDetail() {
   const { id } = useParams<{ id: string }>();
@@ -34,7 +43,32 @@ export default function SupplierInvoiceDetail() {
   const [exchangeRate, setExchangeRate] = useState<number>(0);
   const [profitMargin, setProfitMargin] = useState<number>(1.1);
   const [fillExistingPrices, setFillExistingPrices] = useState(false);
+  const [showPdfViewer, setShowPdfViewer] = useState(false);
   const { t } = useLanguage();
+
+  // Initialize PDF viewer plugins
+  const zoomPluginInstance = zoomPlugin();
+  const printPluginInstance = printPlugin();
+  const getFilePluginInstance = getFilePlugin();
+
+  const defaultLayoutPluginInstance = defaultLayoutPlugin({
+    sidebarTabs: () => [], // Hide sidebar
+    renderToolbar: (Toolbar) => (
+      <Toolbar>
+        {(slots) => {
+          const { ZoomOut, ZoomIn, Download, Print } = slots;
+          return (
+            <div className="flex items-center gap-2 p-2">
+              <ZoomOut />
+              <ZoomIn />
+              <Download />
+              <Print />
+            </div>
+          );
+        }}
+      </Toolbar>
+    ),
+  });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -81,7 +115,7 @@ export default function SupplierInvoiceDetail() {
   };
 
   const calculateSellingPrice = (price: number, exchangeRate: number, profitMargin: number): number => {
-    return price * exchangeRate * profitMargin;
+    return Math.ceil(price * exchangeRate * profitMargin);
   };
 
   const handleEdit = () => {
@@ -105,11 +139,9 @@ export default function SupplierInvoiceDetail() {
   const handleConfirmPrices = () => {
     if (!invoice) return;
 
-    // Sử dụng giá trị mặc định nếu exchangeRate hoặc profitMargin là NaN
     const newExchangeRate = isNaN(exchangeRate) ? 0 : exchangeRate;
     const newProfitMargin = isNaN(profitMargin) ? 1.1 : profitMargin;
 
-    // Kiểm tra giá trị hợp lệ
     if (newExchangeRate < 0) {
       toast.error('Tỷ giá không được nhỏ hơn 0');
       return;
@@ -148,7 +180,6 @@ export default function SupplierInvoiceDetail() {
       const documentBasisId = id;
       const currencyId = invoice.currency.id;
 
-      // Thu thập tất cả sản phẩm cần đăng ký giá vào một mảng
       const productsToRegister = invoice.products
         .map(product => {
           const priceData = productPrices.get(product.productId);
@@ -168,34 +199,66 @@ export default function SupplierInvoiceDetail() {
         })
         .filter((product): product is NonNullable<typeof product> => product !== null);
 
-      // Nếu không có sản phẩm nào để đăng ký, thoát hàm
       if (productsToRegister.length === 0) {
         toast.error('Không có sản phẩm nào để đăng ký giá');
         return;
       }
 
-      // Kiểm tra và loại bỏ sản phẩm trùng lặp dựa trên productId
       const uniqueProductsMap = new Map<string, typeof productsToRegister[0]>();
       productsToRegister.forEach(product => {
-        uniqueProductsMap.set(product.productId, product); // Giữ lại bản ghi cuối cùng nếu có trùng lặp
+        uniqueProductsMap.set(product.productId, product);
       });
 
       const uniqueProducts = Array.from(uniqueProductsMap.values());
 
-      // Nếu sau khi loại bỏ trùng lặp, không còn sản phẩm nào, thoát hàm
       if (uniqueProducts.length === 0) {
         toast.error('Không có sản phẩm hợp lệ để đăng ký giá sau khi loại bỏ trùng lặp');
         return;
       }
 
-      // Gọi API createProductPrice một lần với inventory là mảng
       await createProductPrice({
         documentBasisId: documentBasisId,
         products: uniqueProducts,
         comment: "Cập nhật giá bán từ SupplierInvoiceDetail"
       });
 
-      // Cập nhật lại dữ liệu sau khi lưu giá
+      if (!invoice.posted) {
+        const updateData = {
+          id: invoice.id,
+          number: invoice.number,
+          title: `#${invoice.number}`,
+          date: invoice.date,
+          customerId: invoice.counterparty.id,
+          customerName: invoice.counterparty.presentation,
+          contractId: invoice.contract.id || '',
+          contractName: invoice.contract.presentation || '',
+          currencyId: invoice.currency.id,
+          currencyName: invoice.currency.presentation,
+          rate: 1,
+          comment: invoice.comment,
+          employeeId: invoice.employeeResponsible.id,
+          employeeName: invoice.employeeResponsible.presentation,
+          externalAccountId: invoice.structuralUnit.id || '',
+          externalAccountName: invoice.structuralUnit.presentation || '',
+          amount: invoice.amount,
+          products: invoice.products.map(product => ({
+            productId: product.productId,
+            productName: product.productName,
+            unitId: "5736c39c-5b28-11ef-a699-00155d058802",
+            unitName: product.unit,
+            quantity: product.quantity,
+            price: product.price,
+            coefficient: product.coefficient
+          })),
+          posted: true
+        };
+
+        await updateSupplierInvoice(updateData);
+        toast.success('Đã ghi sổ đơn nhận hàng và lưu giá bán thành công');
+      } else {
+        toast.success('Lưu giá bán thành công');
+      }
+
       const updatedInvoice = await getSupplierInvoiceDetail(id);
       setInvoice(updatedInvoice);
 
@@ -204,11 +267,8 @@ export default function SupplierInvoiceDetail() {
       setProductPrices(updatedPricesMap);
       setOriginalProductPrices(new Map(updatedPricesMap));
 
-      // Reset giá trị Tỷ giá và Hệ số lợi nhuận sau khi lưu
       setExchangeRate(0);
       setProfitMargin(1.1);
-
-      toast.success('Lưu giá bán thành công');
       setIsPriceChanged(false);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Lưu giá bán thất bại';
@@ -225,9 +285,13 @@ export default function SupplierInvoiceDetail() {
     });
     setProductPrices(newProductPrices);
 
-    // Cập nhật trạng thái isPriceChanged
     const hasChanged = !areMapsEqual(newProductPrices, originalProductPrices);
     setIsPriceChanged(hasChanged);
+  };
+
+  const handlePrint = () => {
+    if (!id) return;
+    setShowPdfViewer(true);
   };
 
   const formatDate = (dateString: string) => {
@@ -268,6 +332,8 @@ export default function SupplierInvoiceDetail() {
     );
   }
 
+  const pdfUrl = `https://app.xts.vn/dungbaby-service/hs/apps/files/${id}.pdf?print-form-id=${id}&data-type=XTSSupplierInvoice&template-name=ExternalPrintForm.PF_SupplierInvoice`;
+
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
@@ -289,7 +355,7 @@ export default function SupplierInvoiceDetail() {
                 ? 'bg-green-100 text-green-800'
                 : 'bg-yellow-100 text-yellow-800'
             }`}>
-              {invoice.posted ? 'Đã ghi sổ' : 'Nháp'}
+              {invoice.posted ? 'Đã ghi sổ' : 'Chưa ghi sổ'}
             </span>
           </div>
 
@@ -315,7 +381,7 @@ export default function SupplierInvoiceDetail() {
               <div>
                 <p className="text-sm text-gray-500">Tổng tiền</p>
                 <p className="text-base font-medium text-blue-600">
-                  {formatCurrency(invoice.amount, invoice.currency.presentation)}
+                  {invoice.amount} ¥
                 </p>
               </div>
             </div>
@@ -389,7 +455,7 @@ export default function SupplierInvoiceDetail() {
                         </div>
                         <div className="flex justify-between">
                           <span>Đơn giá nhập/chiếc:</span>
-                          <span>{formatCurrency(product.price, invoice.currency.presentation)}</span>
+                          <span>{product.price} ¥</span>
                         </div>
                         <div className="flex justify-between">
                           <span>Đơn giá bán/chiếc:</span>
@@ -415,7 +481,7 @@ export default function SupplierInvoiceDetail() {
                         </div>
                         <div className="flex justify-between font-medium text-blue-600">
                           <span>Thành tiền:</span>
-                          <span>{formatCurrency(product.total, invoice.currency.presentation)}</span>
+                          <span>{product.total} ¥</span>
                         </div>
                       </div>
                     </div>
@@ -429,7 +495,7 @@ export default function SupplierInvoiceDetail() {
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium text-gray-900">Tổng cộng</span>
               <span className="text-lg font-semibold text-blue-600">
-                {formatCurrency(invoice.amount, invoice.currency.presentation)}
+                {invoice.amount} ¥
               </span>
             </div>
           </div>
@@ -464,6 +530,15 @@ export default function SupplierInvoiceDetail() {
         >
           <DollarSign className="h-6 w-6" />
         </button>
+
+        {invoice.posted && (
+          <button
+            onClick={handlePrint}
+            className="p-3 bg-purple-600 text-white rounded-full shadow-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+          >
+            <Printer className="h-6 w-6" />
+          </button>
+        )}
 
         {isPriceChanged && (
           <button
@@ -555,6 +630,27 @@ export default function SupplierInvoiceDetail() {
               >
                 Xác nhận
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPdfViewer && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start justify-center sm:items-center">
+          <div className="bg-white rounded-lg w-full max-w-4xl sm:h-[90vh] h-[calc(100vh-56px)] mt-[56px] sm:mt-0 flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="text-lg font-medium">Xem trước đơn nhận hàng #{invoice.number}</h3>
+              <button onClick={() => setShowPdfViewer(false)}>
+                <X className="h-6 w-6 text-gray-500" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto">
+              <Worker workerUrl="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js">
+                <Viewer
+                  fileUrl={pdfUrl}
+                  plugins={[defaultLayoutPluginInstance, zoomPluginInstance, printPluginInstance, getFilePluginInstance]}
+                />
+              </Worker>
             </div>
           </div>
         </div>

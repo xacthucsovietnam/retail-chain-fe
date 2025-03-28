@@ -73,54 +73,46 @@ export const processImages = async (images: File[]): Promise<ProcessResult> => {
     const base64Images = await Promise.all(
       images.map(async (img) => {
         const base64 = await fileToBase64(img);
-        const base64Data = base64.split(',')[1];
+        const base64Data = base64.split(',')[1]; // Lấy phần dữ liệu base64 sau dấu phẩy
         return {
-          parts: [
-            {
-              inlineData: {
-                mimeType: "image/jpeg",
-                data: base64Data,
-              },
-            },
-          ],
+          inlineData: {
+            mimeType: "image/jpeg",
+            data: base64Data,
+          },
         };
       })
     );
 
-    // Prompt OCR
+    // Prompt OCR được điều chỉnh để xử lý nhiều ảnh của cùng một hóa đơn
     const prompt = `
-      Analyze this receipt image page and extract:
-    - Date (e.g., from '开单时间' or bottom date like '2025-01-16' in format YYYY-MM-DD, if present).
-    - Total amount (e.g., after '合计' or '总金额' like '5020', if present).
-    - Total quantity (e.g., after '总数' or '件' like '1040', if present).
-    - All line items on this page, each with:
-      - Product name (e.g., the text in parentheses like '(333字母单T)' after the product code, or leave as empty string '' if not present).
-      - Product code (e.g., the initial alphanumeric sequence like '9902ABC' or '天龙童星XD5802' at the start of each line, consisting of digits, letters, and Chinese characters. If under '款号' column, use that value; otherwise, extract the first alphanumeric sequence including Chinese characters).
-      - Size (e.g., not visible, leave as empty string '' if not present).
-      - Quantity (e.g., the number after '数量:' like '60', or a single number in the line).
-      - Price (e.g., the numeric value after '¥' and before '~' like '33.00', or average if a range).
-      - Total (e.g., the amount after '金额:' like '¥1980.00').
-    
-    Special instructions:
-    - For Product code: Extract the first sequence of alphanumeric characters (e.g., '9902ABC' or '天龙童星XD5802') at the start of each line, which may include digits, letters (A-Z, a-z), and Chinese characters. Ignore any checkmarks (✓), parentheses, or non-alphanumeric characters. If a '款号' column exists, prioritize its value. If no alphanumeric sequence is found, return ''.
-    - For Product name: Use the text within parentheses (e.g., '(333字母单T)') immediately following the product code, if present.
-    - For Quantity: Extract the number after '数量:' (e.g., '60'). If written as 'NxM' (e.g., '5x5'), multiply N and M (e.g., '5x5' becomes '25'). Otherwise, use the single number.
-    - For Price: Extract the numeric value after '¥' and before '~' (e.g., '33.00' from '¥33.00 ~ ¥33.00'). If a range, calculate the average.
-    - For Total: Extract the numeric value after '金额:' and before '¥' (e.g., '1980.00' from '金额: ¥1980.00').
-    - If no product name, size, or other fields are visible, return empty string ''.
-    - Preserve all characters in their original form (Chinese, English, Vietnamese, etc.) without escaping or encoding them.
-    
-    Example:
-    Input line: '9902ABC (333字母单T) ¥33.00 ~ ¥33.00 数量: 60 金额: ¥1980.00'
-    Output: {"productDescription": "333字母单T", "productCode": "9902ABC", "UOM": "", "quantity": "60", "price": "33.00", "total": "1980.00"}
-    
-    Input line: '天龙童星XD5802 ✓ ¥90.00 ~ ¥130.00 数量: 18 金额: ¥450.00'
-    Output: {"productDescription": "", "productCode": "天龙童星XD5802", "UOM": "", "quantity": "18", "price": "110.00", "total": "450.00"}
-    
-    Input line: '款号: 9902XYZ (天龙童星XD5802) ¥50.00 ~ ¥60.00 数量: 20 金额: ¥1200.00'
-    Output: {"productDescription": "天龙童星XD5802", "productCode": "9902XYZ", "UOM": "", "quantity": "20", "price": "55.00", "total": "1200.00"}
-    
-    Return ONLY valid JSON matching this schema:
+      You are tasked with analyzing multiple images that represent pages of a single receipt. Process all provided images as parts of the same receipt and extract the following information:
+      - Date (e.g., from '开单时间' or bottom date like '2025-01-16' in format YYYY-MM-DD, if present in any image).
+      - Total amount (e.g., after '合计' or '总金额' like '5020', typically from the last page if present).
+      - Total quantity (e.g., after '总数' or '件' like '1040', typically from the last page if present).
+      - All line items across all pages, each with:
+        - Product name (e.g., text in parentheses like '(333字母单T)' after the product code, or leave as empty string '' if not present).
+        - Product code (e.g., initial alphanumeric sequence like '9902ABC' or '天龙童星XD5802' at the start of each line, consisting of digits, letters, and Chinese characters. If under '款号' column, use that value; otherwise, extract the first alphanumeric sequence including Chinese characters).
+        - Size (e.g., not visible, leave as empty string '' if not present).
+        - Quantity (e.g., number after '数量:' like '60', or a single number in the line).
+        - Price (e.g., numeric value after '¥' and before '~' like '33.00', or average if a range).
+        - Total (e.g., amount after '金额:' like '¥1980.00').
+
+      Special instructions:
+      - Treat all images as consecutive pages of the same receipt.
+      - For Product code: Extract the first sequence of alphanumeric characters (e.g., '9902ABC' or '天龙童星XD5802') at the start of each line, which may include digits, letters (A-Z, a-z), and Chinese characters. Ignore checkmarks (✓), parentheses, or non-alphanumeric characters. If a '款号' column exists, prioritize its value. If no alphanumeric sequence is found, return ''.
+      - For Product name: Use the text within parentheses (e.g., '(333字母单T)') immediately following the product code, if present.
+      - For Quantity: Extract the number after '数量:' (e.g., '60'). If written as 'NxM' (e.g., '5x5'), multiply N and M (e.g., '5x5' becomes '25'). Otherwise, use the single number.
+      - For Price: Extract the numeric value after '¥' and before '~' (e.g., '33.00' from '¥33.00 ~ ¥33.00'). If a range, calculate the average.
+      - For Total: Extract the numeric value after '金额:' and before '¥' (e.g., '1980.00' from '金额: ¥1980.00').
+      - If no product name, size, or other fields are visible, return empty string ''.
+      - Assign a unique lineNumber (starting from 1) to each line item across all pages in sequence.
+      - Preserve all characters in their original form (Chinese, English, Vietnamese, etc.) without escaping or encoding them.
+
+      Example:
+      Input line: '9902ABC (333字母单T) ¥33.00 ~ ¥33.00 数量: 60 金额: ¥1980.00'
+      Output: {"productDescription": "333字母单T", "productCode": "9902ABC", "productCharacteristic": "", "quantity": "60", "price": "33.00", "total": "1980.00"}
+
+      Return ONLY valid JSON matching this schema in a single response:
       {
         "date": string,
         "number": string,
@@ -137,12 +129,24 @@ export const processImages = async (images: File[]): Promise<ProcessResult> => {
             "productCharacteristic": string,
             "quantity": string,
             "price": string,
-            "total": string,
-            "uom": string
+            "total": string
           }
         ]
       }
     `;
+
+    // Chuẩn bị nội dung request với role rõ ràng
+    const requestBody = {
+      contents: [
+        {
+          role: "user", // Chỉ định role là "user" cho nội dung từ người dùng
+          parts: [
+            { text: prompt }, // Prompt ở phần đầu
+            ...base64Images, // Các ảnh được thêm vào sau prompt
+          ],
+        },
+      ],
+    };
 
     // Gọi API Gemini OCR
     const response = await fetch(
@@ -152,14 +156,7 @@ export const processImages = async (images: File[]): Promise<ProcessResult> => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          contents: base64Images.map((img, index) => ({
-            parts: [
-              ...img.parts,
-              { text: index === 0 ? prompt : "" },
-            ],
-          })),
-        }),
+        body: JSON.stringify(requestBody),
       }
     );
 
@@ -185,12 +182,6 @@ export const processImages = async (images: File[]): Promise<ProcessResult> => {
       return value;
     });
 
-    // Gán lineNumber cho từng sản phẩm
-    const itemsWithLineNumber = ocrResult.items.map((item: any, index: number) => ({
-      ...item,
-      lineNumber: `${index + 1}`,
-    }));
-
     // Ánh xạ dữ liệu từ OCR
     const generalInfo: GeneralInfo = {
       date: ocrResult.date || "",
@@ -202,7 +193,7 @@ export const processImages = async (images: File[]): Promise<ProcessResult> => {
       comment: ocrResult.comment || "",
     };
 
-    const originalItems: ProcessedImageData[] = itemsWithLineNumber.map((item: any) => ({
+    const originalItems: ProcessedImageData[] = ocrResult.items.map((item: any) => ({
       lineNumber: item.lineNumber,
       productCode: item.productCode || "",
       productDescription: item.productDescription || "",

@@ -213,7 +213,9 @@ export const getSupplierInvoices = async (page: number = 1, pageSize: number = 5
     _msgId: '',
     dataType: 'XTSSupplierInvoice',
     columnSet: [],
-    sortBy: [],
+    sortBy: [
+      'date DESC'
+    ],
     positionFrom,
     positionTo,
     limit: pageSize,

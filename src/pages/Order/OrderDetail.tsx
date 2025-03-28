@@ -60,14 +60,12 @@ export default function OrderDetail() {
     credit: 0
   });
 
-  // Khởi tạo các plugin
   const zoomPluginInstance = zoomPlugin();
   const printPluginInstance = printPlugin();
   const getFilePluginInstance = getFilePlugin();
 
-  // Tùy chỉnh thanh công cụ
   const defaultLayoutPluginInstance = defaultLayoutPlugin({
-    sidebarTabs: () => [], // Ẩn sidebar
+    sidebarTabs: () => [],
     renderToolbar: (Toolbar) => (
       <Toolbar>
         {(slots) => {
@@ -290,6 +288,35 @@ export default function OrderDetail() {
     setShowPdfViewer(true);
   };
 
+  const handleAddMore = () => {
+    navigate('/orders/add');
+  };
+
+  const handleReturn = () => {
+    if (!order) return;
+
+    const preloadData = {
+      customerId: order.customerId || '', // Giả định order.customerId tồn tại, nếu không thì để trống
+      customerName: order.customer,
+      employeeId: order.employeeResponsible || '',
+      employeeName: order.employeeResponsible || '',
+      deliveryAddress: order.deliveryAddress || '',
+      isReturnOrder: true,
+      originalProducts: order.products.map(p => ({
+        productId: p.productId,
+        productName: p.productName,
+        sku: p.sku,
+        unit: p.unit,
+        quantity: p.quantity,
+        price: p.price,
+        coefficient: p.coefficient
+      }))
+    };
+
+    sessionStorage.setItem('newOrderData', JSON.stringify(preloadData));
+    navigate('/orders/add');
+  };
+
   const getStatusColor = (status: string) => {
     const statusLower = status.toLowerCase();
     if (statusLower.includes('đang soạn')) {
@@ -446,7 +473,6 @@ export default function OrderDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Fixed Header */}
       <div className="fixed top-12 left-0 right-0 z-50 bg-white shadow-sm">
         <div className="px-4 py-3">
           <div className="flex justify-between items-start">
@@ -460,9 +486,7 @@ export default function OrderDetail() {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="pt-12 px-4">
-        {/* Order Information */}
         <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
           <div className="space-y-4">
             <div className="flex justify-between items-center pb-3 border-b border-gray-100">
@@ -498,7 +522,6 @@ export default function OrderDetail() {
           </div>
         </div>
 
-        {/* Payment Information */}
         <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
           <div className="space-y-4">
             <div className="flex justify-between items-center text-lg font-bold">
@@ -531,7 +554,6 @@ export default function OrderDetail() {
           </div>
         </div>
 
-        {/* Products List */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           <h2 className="px-4 py-3 text-base font-medium text-gray-900 border-b border-gray-200">
             Danh sách sản phẩm
@@ -705,7 +727,7 @@ export default function OrderDetail() {
 
       {showRelatedDocs && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
-          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-xl p-4 max-h-[80vh] overflow-y-auto">
+          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-xl p-4 max-h-[80vh] overflow-y-auto flex flex-col">
             <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pb-2 border-b">
               <h3 className="text-lg font-medium">Danh sách chứng từ liên quan</h3>
               <button onClick={() => setShowRelatedDocs(false)}>
@@ -753,6 +775,25 @@ export default function OrderDetail() {
                 ))}
               </div>
             )}
+
+            <div className="sticky bottom-0 bg-white pt-4 border-t border-gray-200">
+              <div className="flex gap-3">
+                <button
+                  onClick={handleAddMore}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Bán thêm
+                </button>
+                <button
+                  onClick={handleReturn}
+                  className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg text-sm hover:bg-orange-700 flex items-center justify-center gap-2"
+                >
+                  <ArrowDownToLine className="w-4 h-4" />
+                  Trả hàng
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

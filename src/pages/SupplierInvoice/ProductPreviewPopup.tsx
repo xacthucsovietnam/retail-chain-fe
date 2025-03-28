@@ -1,6 +1,5 @@
-// ProductPreviewPopup.tsx
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Trash2 } from 'lucide-react';
 import { ProcessedImageData } from '../../utils/imageProcessing';
 import { createPartner } from '../../services/partner';
 import { getSession } from '../../utils/storage';
@@ -20,7 +19,7 @@ interface ProductPreviewPopupProps {
   existed: any[];
   suppliers: any[];
   onClose: () => void;
-  onSave: (updatedNotExist: ProcessedImageData[], updatedGeneralInfo: ProductPreviewPopupProps['generalInfo']) => void;
+  onSave: (updatedNotExist: ProcessedImageData[], updatedExisted: any[], updatedGeneralInfo: ProductPreviewPopupProps['generalInfo']) => void;
 }
 
 const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
@@ -35,20 +34,29 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
   const defaultValues = session?.defaultValues || {};
 
   const [activeTab, setActiveTab] = useState(1);
-  const [localNotExist, setLocalNotExist] = useState<ProcessedImageData[]>(notExist.map(item => ({
-    ...item,
-    coefficient: item.coefficient || 1
-  })));
-  const [localExisted, setLocalExisted] = useState<any[]>(existed.map(item => ({
-    ...item,
-    coefficient: item._uomCoefficient || 1 // Lấy từ _uomCoefficient, mặc định là 1 nếu không có
-  })));
+  const [localNotExist, setLocalNotExist] = useState<ProcessedImageData[]>(
+    notExist.map(item => ({
+      ...item,
+      coefficient: item.coefficient || 1,
+      discount: '',
+      originalPrice: item.price
+    }))
+  );
+  const [localExisted, setLocalExisted] = useState<any[]>(
+    existed.map(item => ({
+      ...item,
+      coefficient: item._uomCoefficient || 1,
+      discount: '',
+      originalPrice: item.price
+    }))
+  );
   const [localGeneralInfo, setLocalGeneralInfo] = useState(generalInfo);
   const [calculatedAmount, setCalculatedAmount] = useState<string>('');
   const [calculatedQuantity, setCalculatedQuantity] = useState<string>('');
   const [showQuickFillPopup, setShowQuickFillPopup] = useState(false);
   const [quickFillName, setQuickFillName] = useState('');
   const [quickFillCoefficient, setQuickFillCoefficient] = useState('1');
+  const [quickFillDiscount, setQuickFillDiscount] = useState('');
 
   useEffect(() => {
     const allItems = [...localExisted, ...localNotExist];
@@ -62,30 +70,59 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
     setCalculatedQuantity(totalQuantity);
   }, [localExisted, localNotExist]);
 
+  const updatePriceAndTotal = (item: any, discount: string) => {
+    const originalPrice = parseFloat(item.originalPrice) || 0;
+    const discountValue = discount === '' ? 0 : parseFloat(discount) || 0;
+    const quantity = parseFloat(item.quantity) || 0;
+    const newPrice = originalPrice + discountValue;
+    return {
+      ...item,
+      price: newPrice.toString(),
+      discount,
+      total: (quantity * newPrice).toFixed(2)
+    };
+  };
+
+  const handleNotExistDiscountChange = (index: number, discount: string) => {
+    const updatedNotExist = [...localNotExist];
+    updatedNotExist[index] = updatePriceAndTotal(updatedNotExist[index], discount);
+    setLocalNotExist(updatedNotExist);
+  };
+
+  const handleExistedDiscountChange = (index: number, discount: string) => {
+    const updatedExisted = [...localExisted];
+    updatedExisted[index] = updatePriceAndTotal(updatedExisted[index], discount);
+    setLocalExisted(updatedExisted);
+  };
+
   const handleNotExistChange = (index: number, field: keyof ProcessedImageData, value: string) => {
     const updatedNotExist = [...localNotExist];
     updatedNotExist[index] = { ...updatedNotExist[index], [field]: value };
-
-    if (field === 'quantity' || field === 'price') {
-      const quantity = parseFloat(updatedNotExist[index].quantity) || 0;
+    if (field === 'quantity') {
+      const quantity = parseFloat(value) || 0;
       const price = parseFloat(updatedNotExist[index].price) || 0;
       updatedNotExist[index].total = (quantity * price).toFixed(2);
     }
-
     setLocalNotExist(updatedNotExist);
   };
 
   const handleExistedChange = (index: number, field: string, value: string) => {
     const updatedExisted = [...localExisted];
     updatedExisted[index] = { ...updatedExisted[index], [field]: value };
-
-    if (field === 'quantity' || field === 'price') {
-      const quantity = parseFloat(updatedExisted[index].quantity) || 0;
+    if (field === 'quantity') {
+      const quantity = parseFloat(value) || 0;
       const price = parseFloat(updatedExisted[index].price) || 0;
       updatedExisted[index].total = (quantity * price).toFixed(2);
     }
-
     setLocalExisted(updatedExisted);
+  };
+
+  const handleRemoveNotExist = (index: number) => {
+    setLocalNotExist(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleRemoveExisted = (index: number) => {
+    setLocalExisted(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleGeneralInfoChange = (field: keyof typeof generalInfo, value: string) => {
@@ -93,17 +130,44 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
   };
 
   const handleQuickFill = () => {
-    // Chỉ áp dụng cho sản phẩm mới (localNotExist), không áp dụng cho sản phẩm đã tồn tại (localExisted)
-    const updatedNotExist = localNotExist.map((item, index) => ({
-      ...item,
-      productDescription: quickFillName ? `${quickFillName} ${index + 1}` : item.productDescription,
-      coefficient: parseFloat(quickFillCoefficient) || 1
-    }));
+    const updatedNotExist = localNotExist.map((item, index) => {
+      const quantity = parseFloat(item.quantity) || 0;
+      const originalPrice = parseFloat(item.originalPrice) || 0;
+      const discount = quickFillDiscount === '' ? 0 : parseFloat(quickFillDiscount) || 0;
+      const newPrice = originalPrice + discount;
+      const newTotal = (quantity * newPrice).toFixed(2);
+
+      return {
+        ...item,
+        productDescription: quickFillName ? `${quickFillName} ${index + 1}` : item.productDescription,
+        coefficient: parseFloat(quickFillCoefficient) || 1,
+        discount: quickFillDiscount,
+        price: newPrice.toString(),
+        total: newTotal
+      };
+    });
+
+    const updatedExisted = localExisted.map(item => {
+      const quantity = parseFloat(item.quantity) || 0;
+      const originalPrice = parseFloat(item.originalPrice) || 0;
+      const discount = quickFillDiscount === '' ? 0 : parseFloat(quickFillDiscount) || 0;
+      const newPrice = originalPrice + discount;
+      const newTotal = (quantity * newPrice).toFixed(2);
+
+      return {
+        ...item,
+        discount: quickFillDiscount,
+        price: newPrice.toString(),
+        total: newTotal
+      };
+    });
 
     setLocalNotExist(updatedNotExist);
+    setLocalExisted(updatedExisted);
     setShowQuickFillPopup(false);
     setQuickFillName('');
     setQuickFillCoefficient('1');
+    setQuickFillDiscount('');
   };
 
   const handleSave = async () => {
@@ -142,18 +206,22 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
       }
     }
 
+    const formattedDate = localGeneralInfo.date
+      ? new Date(localGeneralInfo.date).toISOString().slice(0, 16)
+      : new Date().toISOString().slice(0, 16);
+
     const updatedGeneralInfo = {
       ...localGeneralInfo,
+      date: formattedDate,
       supplierId
     };
 
-    onSave(localNotExist, updatedGeneralInfo);
+    onSave(localNotExist, localExisted, updatedGeneralInfo); // Truyền cả localExisted
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
       <div className="bg-white rounded-lg p-4 w-full max-w-md h-[85vh] flex flex-col">
-        {/* Header */}
         <div className="flex justify-between items-center mb-3">
           <h2 className="text-lg font-semibold">Xem trước thông tin</h2>
           <button onClick={onClose}>
@@ -161,7 +229,6 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
           </button>
         </div>
 
-        {/* Tabs */}
         <div className="flex border-b mb-3">
           <button
             className={`flex-1 py-2 text-sm font-medium text-center ${activeTab === 1 ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-600'}`}
@@ -177,18 +244,16 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
           </button>
         </div>
 
-        {/* Tab Content */}
         <div className="flex-1 overflow-y-auto">
           {activeTab === 2 && (
             <div className="space-y-2 text-sm">
               <div className="flex items-center gap-2">
                 <label className="font-medium min-w-[100px]">Ngày:</label>
                 <input
-                  type="text"
-                  value={localGeneralInfo.date || ''}
+                  type="datetime-local"
+                  value={localGeneralInfo.date ? new Date(localGeneralInfo.date).toISOString().slice(0, 16) : ''}
                   onChange={(e) => handleGeneralInfoChange('date', e.target.value)}
                   className="flex-1 p-1 border rounded text-sm"
-                  placeholder="Nhập ngày..."
                 />
               </div>
               <div className="flex items-center gap-2">
@@ -256,12 +321,17 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
 
           {activeTab === 1 && (
             <div className="space-y-3">
-              {/* Existed Products */}
               {localExisted.length > 0 && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-700 mb-2">Sản phẩm đã tồn tại</h3>
                   {localExisted.map((item, index) => (
-                    <div key={index} className="bg-gray-50 p-3 rounded-lg shadow-sm mb-2">
+                    <div key={index} className="bg-gray-50 p-3 rounded-lg shadow-sm mb-2 relative">
+                      <button
+                        onClick={() => handleRemoveExisted(index)}
+                        className="absolute top-2 right-2 text-red-600 hover:text-red-800"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
                       <div className="flex justify-between items-center mb-2">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium min-w-[60px]">Mã:</span>
@@ -299,6 +369,16 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
                             className="w-20 p-1 border rounded text-sm"
                           />
                         </div>
+                        <div className="flex items-center gap-2">
+                          <label className="text-sm min-w-[60px]">Chiết khấu:</label>
+                          <input
+                            type="number"
+                            value={item.discount}
+                            onChange={(e) => handleExistedChange(index, 'discount', e.target.value)}
+                            onBlur={(e) => handleExistedDiscountChange(index, e.target.value)}
+                            className="w-20 p-1 border rounded text-sm"
+                          />
+                        </div>
                       </div>
                       <p className="mt-2 text-sm">
                         <span className="font-medium">Tổng tiền:</span> {item.total} ¥
@@ -308,12 +388,17 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
                 </div>
               )}
 
-              {/* Not Exist Products */}
               {localNotExist.length > 0 && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-700 mb-2">Sản phẩm mới</h3>
                   {localNotExist.map((item, index) => (
-                    <div key={index} className="bg-gray-50 p-3 rounded-lg shadow-sm mb-2">
+                    <div key={index} className="bg-gray-50 p-3 rounded-lg shadow-sm mb-2 relative">
+                      <button
+                        onClick={() => handleRemoveNotExist(index)}
+                        className="absolute top-2 right-2 text-red-600 hover:text-red-800"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-sm font-medium">Sản phẩm: {item.lineNumber}</span>
                         <span className="text-red-600 text-sm">Mới</span>
@@ -374,6 +459,16 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
                             className="w-20 p-1 border rounded text-sm"
                           />
                         </div>
+                        <div className="flex items-center gap-2">
+                          <label className="text-sm min-w-[60px]">Chiết khấu:</label>
+                          <input
+                            type="number"
+                            value={item.discount}
+                            onChange={(e) => handleNotExistChange(index, 'discount', e.target.value)}
+                            onBlur={(e) => handleNotExistDiscountChange(index, e.target.value)}
+                            className="w-20 p-1 border rounded text-sm"
+                          />
+                        </div>
                       </div>
                       <p className="mt-2 text-sm">
                         <span className="font-medium">Tổng tiền:</span> {item.total} ¥
@@ -386,7 +481,6 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
           )}
         </div>
 
-        {/* Buttons */}
         <div className="mt-3 flex justify-end gap-2">
           <button
             onClick={() => setShowQuickFillPopup(true)}
@@ -402,7 +496,6 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
           </button>
         </div>
 
-        {/* Quick Fill Popup */}
         {showQuickFillPopup && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
             <div className="bg-white rounded-lg p-4 w-full max-w-sm">
@@ -423,7 +516,7 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
                   />
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="block text-sm font-medium text-gray-700 min-w-[100px]">
+                  <label className="block text-sm font-medium text-gray-７０0 min-w-[100px]">
                     Hệ số ri
                   </label>
                   <input
@@ -433,6 +526,18 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Nhập hệ số ri"
                     min="1"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="block text-sm font-medium text-gray-700 min-w-[100px]">
+                    Chiết khấu
+                  </label>
+                  <input
+                    type="number"
+                    value={quickFillDiscount}
+                    onChange={(e) => setQuickFillDiscount(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Nhập chiết khấu"
                   />
                 </div>
               </div>

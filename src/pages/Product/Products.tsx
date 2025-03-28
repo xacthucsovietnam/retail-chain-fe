@@ -17,30 +17,44 @@ interface Product {
 
 export default function Products() {
   const navigate = useNavigate();
-  const [products, setProducts] = useState<Product[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]); // Lưu toàn bộ danh sách sản phẩm gốc
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]); // Danh sách sản phẩm đã lọc
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const lastScrollY = useRef(0);
   const { t } = useLanguage();
 
-  const observer = useRef<IntersectionObserver>();
-  const lastProductRef = useCallback((node: HTMLDivElement) => {
-    if (isLoadingMore) return;
-    if (observer.current) observer.current.disconnect();
-    observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore) {
-        setPage(prevPage => prevPage + 1);
-      }
-    });
-    if (node) observer.current.observe(node);
-  }, [isLoadingMore, hasMore]);
+  // Fetch products từ API với page = 1 và pageSize lớn
+  const fetchProducts = async () => {
+    try {
+      setIsLoading(true);
+      const response = await getProducts(searchTerm, selectedCategory, 1, 999999999); // Lấy toàn bộ sản phẩm
+      setAllProducts(response.items);
+      setFilteredProducts(response.items); // Ban đầu hiển thị toàn bộ
+    } catch (error) {
+      toast.error(t('message.productsFailed'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Gọi API khi component mount hoặc khi thay đổi danh mục
+  useEffect(() => {
+    fetchProducts();
+  }, [selectedCategory]);
+
+  // Lọc sản phẩm cục bộ dựa trên searchTerm
+  useEffect(() => {
+    const filtered = allProducts.filter(product =>
+      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.code.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredProducts(filtered);
+  }, [searchTerm, allProducts]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -59,47 +73,8 @@ export default function Products() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const fetchProducts = async (pageNumber: number, isNewSearch: boolean = false) => {
-    try {
-      const response = await getProducts(searchTerm, selectedCategory, pageNumber);
-      
-      if (isNewSearch) {
-        setProducts(response.items);
-      } else {
-        setProducts(prev => [...prev, ...response.items]);
-      }
-      
-      setHasMore(response.hasMore);
-    } catch (error) {
-      toast.error(t('message.productsFailed'));
-    } finally {
-      setIsLoading(false);
-      setIsLoadingMore(false);
-    }
-  };
-
-  useEffect(() => {
-    setIsLoading(true);
-    setProducts([]);
-    setPage(1);
-    setHasMore(true);
-    fetchProducts(1, true);
-  }, [searchTerm, selectedCategory]);
-
-  useEffect(() => {
-    if (page > 1) {
-      setIsLoadingMore(true);
-      fetchProducts(page);
-    }
-  }, [page]);
-
-  const handleSearch = () => {
-    setIsLoading(true);
-    setProducts([]);
-    setPage(1);
-    setHasMore(true);
-    fetchProducts(1, true);
-    setIsSearchExpanded(false);
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value); // Cập nhật searchTerm để lọc cục bộ
   };
 
   const clearFilters = () => {
@@ -143,7 +118,7 @@ export default function Products() {
                   <input
                     type="text"
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={handleSearchChange}
                     placeholder="Tìm kiếm sản phẩm..."
                     className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-base focus:ring-blue-500 focus:border-blue-500"
                     autoFocus
@@ -196,10 +171,9 @@ export default function Products() {
               </div>
             ))
           ) : (
-            products.map((product, index) => (
+            filteredProducts.map((product) => (
               <div
                 key={product.id}
-                ref={index === products.length - 1 ? lastProductRef : null}
                 onClick={() => navigate(`/products/${product.id}`)}
                 className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden active:scale-95 transition-transform"
               >
@@ -231,13 +205,7 @@ export default function Products() {
           )}
         </div>
 
-        {isLoadingMore && (
-          <div className="text-center py-4">
-            <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-          </div>
-        )}
-
-        {!isLoading && products.length === 0 && (
+        {!isLoading && filteredProducts.length === 0 && (
           <div className="text-center py-8">
             <p className="text-gray-500">Không tìm thấy sản phẩm</p>
           </div>
@@ -281,7 +249,7 @@ export default function Products() {
                 </button>
                 <button
                   onClick={() => {
-                    handleSearch();
+                    fetchProducts();
                     setIsFilterOpen(false);
                   }}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"

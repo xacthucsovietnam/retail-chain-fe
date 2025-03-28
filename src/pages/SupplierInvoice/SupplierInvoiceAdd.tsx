@@ -21,14 +21,12 @@ import { getSession } from '../../utils/storage';
 import { getCurrencies } from '../../services/currency';
 import { createPartner } from '../../services/partner';
 
-// Định nghĩa interface Product để bao gồm code và riCoefficient
 interface Product {
   id: string;
   name: string;
-  code?: string; // Thay sku bằng code
+  code?: string;
   price: number;
   riCoefficient?: number;
-  // Các trường khác nếu có
 }
 
 interface FormData {
@@ -69,6 +67,7 @@ export default function SupplierInvoiceAdd() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessingImages, setIsProcessingImages] = useState(false);
+  const [isSavingFromPopup, setIsSavingFromPopup] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<File[]>([]);
   const [showPopup, setShowPopup] = useState(false);
@@ -90,7 +89,7 @@ export default function SupplierInvoiceAdd() {
   const defaultValues = session?.defaultValues || {};
 
   const [formData, setFormData] = useState<FormData>({
-    date: new Date().toISOString().split('T')[0] + 'T00:00:00',
+    date: new Date().toISOString().slice(0, 16),
     customerId: '',
     customerName: '',
     currencyId: '',
@@ -126,12 +125,15 @@ export default function SupplierInvoiceAdd() {
     try {
       const response = await getCurrencies();
       setCurrencies(response.items || []);
-      if (response.items && response.items.length > 0) {
+      const cnyCurrency = response.items.find(currency => currency.name === 'CNY');
+      if (cnyCurrency) {
         setFormData(prev => ({
           ...prev,
-          currencyId: response.items[0].id,
-          currencyName: response.items[0].name
+          currencyId: cnyCurrency.id,
+          currencyName: cnyCurrency.name
         }));
+      } else {
+        toast.error('Không tìm thấy tiền tệ CNY trong danh sách');
       }
     } catch (error) {
       toast.error('Không thể tải danh sách loại tiền tệ');
@@ -141,7 +143,7 @@ export default function SupplierInvoiceAdd() {
     }
   };
 
-  const fetchProducts = async () => {
+  const fetchProductsOnce = async () => {
     setIsFetchingProducts(true);
     try {
       const response = await getProducts('', '', 1, 10000);
@@ -157,7 +159,7 @@ export default function SupplierInvoiceAdd() {
   useEffect(() => {
     fetchSuppliers();
     fetchCurrencies();
-    fetchProducts();
+    fetchProductsOnce();
   }, []);
 
   const calculateTotal = () => {
@@ -260,65 +262,23 @@ export default function SupplierInvoiceAdd() {
     setShowPopup(false);
   };
 
-  const handleSaveFromPopup = async (updatedNotExist: ProcessedImageData[], updatedGeneralInfo: any) => {
+  const handleSaveFromPopup = async (updatedNotExist: ProcessedImageData[], updatedExisted: any[], updatedGeneralInfo: any) => {
+    setIsSavingFromPopup(true);
     let processedNotExist = [...updatedNotExist];
-    let updatedSuppliers = [...suppliers];
-    let customerId = formData.customerId;
-    let customerName = formData.customerName;
 
-    if (updatedGeneralInfo.supplier) {
-      const existingSupplier = suppliers.find(s => s.name === updatedGeneralInfo.supplier);
-      if (!existingSupplier) {
-        try {
-          const newSupplier = await createPartner({
-            name: updatedGeneralInfo.supplier,
-            fullName: '',
-            dateOfBirth: '',
-            phone: updatedGeneralInfo.contactInfo || '',
-            email: '',
-            address: '',
-            notes: updatedGeneralInfo.comment || '',
-            gender: '',
-            picture: '',
-            counterpartyKindId: defaultValues.counterpartyKind?.id || '',
-            counterpartyKindPresentation: defaultValues.counterpartyKind?.presentation || '',
-            employeeResponsibleId: defaultValues.employeeResponsible?.id || '',
-            employeeResponsiblePresentation: defaultValues.employeeResponsible?.presentation || '',
-            taxIdentifactionNumber: '',
-            invalid: false,
-            isCustomer: false,
-            isVendor: true,
-            otherRelations: false,
-            margin: 0,
-            doOperationsByContracts: false,
-            doOperationsByOrders: false,
-            doOperationsByDocuments: false
-          });
-
-          updatedSuppliers = [...suppliers, { id: newSupplier.id, name: updatedGeneralInfo.supplier }];
-          setSuppliers(updatedSuppliers);
-          customerId = newSupplier.id;
-          customerName = updatedGeneralInfo.supplier;
-        } catch (error) {
-          toast.error('Không thể tạo nhà cung cấp mới');
-          console.error('Error creating supplier:', error);
-          return;
-        }
-      } else {
-        customerId = existingSupplier.id;
-        customerName = existingSupplier.name;
-      }
-    }
+    const customerId = formData.customerId || updatedGeneralInfo.supplierId;
+    const customerName = formData.customerName || updatedGeneralInfo.supplier;
 
     if (updatedNotExist.length > 0) {
       try {
         const createPromises = updatedNotExist.map(async (item) => {
+          const adjustedPrice = Number(item.price); // Giá đã điều chỉnh từ ProductPreviewPopup
           const createProductData = {
             code: item.productCode,
             name: item.productDescription || `Sản phẩm ${item.lineNumber}`,
             category: "5736c39a-5b28-11ef-a699-00155d058802",
-            purchasePrice: Number(item.price) || 0,
-            sellingPrice: Number(item.price) || 0,
+            purchasePrice: adjustedPrice,
+            sellingPrice: adjustedPrice,
             measurementUnit: "5736c39c-5b28-11ef-a699-00155d058802",
             riCoefficient: Number(item.coefficient) || 1,
             description: item.productCharacteristic,
@@ -326,61 +286,76 @@ export default function SupplierInvoiceAdd() {
           };
 
           const { id, presentation } = await createProduct(createProductData);
-          return { ...item, id, name: presentation };
+          const newProduct = {
+            id,
+            name: presentation,
+            code: item.productCode,
+            price: adjustedPrice,
+            riCoefficient: Number(item.coefficient) || 1
+          };
+          setProducts(prev => [...prev, newProduct]);
+          return { ...item, id, name: presentation, price: adjustedPrice.toString() };
         });
 
         processedNotExist = await Promise.all(createPromises);
       } catch (error) {
         toast.error('Không thể tạo sản phẩm mới');
         console.error('Error creating products:', error);
+        setIsSavingFromPopup(false);
         return;
       }
     }
 
     const combinedProducts = [
-      ...(previewData?.existed || []).map(item => ({
-        productId: item.id || '',
-        productName: item.name || item.productDescription,
-        unitId: '5736c39c-5b28-11ef-a699-00155d058802',
-        unitName: 'c',
-        quantity: Number(item.quantity) || 1,
-        price: Number(item.price) || 0,
-        coefficient: Number(item.coefficient) || 1,
-        total: Number(item.total) || (Number(item.quantity) * Number(item.price))
-      })),
-      ...processedNotExist.map(item => ({
-        productId: item.id || '',
-        productName: item.name || item.productDescription,
-        unitId: '5736c39c-5b28-11ef-a699-00155d058802',
-        unitName: 'c',
-        quantity: Number(item.quantity) || 1,
-        price: Number(item.price) || 0,
-        coefficient: Number(item.coefficient) || 1,
-        total: Number(item.total) || (Number(item.quantity) * Number(item.price))
-      }))
+      ...updatedExisted.map(item => {
+        const adjustedPrice = Number(item.price); // Giá đã điều chỉnh từ ProductPreviewPopup
+        return {
+          productId: item.id || '',
+          productName: item.name || item.productDescription,
+          unitId: '5736c39c-5b28-11ef-a699-00155d058802',
+          unitName: 'c',
+          quantity: Number(item.quantity) || 1,
+          price: adjustedPrice,
+          coefficient: Number(item.coefficient) || 1,
+          total: Number(item.total) || (Number(item.quantity) * adjustedPrice)
+        };
+      }),
+      ...processedNotExist.map(item => {
+        const adjustedPrice = Number(item.price); // Giá đã điều chỉnh từ ProductPreviewPopup
+        return {
+          productId: item.id || '',
+          productName: item.name || item.productDescription,
+          unitId: '5736c39c-5b28-11ef-a699-00155d058802',
+          unitName: 'c',
+          quantity: Number(item.quantity) || 1,
+          price: adjustedPrice,
+          coefficient: Number(item.coefficient) || 1,
+          total: Number(item.total) || (Number(item.quantity) * adjustedPrice)
+        };
+      })
     ];
 
     setFormData(prev => ({
       ...prev,
       date: updatedGeneralInfo?.date || prev.date,
-      customerId: customerId || prev.customerId,
-      customerName: customerName || prev.customerName,
+      customerId: customerId,
+      customerName: customerName,
       comment: updatedGeneralInfo?.comment || prev.comment,
       amount: Number(updatedGeneralInfo?.documentAmount) || prev.amount,
       products: combinedProducts.map(item => ({
-        productId: item.productId || item.id,
-        productName: item.productName || item.name || item.description,
-        unitId: item.unitId || item.measurementUnit?.id || "5736c39c-5b28-11ef-a699-00155d058802",
-        unitName: item.unitName || item.measurementUnit?.presentation || "c",
-        quantity: Number(item.quantity) || 1,
-        price: Number(item.price) || 0,
-        coefficient: Number(item.coefficient) || 1,
-        total: (Number(item.quantity) || 1) * (Number(item.price) || 0)
+        productId: item.productId,
+        productName: item.productName,
+        unitId: item.unitId,
+        unitName: item.unitName,
+        quantity: item.quantity,
+        price: item.price,
+        coefficient: item.coefficient,
+        total: item.total
       }))
     }));
 
-    await fetchProducts();
     setShowPopup(false);
+    setIsSavingFromPopup(false);
   };
 
   const validateForm = (): boolean => {
@@ -517,15 +492,6 @@ export default function SupplierInvoiceAdd() {
     }));
   };
 
-  const handleCurrencyChange = (selectedOption: any) => {
-    const selectedCurrency = currencies.find(c => c.id === selectedOption?.value);
-    setFormData(prev => ({
-      ...prev,
-      currencyId: selectedOption ? selectedOption.value : '',
-      currencyName: selectedCurrency ? selectedCurrency.name : ''
-    }));
-  };
-
   const handleCloseCreateSupplierPopup = () => {
     setShowCreateSupplierPopup(false);
     setSupplierName('');
@@ -584,18 +550,14 @@ export default function SupplierInvoiceAdd() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Fixed Header */}
       <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
         <div className="px-4 py-3">
           <h1 className="text-lg font-semibold text-gray-900">Thêm mới</h1>
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="pt-4 px-4">
-        {/* General Information */}
         <div className="space-y-4 mb-6">
-          {/* Image Upload Section */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Hình ảnh
@@ -683,13 +645,11 @@ export default function SupplierInvoiceAdd() {
             <Select
               options={currencyOptions}
               value={currencyOptions.find(option => option.value === formData.currencyId) || null}
-              onChange={handleCurrencyChange}
+              onChange={() => {}}
               placeholder="Chọn loại tiền tệ"
-              isClearable
-              isSearchable
+              isDisabled={true}
               className="text-sm"
               classNamePrefix="select"
-              isDisabled={isFetchingCurrencies || isProcessingImages}
             />
           </div>
 
@@ -708,7 +668,6 @@ export default function SupplierInvoiceAdd() {
           </div>
         </div>
 
-        {/* Products List */}
         <div>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-base font-medium text-gray-900">Danh sách sản phẩm</h2>
@@ -723,20 +682,17 @@ export default function SupplierInvoiceAdd() {
 
           <div className="space-y-4">
             {formData.products.map((product, index) => {
-              // Tìm sản phẩm trong danh sách products để lấy code và riCoefficient
               const selectedProduct = products.find(p => p.id === product.productId);
-              const code = selectedProduct?.code || 'N/A'; // Thay sku bằng code
+              const code = selectedProduct?.code || 'N/A';
               const riCoefficient = selectedProduct?.riCoefficient || product.coefficient || 1;
 
               return (
                 <div key={index} className="bg-white rounded-lg shadow-sm p-4">
-                  {/* Product Selection */}
                   <div className="flex gap-3 mb-3">
                     <div className="h-16 w-16 bg-gray-100 rounded-lg flex items-center justify-center">
                       <Package className="h-8 w-8 text-gray-400" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      {/* Bỏ label "Chọn sản phẩm" */}
                       <Select
                         options={productOptions}
                         value={productOptions.find(option => option.value === product.productId) || null}
@@ -750,12 +706,10 @@ export default function SupplierInvoiceAdd() {
                         classNamePrefix="select"
                         isDisabled={isFetchingProducts || isProcessingImages}
                       />
-                      {/* Hiển thị Code (có label "Mã sản phẩm") */}
                       <div className="mt-2 flex items-center gap-2">
                         <span className="text-sm text-gray-500">Mã sản phẩm:</span>
                         <span className="text-sm text-gray-900">{code}</span>
                       </div>
-                      {/* Hiển thị Hệ số ri */}
                       <div className="mt-2 flex items-center gap-2">
                         <span className="text-sm text-gray-500">Hệ số ri:</span>
                         <span className="text-sm text-gray-900">{riCoefficient}</span>
@@ -770,7 +724,6 @@ export default function SupplierInvoiceAdd() {
                     </button>
                   </div>
 
-                  {/* Quantity and Price */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">
@@ -803,7 +756,6 @@ export default function SupplierInvoiceAdd() {
                     </div>
                   </div>
 
-                  {/* Total */}
                   <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
                     <span className="text-xs text-gray-500">Thành tiền</span>
                     <span className="text-sm font-medium text-blue-600">
@@ -815,7 +767,6 @@ export default function SupplierInvoiceAdd() {
             })}
           </div>
 
-          {/* Total Amount */}
           {formData.products.length > 0 && (
             <div className="mt-4 bg-white rounded-lg shadow-sm p-4">
               <div className="flex justify-between items-center">
@@ -829,26 +780,24 @@ export default function SupplierInvoiceAdd() {
         </div>
       </div>
 
-      {/* Floating Action Buttons */}
       <div className="fixed bottom-4 right-4 flex flex-col gap-2">
         <button
           onClick={() => navigate('/supplier-invoices')}
           className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-          disabled={isProcessingImages}
+          disabled={isProcessingImages || isSavingFromPopup}
         >
           <ArrowLeft className="h-6 w-6" />
         </button>
         
         <button
           onClick={handleSubmit}
-          disabled={isLoading || isProcessingImages}
+          disabled={isLoading || isProcessingImages || isSavingFromPopup}
           className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
         >
           <Save className="h-6 w-6" />
         </button>
       </div>
 
-      {/* Confirmation Modal */}
       {showConfirmation && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-lg p-4 w-full max-w-sm">
@@ -877,7 +826,6 @@ export default function SupplierInvoiceAdd() {
         </div>
       )}
 
-      {/* Create Supplier Popup */}
       {showCreateSupplierPopup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-lg p-4 w-full max-w-sm">
@@ -940,7 +888,6 @@ export default function SupplierInvoiceAdd() {
         </div>
       )}
 
-      {/* Product Preview Popup */}
       {showPopup && previewData && (
         <ProductPreviewPopup
           generalInfo={previewData.generalInfo}
@@ -952,7 +899,6 @@ export default function SupplierInvoiceAdd() {
         />
       )}
 
-      {/* Loading Overlay */}
       {isProcessingImages && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
           <div className="flex flex-col items-center">
@@ -977,6 +923,34 @@ export default function SupplierInvoiceAdd() {
               />
             </svg>
             <span className="text-white text-sm">Đang xử lý ảnh...</span>
+          </div>
+        </div>
+      )}
+
+      {isSavingFromPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
+          <div className="flex flex-col items-center">
+            <svg
+              className="animate-spin h-10 w-10 text-white mb-2"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+            <span className="text-white text-sm">Đang lưu dữ liệu...</span>
           </div>
         </div>
       )}

@@ -32,10 +32,6 @@ export interface OrderStateDropdownItem {
 export interface ProductDropdownItem {
   id: string;
   name: string;
-  code: string;
-  baseUnit: string;
-  baseUnitId: string;
-  price: number;
 }
 
 export interface Order {
@@ -330,11 +326,11 @@ export const getProductDropdownData = async (): Promise<ProductDropdownItem[]> =
     _dbId: '',
     _msgId: '',
     dataType: 'XTSProduct',
-    columnSet: [],
+    columnSet: ['objectId'], // Chỉ yêu cầu các trường cần thiết
     sortBy: [],
     positionFrom: 1,
-    positionTo: 100,
-    limit: 100,
+    positionTo: 10000000,
+    limit: 10000000,
     conditions: []
   };
 
@@ -347,11 +343,7 @@ export const getProductDropdownData = async (): Promise<ProductDropdownItem[]> =
 
     return response.data.items.map((item: any) => ({
       id: item.object.objectId.id,
-      name: item.object.description,
-      code: item.object.code || '',
-      baseUnit: item.object.measurementUnit?.presentation || '',
-      baseUnitId: item.object.measurementUnit?.id || '',
-      price: item.object._price || 0
+      name: item.object.objectId.presentation,
     }));
   } catch (error) {
     console.error('Failed to fetch products:', error);

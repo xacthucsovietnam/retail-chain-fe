@@ -1,13 +1,11 @@
 // src/pages/orderAdd.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   Save,
   Package,
   Trash2,
-  Search,
-  X,
   PlusCircle
 } from 'lucide-react';
 import Select from 'react-select';
@@ -24,6 +22,7 @@ import {
 } from '../../services/order';
 import { createPartner } from '../../services/partner';
 import { getSession } from '../../utils/storage';
+import { getProductDetail, type ProductDetail } from '../../services/product';
 
 interface FormData {
   customerId: string;
@@ -43,6 +42,8 @@ interface FormData {
     price: number;
     total: number;
     coefficient: number;
+    availableUnits: Array<{ id: string; presentation: string; coefficient: number }>;
+    imageUrl?: string;
   }>;
 }
 
@@ -75,11 +76,6 @@ const initialFormData: FormData = {
   products: []
 };
 
-interface DropdownState {
-  isOpen: boolean;
-  search: string;
-}
-
 export default function OrderAdd() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -99,32 +95,10 @@ export default function OrderAdd() {
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isReturnOrder, setIsReturnOrder] = useState(false);
   const [availableProducts, setAvailableProducts] = useState<ProductDropdownItem[]>([]);
-  const [showCreateCustomerPopup, setShowCreateCustomerPopup] = useState(false); // State cho popup Tạo khách hàng
-  const [customerName, setCustomerName] = useState(''); // State cho ô Tên khách hàng
-  const [customerPhone, setCustomerPhone] = useState(''); // State cho ô Số điện thoại
-  const [customerAddress, setCustomerAddress] = useState(''); // State cho ô Địa chỉ
-
-  // Dropdown states
-  const [productDropdowns, setProductDropdowns] = useState<{[key: number]: DropdownState}>({});
-
-  // Refs for click outside handling
-  const productRefs = useRef<{[key: number]: HTMLDivElement | null}>({});
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      Object.entries(productRefs.current).forEach(([index, ref]) => {
-        if (ref && !ref.contains(event.target as Node)) {
-          setProductDropdowns(prev => ({
-            ...prev,
-            [index]: { ...prev[index], isOpen: false }
-          }));
-        }
-      });
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const [showCreateCustomerPopup, setShowCreateCustomerPopup] = useState(false);
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
 
   useEffect(() => {
     const loadData = async () => {
@@ -139,44 +113,35 @@ export default function OrderAdd() {
         setEmployees(employeeData);
         setProducts(productData);
 
-        // Check for pre-populated data
         const savedData = sessionStorage.getItem('newOrderData');
         if (savedData) {
           try {
             const parsedData = JSON.parse(savedData) as OrderPreloadData;
             
+            // Tìm customer khớp với customerId hoặc customerName
+            const selectedCustomer = customerData.find(c => 
+              c.id === parsedData.customerId || c.name === parsedData.customerName
+            );
+
             setFormData(prev => ({
               ...prev,
-              customerId: parsedData.customerId,
-              customerName: parsedData.customerName,
+              customerId: selectedCustomer?.id || parsedData.customerId || '',
+              customerName: selectedCustomer?.name || parsedData.customerName || '',
               employeeId: parsedData.employeeId || defaultValues.employeeResponsible?.id || '',
               employeeName: parsedData.employeeName || defaultValues.employeeResponsible?.presentation || '',
-              deliveryAddress: parsedData.deliveryAddress,
+              deliveryAddress: parsedData.deliveryAddress || '',
               products: []
             }));
 
             setIsReturnOrder(parsedData.isReturnOrder);
 
             if (parsedData.isReturnOrder && Array.isArray(parsedData.originalProducts)) {
-              // Filter available products to only those from the original order
               const filteredProducts = productData.filter(p => 
                 parsedData.originalProducts?.some(op => op.productId === p.id)
               );
-              
-              // Merge original product data with product details
-              const enhancedProducts = filteredProducts.map(p => {
-                const originalProduct = parsedData.originalProducts?.find(op => op.productId === p.id);
-                return {
-                  ...p,
-                  originalQuantity: originalProduct?.quantity || 0,
-                  originalPrice: originalProduct?.price || 0
-                };
-              });
-
-              setAvailableProducts(enhancedProducts);
+              setAvailableProducts(filteredProducts);
             }
 
-            // Clear the saved data
             sessionStorage.removeItem('newOrderData');
           } catch (error) {
             console.error('Error parsing saved order data:', error);
@@ -192,8 +157,17 @@ export default function OrderAdd() {
     loadData();
   }, []);
 
+  const calculateProductTotal = (product: FormData['products'][0]) => {
+    if (product.unitName === 'c') {
+      return product.quantity * product.price;
+    } else if (product.unitName.toLowerCase().includes('ri')) {
+      return product.quantity * product.coefficient * product.price;
+    }
+    return product.quantity * product.price;
+  };
+
   const calculateTotal = () => {
-    return formData.products.reduce((sum, product) => sum + product.total, 0);
+    return formData.products.reduce((sum, product) => sum + calculateProductTotal(product), 0);
   };
 
   const handleAddProduct = () => {
@@ -210,7 +184,8 @@ export default function OrderAdd() {
           quantity: 1,
           price: 0,
           total: 0,
-          coefficient: 1
+          coefficient: 1,
+          availableUnits: []
         }
       ]
     }));
@@ -223,60 +198,83 @@ export default function OrderAdd() {
     }));
   };
 
-  const handleProductChange = (index: number, field: string, value: any) => {
+  const handleProductChange = async (index: number, selectedOption: any) => {
+    if (!selectedOption) return;
+
+    try {
+      const productDetail = await getProductDetail(selectedOption.value);
+      const defaultUnit = productDetail.uoms[0] || { id: '', presentation: '', coefficient: 1 };
+      const fileStorageURL = session?.fileStorageURL || '';
+      const imageUrl = productDetail.imageUrl && productDetail.images.length > 0 
+        ? `${fileStorageURL}${productDetail.images[0].id}`
+        : undefined;
+
+      setFormData(prev => {
+        const newProducts = [...prev.products];
+        newProducts[index] = {
+          id: productDetail.id,
+          name: productDetail.name,
+          sku: productDetail.code,
+          unitId: defaultUnit.id,
+          unitName: defaultUnit.presentation,
+          quantity: 1,
+          price: productDetail.price,
+          total: calculateProductTotal({
+            unitName: defaultUnit.presentation,
+            quantity: 1,
+            price: productDetail.price,
+            coefficient: defaultUnit.coefficient
+          }),
+          coefficient: defaultUnit.coefficient,
+          availableUnits: productDetail.uoms,
+          imageUrl
+        };
+        return { ...prev, products: newProducts };
+      });
+    } catch (error) {
+      toast.error('Không thể tải chi tiết sản phẩm');
+      console.error('Error fetching product detail:', error);
+    }
+  };
+
+  const handleUnitChange = (index: number, selectedOption: any) => {
+    if (!selectedOption) return;
+
     setFormData(prev => {
       const newProducts = [...prev.products];
-      
-      if (field === 'id') {
-        const selectedProduct = products.find(p => p.id === value);
-        if (selectedProduct) {
-          newProducts[index] = {
-            ...newProducts[index],
-            id: selectedProduct.id,
-            name: selectedProduct.name,
-            sku: selectedProduct.code,
-            unitId: selectedProduct.baseUnitId,
-            unitName: selectedProduct.baseUnit,
-            price: selectedProduct.price,
-            total: selectedProduct.price * newProducts[index].quantity
-          };
-        }
-      } else {
+      const selectedUnit = newProducts[index].availableUnits.find(u => u.id === selectedOption.value);
+      if (selectedUnit) {
         newProducts[index] = {
           ...newProducts[index],
-          [field]: value
+          unitId: selectedUnit.id,
+          unitName: selectedUnit.presentation,
+          coefficient: selectedUnit.coefficient,
+          total: calculateProductTotal({
+            ...newProducts[index],
+            unitName: selectedUnit.presentation,
+            coefficient: selectedUnit.coefficient,
+            quantity: newProducts[index].quantity,
+            price: newProducts[index].price
+          })
         };
-        
-        if (field === 'quantity' || field === 'price') {
-          newProducts[index].total = newProducts[index].quantity * newProducts[index].price;
-        }
       }
-      
       return { ...prev, products: newProducts };
     });
   };
 
-  const getFilteredProducts = (index: number) => {
-    const search = (productDropdowns[index]?.search || '').toLowerCase();
-    const productsToFilter = isReturnOrder ? availableProducts : products;
-    return productsToFilter.filter(product => 
-      product.name.toLowerCase().includes(search) ||
-      product.code.toLowerCase().includes(search)
-    );
-  };
-
-  const handleProductDropdownOpen = (index: number) => {
-    setProductDropdowns(prev => ({
-      ...prev,
-      [index]: { isOpen: true, search: prev[index]?.search || '' }
-    }));
-  };
-
-  const handleProductSearch = (index: number, value: string) => {
-    setProductDropdowns(prev => ({
-      ...prev,
-      [index]: { ...prev[index], search: value }
-    }));
+  const handleFieldChange = (index: number, field: keyof FormData['products'][0], value: any) => {
+    setFormData(prev => {
+      const newProducts = [...prev.products];
+      newProducts[index] = {
+        ...newProducts[index],
+        [field]: value,
+        total: calculateProductTotal({
+          ...newProducts[index],
+          [field]: value
+        })
+      };
+      return { ...prev, products: newProducts };
+    });
   };
 
   const validateForm = (): boolean => {
@@ -302,7 +300,7 @@ export default function OrderAdd() {
       }
 
       if (product.price < 0) {
-        toast.error('Đơn giá không được âm');
+        toast.error('Đơn giá chiếc không được âm');
         return false;
       }
     }
@@ -352,7 +350,6 @@ export default function OrderAdd() {
     }
   };
 
-  // Định dạng options cho react-select (Khách hàng)
   const customerOptions = [
     { value: 'create-customer', label: 'Tạo khách hàng', isCreateOption: true },
     ...customers.map(customer => ({
@@ -361,7 +358,11 @@ export default function OrderAdd() {
     }))
   ];
 
-  // Custom Option cho react-select để hiển thị icon "Tạo khách hàng"
+  const productOptions = (isReturnOrder ? availableProducts : products).map(product => ({
+    value: product.id,
+    label: product.name
+  }));
+
   const CustomOption = (props: any) => {
     const { data, innerRef, innerProps } = props;
     return (
@@ -382,7 +383,6 @@ export default function OrderAdd() {
     );
   };
 
-  // Xử lý khi chọn "Khách hàng"
   const handleCustomerChange = (selectedOption: any) => {
     if (selectedOption?.value === 'create-customer') {
       setShowCreateCustomerPopup(true);
@@ -397,7 +397,6 @@ export default function OrderAdd() {
     }));
   };
 
-  // Xử lý đóng popup Tạo khách hàng
   const handleCloseCreateCustomerPopup = () => {
     setShowCreateCustomerPopup(false);
     setCustomerName('');
@@ -405,9 +404,7 @@ export default function OrderAdd() {
     setCustomerAddress('');
   };
 
-  // Xử lý xác nhận tạo khách hàng
   const handleConfirmCreateCustomer = async () => {
-    // Validate input
     if (!customerName.trim()) {
       toast.error('Vui lòng nhập Tên khách hàng');
       return;
@@ -439,11 +436,9 @@ export default function OrderAdd() {
         doOperationsByDocuments: false
       });
 
-      // Cập nhật danh sách khách hàng
       const updatedCustomers = [...customers, { id: newCustomer.id, name: customerName, code: newCustomer.code || '' }];
       setCustomers(updatedCustomers);
 
-      // Chọn khách hàng vừa tạo
       setFormData(prev => ({
         ...prev,
         customerId: newCustomer.id,
@@ -471,18 +466,14 @@ export default function OrderAdd() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Fixed Header */}
       <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
         <div className="px-4 py-3">
           <h1 className="text-lg font-semibold text-gray-900">Thêm mới đơn hàng</h1>
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="pt-2 px-4">
-        {/* Order Information */}
         <div className="space-y-4 mb-6">
-          {/* Customer Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Khách hàng *
@@ -500,7 +491,6 @@ export default function OrderAdd() {
             />
           </div>
 
-          {/* Employee Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Người bán
@@ -513,7 +503,6 @@ export default function OrderAdd() {
             />
           </div>
 
-          {/* Order Status */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Trạng thái
@@ -526,7 +515,6 @@ export default function OrderAdd() {
             />
           </div>
 
-          {/* Delivery Address */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Địa chỉ giao hàng
@@ -540,7 +528,6 @@ export default function OrderAdd() {
             />
           </div>
 
-          {/* Notes */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Ghi chú
@@ -555,78 +542,37 @@ export default function OrderAdd() {
           </div>
         </div>
 
-        {/* Products List */}
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-medium text-gray-900">Danh sách sản phẩm</h2>
-            <button
-              onClick={handleAddProduct}
-              className="text-sm text-blue-600 hover:text-blue-700"
-            >
-              Thêm sản phẩm
-            </button>
-          </div>
+          <h2 className="text-base font-medium text-gray-900 mb-4">Danh sách sản phẩm</h2>
 
           <div className="space-y-4">
             {formData.products.map((product, index) => (
               <div key={index} className="bg-white rounded-lg shadow-sm p-4">
-                {/* Product Selection */}
                 <div className="flex gap-3 mb-3">
-                  <div className="h-16 w-16 bg-gray-100 rounded-lg flex items-center justify-center">
-                    <Package className="h-8 w-8 text-gray-400" />
-                  </div>
-                  <div 
-                    ref={el => productRefs.current[index] = el}
-                    className="flex-1 min-w-0 relative"
-                  >
-                    <div
-                      onClick={() => handleProductDropdownOpen(index)}
-                      className="cursor-pointer"
-                    >
-                      <input
-                        type="text"
-                        value={productDropdowns[index]?.isOpen 
-                          ? productDropdowns[index].search 
-                          : product.name || 'Chọn sản phẩm...'}
-                        onChange={(e) => handleProductSearch(index, e.target.value)}
-                        className="w-full text-sm text-gray-900 bg-transparent border-0 p-0 focus:ring-0"
-                        placeholder="Tìm kiếm sản phẩm..."
-                        readOnly={!productDropdowns[index]?.isOpen}
+                  <div className="h-16 w-16 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                    {product.imageUrl ? (
+                      <img 
+                        src={product.imageUrl} 
+                        alt={product.name} 
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                          (e.target as HTMLImageElement).nextSibling?.removeAttribute('style');
+                        }}
                       />
-                    </div>
-                    {productDropdowns[index]?.isOpen && (
-                      <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg max-h-60 overflow-auto">
-                        <div className="sticky top-0 bg-white p-2 border-b">
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={productDropdowns[index].search}
-                              onChange={(e) => handleProductSearch(index, e.target.value)}
-                              className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                              placeholder="Tìm kiếm..."
-                              autoFocus
-                            />
-                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                          </div>
-                        </div>
-                        {getFilteredProducts(index).map(p => (
-                          <div
-                            key={p.id}
-                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                            onClick={() => {
-                              handleProductChange(index, 'id', p.id);
-                              setProductDropdowns(prev => ({
-                                ...prev,
-                                [index]: { isOpen: false, search: '' }
-                              }));
-                            }}
-                          >
-                            <div className="text-sm font-medium text-gray-900">{p.name}</div>
-                            <div className="text-xs text-gray-500">{p.code}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    ) : null}
+                    <Package className={`h-8 w-8 text-gray-400 ${product.imageUrl ? 'hidden' : ''}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <Select
+                      options={productOptions}
+                      value={productOptions.find(option => option.value === product.id) || null}
+                      onChange={(option) => handleProductChange(index, option)}
+                      placeholder="Chọn sản phẩm..."
+                      isSearchable
+                      className="text-sm"
+                      classNamePrefix="select"
+                    />
                     <p className="text-xs text-gray-500 mt-1">{product.sku || 'SKU'}</p>
                   </div>
                   <button
@@ -637,7 +583,6 @@ export default function OrderAdd() {
                   </button>
                 </div>
 
-                {/* Quantity and Price */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">
@@ -646,29 +591,46 @@ export default function OrderAdd() {
                     <input
                       type="number"
                       value={product.quantity}
-                      onChange={(e) => handleProductChange(index, 'quantity', Number(e.target.value))}
+                      onChange={(e) => handleFieldChange(index, 'quantity', Number(e.target.value))}
                       min="1"
-                      className="w-full text-sm text-gray-900 bg-transparent border-0 p-0 focus:ring-0"
+                      className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1 focus:ring-blue-500 focus:border-blue-500"
                       inputMode="numeric"
                     />
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">
-                      Đơn giá
+                      Đơn giá chiếc
                     </label>
                     <input
                       type="number"
                       value={product.price}
-                      onChange={(e) => handleProductChange(index, 'price', Number(e.target.value))}
+                      onChange={(e) => handleFieldChange(index, 'price', Number(e.target.value))}
                       min="0"
                       step="1000"
-                      className="w-full text-sm text-gray-900 bg-transparent border-0 p-0 focus:ring-0"
+                      className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1 focus:ring-blue-500 focus:border-blue-500"
                       inputMode="numeric"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Đơn vị tính
+                    </label>
+                    <Select
+                      options={product.availableUnits.map(unit => ({
+                        value: unit.id,
+                        label: unit.presentation
+                      }))}
+                      value={product.availableUnits
+                        .map(unit => ({ value: unit.id, label: unit.presentation }))
+                        .find(option => option.value === product.unitId) || null}
+                      onChange={(option) => handleUnitChange(index, option)}
+                      placeholder="Chọn đơn vị tính..."
+                      className="text-sm"
+                      classNamePrefix="select"
                     />
                   </div>
                 </div>
 
-                {/* Total */}
                 <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
                   <span className="text-xs text-gray-500">Thành tiền</span>
                   <span className="text-sm font-medium text-blue-600">
@@ -679,7 +641,15 @@ export default function OrderAdd() {
             ))}
           </div>
 
-          {/* Total Amount */}
+          <div className="mt-4">
+            <button
+              onClick={handleAddProduct}
+              className="text-sm text-blue-600 hover:text-blue-700"
+            >
+              Thêm sản phẩm
+            </button>
+          </div>
+
           {formData.products.length > 0 && (
             <div className="mt-4 bg-white rounded-lg shadow-sm p-4">
               <div className="flex justify-between items-center">
@@ -693,7 +663,6 @@ export default function OrderAdd() {
         </div>
       </div>
 
-      {/* Floating Action Buttons */}
       <div className="fixed bottom-4 right-4 flex flex-col gap-2">
         <button
           onClick={() => navigate('/orders')}
@@ -711,7 +680,6 @@ export default function OrderAdd() {
         </button>
       </div>
 
-      {/* Confirmation Modal */}
       {showConfirmation && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-lg p-4 w-full max-w-sm">
@@ -740,7 +708,6 @@ export default function OrderAdd() {
         </div>
       )}
 
-      {/* Create Customer Popup */}
       {showCreateCustomerPopup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-lg p-4 w-full max-w-sm">

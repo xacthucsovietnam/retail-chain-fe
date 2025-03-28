@@ -1,3 +1,4 @@
+// src/services/product.ts
 import api from './axiosClient';
 import { 
   uploadFile, 
@@ -7,14 +8,12 @@ import {
 } from './file';
 import { ListRequest, PaginatedResponse } from './types';
 
-// Add new interface for image processing
 export interface ProductImage {
   id: string;
   url: string;
   presentation: string;
 }
 
-// Update existing interfaces
 export interface Product {
   id: string;
   name: string;
@@ -36,6 +35,11 @@ export interface ProductDetail {
   description: string;
   comment: string;
   images: ProductImage[];
+  uoms: Array<{
+    id: string;
+    presentation: string;
+    coefficient: number;
+  }>;
 }
 
 export interface Category {
@@ -75,11 +79,9 @@ export interface UpdateProductData {
   deletedImageIds?: string[];
 }
 
-// Helper function to process product images
 const processProductImages = (product: any): ProductImage[] => {
   const images: ProductImage[] = [];
 
-  // Add main picture if exists
   if (product.picture) {
     images.push({
       id: product.picture.id,
@@ -88,7 +90,6 @@ const processProductImages = (product: any): ProductImage[] => {
     });
   }
 
-  // Add additional pictures if they exist
   if (Array.isArray(product._pictures)) {
     product._pictures.forEach((pic: any) => {
       if (pic?.fileName && !images.find(img => img.id === pic.file.id)) {
@@ -104,7 +105,6 @@ const processProductImages = (product: any): ProductImage[] => {
   return images;
 };
 
-// Main service functions
 export const getCategories = async (): Promise<Category[]> => {
   const categoryListData = {
     _type: 'XTSGetObjectListRequest',
@@ -176,7 +176,7 @@ export const getProducts = async (searchTerm: string = '', category: string = ''
     _dbId: '',
     _msgId: '',
     dataType: 'XTSProduct',
-    columnSet: [],
+    columnSet: ['objectId', 'productCategory', 'description', 'sku', 'price', 'picture'],
     sortBy: [],
     positionFrom,
     positionTo,
@@ -211,7 +211,6 @@ export const getProducts = async (searchTerm: string = '', category: string = ''
 
     return {
       items: response.data.items.map((item: any) => {
-        // Get the image URL from either picture.objectId.url or picture.presentation
         let imageUrl = '';
         if (item.object.picture?.presentation) {
           imageUrl = getImageUrl(item.object.picture.presentation);
@@ -248,7 +247,10 @@ export const getProductDetail = async (id: string): Promise<ProductDetail> => {
         url: ''
       }
     ],
-    columnSet: []
+    columnSet: [
+      'objectId', 'description', 'sku', 'productCategory', '_price', 'picture',
+      'measurementUnit', '_uomCoefficient', 'descriptionFull', 'comment', '_uoms', '_pictures'
+    ]
   };
 
   try {
@@ -272,7 +274,12 @@ export const getProductDetail = async (id: string): Promise<ProductDetail> => {
       riCoefficient: product._uomCoefficient || 1,
       description: product.descriptionFull || '',
       comment: product.comment || '',
-      images: images
+      images: images,
+      uoms: product._uoms?.map((uom: any) => ({
+        id: uom.uom.id,
+        presentation: uom.uom.presentation,
+        coefficient: uom.coefficient || 1
+      })) || []
     };
   } catch (error) {
     console.error('Product detail fetch error:', error);
@@ -281,7 +288,6 @@ export const getProductDetail = async (id: string): Promise<ProductDetail> => {
 };
 
 export const createProduct = async (data: CreateProductData): Promise<{ id: string; presentation: string }> => {
-  // Step 1: Create product
   const createProductData = {
     _type: 'XTSCreateObjectsRequest',
     _dbId: '',
@@ -345,10 +351,8 @@ export const createProduct = async (data: CreateProductData): Promise<{ id: stri
     const productId = createdProduct.objectId.id;
     const productPresentation = createdProduct.objectId.presentation;
 
-    // Step 2: Upload images if provided
     if (data.images.length > 0) {
       try {
-        // Upload all images in parallel
         const uploadPromises = data.images.map(image => 
           uploadFile(image, {
             fileOwnerType: 'XTSProduct',
@@ -361,8 +365,6 @@ export const createProduct = async (data: CreateProductData): Promise<{ id: stri
         await Promise.all(uploadPromises);
       } catch (error) {
         console.error('Image upload error:', error);
-        // Continue even if image upload fails
-        // The product is already created
       }
     }
 
@@ -378,7 +380,6 @@ export const createProduct = async (data: CreateProductData): Promise<{ id: stri
 
 export const updateProduct = async (data: UpdateProductData): Promise<void> => {
   try {
-    // Step 1: Handle image deletions if any
     if (data.deletedImageIds?.length) {
       const deletePromises = data.deletedImageIds.map(fileId =>
         deleteFile({
@@ -389,7 +390,6 @@ export const updateProduct = async (data: UpdateProductData): Promise<void> => {
       await Promise.all(deletePromises);
     }
 
-    // Step 2: Handle new image uploads if any
     if (data.newImages?.length) {
       const uploadPromises = data.newImages.map(image =>
         uploadFile(image, {
@@ -402,7 +402,6 @@ export const updateProduct = async (data: UpdateProductData): Promise<void> => {
       await Promise.all(uploadPromises);
     }
 
-    // Step 3: Update product data
     const updateProductData = {
       _type: 'XTSUpdateObjectsRequest',
       _dbId: '',
