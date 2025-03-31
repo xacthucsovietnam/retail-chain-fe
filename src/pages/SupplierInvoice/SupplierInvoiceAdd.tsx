@@ -273,15 +273,16 @@ export default function SupplierInvoiceAdd() {
       try {
         const createPromises = updatedNotExist.map(async (item) => {
           const adjustedPrice = Number(item.price); // Giá đã điều chỉnh từ ProductPreviewPopup
+          const adjustedCoefficient = Number(item.coefficient) || 1; // Hệ số ri đã chỉnh sửa
           const createProductData = {
-            code: item.productCode,
-            name: item.productDescription || `Sản phẩm ${item.lineNumber}`,
+            code: item.productCode || `NEW-${item.lineNumber}`, // Mã sản phẩm đã chỉnh sửa
+            name: item.productDescription || `Sản phẩm ${item.lineNumber}`, // Tên sản phẩm đã chỉnh sửa
             category: "5736c39a-5b28-11ef-a699-00155d058802",
             purchasePrice: adjustedPrice,
             sellingPrice: adjustedPrice,
             measurementUnit: "5736c39c-5b28-11ef-a699-00155d058802",
-            riCoefficient: Number(item.coefficient) || 1,
-            description: item.productCharacteristic,
+            riCoefficient: adjustedCoefficient, // Truyền hệ số ri đã chỉnh sửa
+            description: item.productCharacteristic || '',
             images: []
           };
 
@@ -289,9 +290,9 @@ export default function SupplierInvoiceAdd() {
           const newProduct = {
             id,
             name: presentation,
-            code: item.productCode,
+            code: item.productCode || `NEW-${item.lineNumber}`,
             price: adjustedPrice,
-            riCoefficient: Number(item.coefficient) || 1
+            riCoefficient: adjustedCoefficient
           };
           setProducts(prev => [...prev, newProduct]);
           return { ...item, id, name: presentation, price: adjustedPrice.toString() };
@@ -309,6 +310,7 @@ export default function SupplierInvoiceAdd() {
     const combinedProducts = [
       ...updatedExisted.map(item => {
         const adjustedPrice = Number(item.price); // Giá đã điều chỉnh từ ProductPreviewPopup
+        const adjustedCoefficient = Number(item.coefficient) || 1; // Hệ số ri đã chỉnh sửa
         return {
           productId: item.id || '',
           productName: item.name || item.productDescription,
@@ -316,12 +318,13 @@ export default function SupplierInvoiceAdd() {
           unitName: 'c',
           quantity: Number(item.quantity) || 1,
           price: adjustedPrice,
-          coefficient: Number(item.coefficient) || 1,
+          coefficient: adjustedCoefficient,
           total: Number(item.total) || (Number(item.quantity) * adjustedPrice)
         };
       }),
       ...processedNotExist.map(item => {
         const adjustedPrice = Number(item.price); // Giá đã điều chỉnh từ ProductPreviewPopup
+        const adjustedCoefficient = Number(item.coefficient) || 1; // Hệ số ri đã chỉnh sửa
         return {
           productId: item.id || '',
           productName: item.name || item.productDescription,
@@ -329,7 +332,7 @@ export default function SupplierInvoiceAdd() {
           unitName: 'c',
           quantity: Number(item.quantity) || 1,
           price: adjustedPrice,
-          coefficient: Number(item.coefficient) || 1,
+          coefficient: adjustedCoefficient,
           total: Number(item.total) || (Number(item.quantity) * adjustedPrice)
         };
       })

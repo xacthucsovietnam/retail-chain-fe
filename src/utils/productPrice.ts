@@ -75,7 +75,8 @@ const createPayload = (productIds: string[]) => {
       minute: '2-digit',
       second: '2-digit',
       hour12: false
-    }).replace(/[^0-9]/g, ''),
+    })
+    .replace(/(\d+)\/(\d+)\/(\d+),\s(\d+):(\d+):(\d+)/, '$3-$1-$2T$4:$5:$6'),
     priceKinds: [{
       _type: "XTSObjectId",
       id: "1a1fb49c-5b28-11ef-a699-00155d058802",
