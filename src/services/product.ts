@@ -176,7 +176,7 @@ export const getProducts = async (searchTerm: string = '', category: string = ''
     _dbId: '',
     _msgId: '',
     dataType: 'XTSProduct',
-    columnSet: ['objectId', 'productCategory', 'description', 'sku', 'price', 'picture'],
+    columnSet: ['objectId', 'productCategory', 'description', 'sku', 'price', '_uomCoefficient', 'picture'],
     sortBy: [],
     positionFrom,
     positionTo,

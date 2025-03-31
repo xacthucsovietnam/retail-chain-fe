@@ -14,7 +14,7 @@ export interface ProcessedImageData {
   name?: string;
 }
 
-// Định nghĩa interface cho thông tin chung và danh sách sản phẩm
+// Định nghĩa interface cho thông tin chung
 interface GeneralInfo {
   date: string;
   number: string;
@@ -25,10 +25,19 @@ interface GeneralInfo {
   comment: string;
 }
 
+// Định nghĩa interface cho XTSFoundObject (tương tự foundObjects trong searchResponse)
+interface XTSFoundObject {
+  _type: "XTSFoundObject";
+  lineNumber: number;
+  attributeValue: string;
+  objects: any[]; // Lưu toàn bộ dữ liệu sản phẩm từ searchResponse
+}
+
+// Định nghĩa interface cho kết quả xử lý
 interface ProcessResult {
   generalInfo: GeneralInfo;
   notExist: ProcessedImageData[];
-  existed: ProcessedImageData[];
+  existed: XTSFoundObject[];
 }
 
 // Định nghĩa interface cho XTSSearchObjectsRequest
@@ -225,37 +234,35 @@ export const processImages = async (images: File[]): Promise<ProcessResult> => {
     // Lấy danh sách foundObjects từ searchResponse
     const foundObjects = searchResponse.data?.foundObjects || [];
 
-    // Tạo Set từ các attributeValue (SKU) trong foundObjects
-    const existedSKUs = new Set(foundObjects.map((obj: any) => obj.attributeValue));
-
-    // Tạo existed và notExist từ originalItems
-    const existed: ProcessedImageData[] = [];
+    // Tạo existed và notExist
+    const existed: XTSFoundObject[] = [];
     const notExist: ProcessedImageData[] = [];
 
-    // Map để lưu thông tin gốc từ originalItems theo productCode và lineNumber
-    const originalItemsMap = new Map(
-      originalItems.map(item => [`${item.productCode}-${item.lineNumber}`, item])
-    );
+    // Tạo Set từ các attributeValue (SKU) trong foundObjects để kiểm tra tồn tại
+    const existedSKUs = new Set(foundObjects.map((obj: any) => obj.attributeValue));
 
-    // Phân loại sản phẩm và tạo existed
+    // Phân loại sản phẩm
     originalItems.forEach((item) => {
       if (existedSKUs.has(item.productCode)) {
+        // Tìm foundObject tương ứng với item dựa trên productCode và lineNumber
         const foundObj = foundObjects.find(
           (obj: any) => obj.attributeValue === item.productCode && obj.lineNumber.toString() === item.lineNumber
         );
         if (foundObj) {
-          foundObj.objects.forEach((product: any) => {
-            existed.push({
-              lineNumber: item.lineNumber,
-              productCode: product.sku || item.productCode,
-              productDescription: item.productDescription,
-              productCharacteristic: item.productCharacteristic,
+          // Lưu toàn bộ dữ liệu từ foundObj vào existed
+          existed.push({
+            _type: "XTSFoundObject",
+            lineNumber: foundObj.lineNumber,
+            attributeValue: foundObj.attributeValue,
+            objects: foundObj.objects.map((product: any) => ({
+              ...product, // Giữ nguyên toàn bộ dữ liệu sản phẩm
+              // Có thể thêm các trường từ originalItems nếu cần
               quantity: item.quantity,
               price: item.price,
               total: item.total,
-              id: product.objectId?.id || undefined,
-              name: product.description || item.name,
-            });
+              productDescription: item.productDescription,
+              productCharacteristic: item.productCharacteristic,
+            })),
           });
         }
       } else {

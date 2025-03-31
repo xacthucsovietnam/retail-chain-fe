@@ -63,6 +63,15 @@ interface Currency {
   name: string;
 }
 
+// Định nghĩa interface cho XTSFoundObject từ imageProcessing.ts
+interface XTSFoundObject {
+  _type: "XTSFoundObject";
+  lineNumber: number;
+  attributeValue: string;
+  objects: any[];
+  selectedObject?: any; // Thêm trường selectedObject
+}
+
 export default function SupplierInvoiceAdd() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
@@ -74,7 +83,7 @@ export default function SupplierInvoiceAdd() {
   const [previewData, setPreviewData] = useState<{
     generalInfo: { date: string; documentAmount: string; documentQuantity: string; number: string; contactInfo: string; comment: string; supplier: string };
     notExist: ProcessedImageData[];
-    existed: any[];
+    existed: XTSFoundObject[];
   } | null>(null);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isFetchingSuppliers, setIsFetchingSuppliers] = useState(false);
@@ -89,7 +98,7 @@ export default function SupplierInvoiceAdd() {
   const defaultValues = session?.defaultValues || {};
 
   const [formData, setFormData] = useState<FormData>({
-    date: new Date().toISOString().slice(0, 16),
+    date: new Date().toISOString().slice(16),
     customerId: '',
     customerName: '',
     currencyId: '',
@@ -211,6 +220,11 @@ export default function SupplierInvoiceAdd() {
           newProducts[index].price = selected.price;
           newProducts[index].coefficient = selected.riCoefficient || 1;
           newProducts[index].total = selected.price * newProducts[index].quantity;
+        } else {
+          newProducts[index].productName = '';
+          newProducts[index].price = 0;
+          newProducts[index].coefficient = 1;
+          newProducts[index].total = 0;
         }
       }
 
@@ -262,26 +276,31 @@ export default function SupplierInvoiceAdd() {
     setShowPopup(false);
   };
 
-  const handleSaveFromPopup = async (updatedNotExist: ProcessedImageData[], updatedExisted: any[], updatedGeneralInfo: any) => {
+  const handleSaveFromPopup = async (
+    updatedNotExist: ProcessedImageData[],
+    updatedExisted: XTSFoundObject[],
+    updatedGeneralInfo: any
+  ) => {
     setIsSavingFromPopup(true);
     let processedNotExist = [...updatedNotExist];
 
     const customerId = formData.customerId || updatedGeneralInfo.supplierId;
     const customerName = formData.customerName || updatedGeneralInfo.supplier;
 
+    // Xử lý các sản phẩm mới (notExist)
     if (updatedNotExist.length > 0) {
       try {
         const createPromises = updatedNotExist.map(async (item) => {
-          const adjustedPrice = Number(item.price); // Giá đã điều chỉnh từ ProductPreviewPopup
-          const adjustedCoefficient = Number(item.coefficient) || 1; // Hệ số ri đã chỉnh sửa
+          const adjustedPrice = Number(item.price);
+          const adjustedCoefficient = Number(item.coefficient) || 1;
           const createProductData = {
-            code: item.productCode || `NEW-${item.lineNumber}`, // Mã sản phẩm đã chỉnh sửa
-            name: item.productDescription || `Sản phẩm ${item.lineNumber}`, // Tên sản phẩm đã chỉnh sửa
+            code: item.productCode || `NEW-${item.lineNumber}`,
+            name: item.productDescription || `Sản phẩm ${item.lineNumber}`,
             category: "5736c39a-5b28-11ef-a699-00155d058802",
             purchasePrice: adjustedPrice,
             sellingPrice: adjustedPrice,
             measurementUnit: "5736c39c-5b28-11ef-a699-00155d058802",
-            riCoefficient: adjustedCoefficient, // Truyền hệ số ri đã chỉnh sửa
+            riCoefficient: adjustedCoefficient,
             description: item.productCharacteristic || '',
             images: []
           };
@@ -307,24 +326,28 @@ export default function SupplierInvoiceAdd() {
       }
     }
 
+    // Xử lý các sản phẩm đã tồn tại (existed)
     const combinedProducts = [
+      // Ánh xạ từ updatedExisted (XTSFoundObject[])
       ...updatedExisted.map(item => {
-        const adjustedPrice = Number(item.price); // Giá đã điều chỉnh từ ProductPreviewPopup
-        const adjustedCoefficient = Number(item.coefficient) || 1; // Hệ số ri đã chỉnh sửa
+        const selectedObj = item.selectedObject; // Lấy selectedObject từ mỗi XTSFoundObject
+        const adjustedPrice = Number(selectedObj.price || selectedObj._price || 0);
+        const adjustedCoefficient = Number(selectedObj.coefficient || selectedObj._uomCoefficient || 1);
         return {
-          productId: item.id || '',
-          productName: item.name || item.productDescription,
+          productId: selectedObj.objectId.id || '',
+          productName: selectedObj.objectId.presentation || '',
           unitId: '5736c39c-5b28-11ef-a699-00155d058802',
           unitName: 'c',
-          quantity: Number(item.quantity) || 1,
+          quantity: Number(selectedObj.quantity) || 1,
           price: adjustedPrice,
           coefficient: adjustedCoefficient,
-          total: Number(item.total) || (Number(item.quantity) * adjustedPrice)
+          total: Number(selectedObj.total) || (Number(selectedObj.quantity) * adjustedPrice)
         };
       }),
+      // Ánh xạ từ processedNotExist
       ...processedNotExist.map(item => {
-        const adjustedPrice = Number(item.price); // Giá đã điều chỉnh từ ProductPreviewPopup
-        const adjustedCoefficient = Number(item.coefficient) || 1; // Hệ số ri đã chỉnh sửa
+        const adjustedPrice = Number(item.price);
+        const adjustedCoefficient = Number(item.coefficient) || 1;
         return {
           productId: item.id || '',
           productName: item.name || item.productDescription,
