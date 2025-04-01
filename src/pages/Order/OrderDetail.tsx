@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getOrderDetail, updateOrder, getRelatedDocuments, type RelatedDocument } from '../../services/order';
+import { deleteObjects } from '../../services/deleteObjects'; // Import deleteObjects
 import type { OrderDetail } from '../../services/order';
 import { formatCurrency } from '../../utils/currency';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -317,6 +318,32 @@ export default function OrderDetail() {
     navigate('/orders/add');
   };
 
+  // Hàm xử lý xóa đơn hàng
+  const handleDelete = async () => {
+    if (!order || !id) return;
+
+    setIsProcessing(true);
+
+    try {
+      const objectToDelete = {
+        _type: 'XTSObjectId',
+        id: order.id,
+        dataType: 'XTSOrder',
+        presentation: `${order.title} (đã xóa)`,
+        navigationRef: null,
+      };
+
+      await deleteObjects([objectToDelete]);
+      toast.success('Đơn hàng đã được xóa thành công');
+      navigate('/orders'); // Quay lại danh sách sau khi xóa
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Không thể xóa đơn hàng';
+      toast.error(errorMessage);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     const statusLower = status.toLowerCase();
     if (statusLower.includes('đang soạn')) {
@@ -354,35 +381,53 @@ export default function OrderDetail() {
     if (!order) return null;
 
     const status = order.orderState.toLowerCase();
-    const buttons = [];
+    const leftButtons = [];
+    const rightButtons = [];
 
-    buttons.push(
+    // Nút Back luôn có
+    leftButtons.push(
       <button
         key="back"
         onClick={() => navigate('/orders')}
         className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        title="Quay lại"
       >
         <ArrowLeft className="h-6 w-6" />
       </button>
     );
 
-    buttons.push(
+    // Các nút chung cho mọi trạng thái
+    rightButtons.push(
       <button
         key="related"
         onClick={handleShowRelatedDocs}
         disabled={isLoadingDocs}
         className="p-3 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+        title="Chứng từ liên quan"
       >
         <Files className="h-6 w-6" />
       </button>
     );
 
+    // Các nút theo trạng thái
     if (status.includes('đang soạn') || status.includes('chờ trả trước')) {
-      buttons.push(
+      leftButtons.push(
+        <button
+          key="delete"
+          onClick={handleDelete}
+          disabled={isProcessing}
+          className="p-3 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+          title="Xóa"
+        >
+          <Trash2 className="h-6 w-6" />
+        </button>
+      );
+      rightButtons.push(
         <button
           key="edit"
           onClick={() => navigate(`/orders/edit/${id}`)}
           className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          title="Chỉnh sửa"
         >
           <Pencil className="h-6 w-6" />
         </button>,
@@ -390,24 +435,30 @@ export default function OrderDetail() {
           key="pay"
           onClick={() => setShowPaymentModal(true)}
           className="p-3 bg-green-600 text-white rounded-full shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+          title="Thanh toán"
         >
           <CreditCard className="h-6 w-6" />
-        </button>,
+        </button>
+      );
+    } else if (status.includes('đang chuẩn bị')) {
+      leftButtons.push(
         <button
           key="delete"
-          onClick={() => toast.error('Delete functionality not implemented')}
-          className="p-3 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+          onClick={handleDelete}
+          disabled={isProcessing}
+          className="p-3 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+          title="Xóa"
         >
           <Trash2 className="h-6 w-6" />
         </button>
       );
-    } else if (status.includes('đang chuẩn bị')) {
-      buttons.push(
+      rightButtons.push(
         <button
           key="deliver"
           onClick={handleDelivery}
           disabled={isProcessing}
           className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+          title="Giao hàng"
         >
           <Truck className="h-6 w-6" />
         </button>,
@@ -415,30 +466,34 @@ export default function OrderDetail() {
           key="print"
           onClick={handlePrint}
           className="p-3 bg-purple-600 text-white rounded-full shadow-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+          title="In"
         >
           <Printer className="h-6 w-6" />
-        </button>,
-        <button
-          key="delete"
-          onClick={() => toast.error('Delete functionality not implemented')}
-          className="p-3 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-        >
-          <Trash2 className="h-6 w-6" />
         </button>
       );
     } else if (status.includes('đã giao hàng') || status.includes('đã hoàn thành')) {
-      buttons.push(
+      rightButtons.push(
         <button
           key="print"
           onClick={handlePrint}
           className="p-3 bg-purple-600 text-white rounded-full shadow-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+          title="In"
         >
           <Printer className="h-6 w-6" />
         </button>
       );
     }
 
-    return buttons;
+    return (
+      <div className="flex justify-between items-center w-full px-4">
+        <div className="flex gap-2">
+          {leftButtons}
+        </div>
+        <div className="flex gap-2">
+          {rightButtons}
+        </div>
+      </div>
+    );
   };
 
   if (isLoading) {
@@ -459,7 +514,7 @@ export default function OrderDetail() {
           </h2>
           <button
             onClick={() => navigate('/orders')}
-            className="text-blue-600 hover:text-blue-800 flex items-center gap-2 mx-auto"
+            classNama="text-blue-600 hover:text-blue-800 flex items-center gap-2 mx-auto"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Orders
@@ -615,7 +670,8 @@ export default function OrderDetail() {
         </div>
       </div>
 
-      <div className="fixed bottom-4 right-4 flex flex-col gap-2">
+      {/* Hiển thị nút theo hàng ngang */}
+      <div className="fixed bottom-4 left-0 right-0 z-50">
         {getActionButtons()}
       </div>
 

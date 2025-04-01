@@ -42,7 +42,7 @@ export default function SupplierInvoiceDetail() {
   const [isPriceModalOpen, setIsPriceModalOpen] = useState(false);
   const [exchangeRate, setExchangeRate] = useState<number>(0);
   const [profitMargin, setProfitMargin] = useState<number>(1.1);
-  const [fillExistingPrices, setFillExistingPrices] = useState(false);
+  const [fillExistingPrices, setFillExistingPrices] = useState(true);
   const [showPdfViewer, setShowPdfViewer] = useState(false);
   const { t } = useLanguage();
 

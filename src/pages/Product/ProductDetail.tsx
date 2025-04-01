@@ -18,12 +18,14 @@ import type { ProductDetail, ProductImage } from '../../services/product';
 import { formatCurrency } from '../../utils/currency';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { DEFAULT_IMAGE_URL } from '../../services/file';
+import { deleteSingleObject } from '../../services/deleteObjects'; // Import hàm xóa từ deleteObjects.ts
 
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false); // Thêm trạng thái để xử lý khi đang xóa
   const [error, setError] = useState<string | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const { t } = useLanguage();
@@ -108,6 +110,30 @@ export default function ProductDetail() {
     for (let i = 0; i < product.images.length; i++) {
       const filename = `product-${product.code}-${i + 1}.jpg`;
       await downloadImage(product.images[i].url, filename);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!id || !product) return;
+
+    const confirmDelete = window.confirm('Bạn có chắc chắn muốn xóa sản phẩm này không?');
+    if (!confirmDelete) return;
+
+    try {
+      setIsDeleting(true);
+      const objectToDelete = {
+        id: id,
+        dataType: 'Product', // Giả định dataType là 'Product', cần điều chỉnh nếu khác
+        presentation: product.name
+      };
+      await deleteSingleObject(objectToDelete);
+      toast.success('Xóa sản phẩm thành công');
+      navigate('/products'); // Quay lại danh sách sản phẩm sau khi xóa thành công
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Không thể xóa sản phẩm';
+      toast.error(errorMessage);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -256,28 +282,40 @@ export default function ProductDetail() {
         </div>
       </div>
 
-      {/* Floating Action Buttons */}
-      <div className="fixed bottom-4 right-4 flex flex-col gap-2">
-        <button
-          onClick={() => navigate('/products')}
-          className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-        >
-          <ArrowLeft className="h-6 w-6" />
-        </button>
-        
-        <button
-          onClick={() => navigate(`/products/edit/${id}`)}
-          className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-          <Pencil className="h-6 w-6" />
-        </button>
+      {/* Floating Action Buttons - Hàng ngang */}
+      <div className="fixed bottom-4 left-0 right-0 px-4 z-50">
+        <div className="flex justify-between items-center max-w-screen-xl mx-auto">
+          {/* Nút Back và Delete bên trái */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => navigate('/products')}
+              className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+            >
+              <ArrowLeft className="h-6 w-6" />
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="p-3 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+            >
+              {isDeleting ? (
+                <Loader2 className="h-6 w-6 animate-spin" />
+              ) : (
+                <Trash2 className="h-6 w-6" />
+              )}
+            </button>
+          </div>
 
-        <button
-          onClick={() => toast.error('Chức năng xóa chưa được triển khai')}
-          className="p-3 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-        >
-          <Trash2 className="h-6 w-6" />
-        </button>
+          {/* Nút Edit bên phải */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => navigate(`/products/edit/${id}`)}
+              className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <Pencil className="h-6 w-6" />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

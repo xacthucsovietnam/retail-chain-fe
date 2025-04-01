@@ -586,7 +586,7 @@ export default function SupplierInvoiceAdd() {
         <div className="space-y-4 mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Hình ảnh
+              Tải lên hình ảnh hoá đơn
             </label>
             <div className="flex items-center gap-2">
               <label className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white hover:bg-gray-50 cursor-pointer">

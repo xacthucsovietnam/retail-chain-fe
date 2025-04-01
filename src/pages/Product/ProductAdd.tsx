@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft,
@@ -7,17 +7,14 @@ import {
   X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { createProduct, getCategories, getMeasurementUnits } from '../../services/product';
-import type { Category, MeasurementUnit } from '../../services/product';
+import { createProduct } from '../../services/product';
 
 interface FormData {
   images: File[];
   code: string;
   name: string;
-  category: string;
   purchasePrice: number;
   sellingPrice: number;
-  measurementUnit: string;
   riCoefficient: number;
   description: string;
 }
@@ -27,10 +24,7 @@ const MAX_DESCRIPTION_LENGTH = 500;
 
 export default function ProductAdd() {
   const navigate = useNavigate();
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [measurementUnits, setMeasurementUnits] = useState<MeasurementUnit[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingUnits, setIsLoadingUnits] = useState(true);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -39,36 +33,11 @@ export default function ProductAdd() {
     images: [],
     code: '',
     name: '',
-    category: '',
     purchasePrice: 0,
     sellingPrice: 0,
-    measurementUnit: '',
     riCoefficient: 1,
     description: ''
   });
-
-  useEffect(() => {
-    const loadInitialData = async () => {
-      try {
-        const [categoryData, unitData] = await Promise.all([
-          getCategories(),
-          getMeasurementUnits()
-        ]);
-        setCategories(categoryData);
-        setMeasurementUnits(unitData);
-        
-        if (unitData.length > 0) {
-          setFormData(prev => ({ ...prev, measurementUnit: unitData[0].id }));
-        }
-      } catch (error) {
-        toast.error('Không thể tải dữ liệu ban đầu');
-      } finally {
-        setIsLoadingUnits(false);
-      }
-    };
-
-    loadInitialData();
-  }, []);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -119,18 +88,8 @@ export default function ProductAdd() {
       return false;
     }
 
-    if (!formData.category) {
-      toast.error('Vui lòng chọn loại sản phẩm');
-      return false;
-    }
-
     if (formData.sellingPrice <= 0) {
       toast.error('Giá bán phải lớn hơn 0');
-      return false;
-    }
-
-    if (!formData.measurementUnit) {
-      toast.error('Vui lòng chọn đơn vị tính');
       return false;
     }
 
@@ -240,39 +199,6 @@ export default function ProductAdd() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Loại sản phẩm *
-            </label>
-            <select
-              value={formData.category}
-              onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">Chọn loại sản phẩm</option>
-              {categories.map(category => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Giá mua
-            </label>
-            <input
-              type="number"
-              value={formData.purchasePrice}
-              onChange={(e) => setFormData(prev => ({ ...prev, purchasePrice: Number(e.target.value) }))}
-              min="0"
-              step="1000"
-              placeholder="Nhập giá mua"
-              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
               Giá bán *
             </label>
             <input
@@ -284,25 +210,6 @@ export default function ProductAdd() {
               placeholder="Nhập giá bán"
               className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Đơn vị *
-            </label>
-            <select
-              value={formData.measurementUnit}
-              onChange={(e) => setFormData(prev => ({ ...prev, measurementUnit: e.target.value }))}
-              disabled={isLoadingUnits}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
-            >
-              <option value="">Chọn đơn vị</option>
-              {measurementUnits.map(unit => (
-                <option key={unit.id} value={unit.id}>
-                  {unit.name}
-                </option>
-              ))}
-            </select>
           </div>
 
           <div>
