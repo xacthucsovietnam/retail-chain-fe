@@ -294,28 +294,34 @@ export default function OrderDetail() {
   };
 
   const handleReturn = () => {
-    if (!order) return;
+  if (!order) return;
 
-    const preloadData = {
-      customerId: order.customerId || '', // Giả định order.customerId tồn tại, nếu không thì để trống
-      customerName: order.customer,
+  const preloadData = {
+      supplierId: order.customerId || '', // Sử dụng customerId từ đơn hàng gốc làm supplierId
+      supplierName: order.customer, // Tên khách hàng làm tên nhà cung cấp
       employeeId: order.employeeResponsible || '',
       employeeName: order.employeeResponsible || '',
       deliveryAddress: order.deliveryAddress || '',
       isReturnOrder: true,
+      originalOrderId: order.id, // Thêm ID đơn hàng gốc để tham chiếu
+      originalOrderNumber: order.number, // Thêm số đơn hàng gốc
       originalProducts: order.products.map(p => ({
         productId: p.productId,
         productName: p.productName,
         sku: p.sku,
         unit: p.unit,
-        quantity: p.quantity,
+        quantity: p.quantity, // Số lượng tối đa có thể trả
         price: p.price,
-        coefficient: p.coefficient
+        coefficient: p.coefficient,
+        availableQuantity: p.quantity // Thêm trường để giới hạn số lượng trả
       }))
     };
-
-    sessionStorage.setItem('newOrderData', JSON.stringify(preloadData));
-    navigate('/orders/add');
+  
+    // Lưu dữ liệu vào sessionStorage để sử dụng trong màn hình thêm mới đơn nhập
+    sessionStorage.setItem('newSupplierInvoiceData', JSON.stringify(preloadData));
+    
+    // Chuyển hướng đến màn hình thêm mới đơn nhập hàng
+    navigate('/supplier-invoices/add');
   };
 
   // Hàm xử lý xóa đơn hàng
@@ -654,8 +660,7 @@ export default function OrderDetail() {
                           <span>{product.quantity}</span>
                           <span>{product.unit}</span>
                           <span>x</span>
-                          <span>{formatCurrency(product.price, order.documentCurrency)}</span>
-                          <span>/{product.unit}</span>
+                          <span>{product.price} đồng/chiếc</span>
                         </div>
                         <span className="font-medium text-blue-600">
                           {formatCurrency(product.total, order.documentCurrency)}

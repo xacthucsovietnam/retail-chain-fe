@@ -29,6 +29,7 @@ import '@react-pdf-viewer/default-layout/lib/styles/index.css';
 import { zoomPlugin } from '@react-pdf-viewer/zoom';
 import { printPlugin } from '@react-pdf-viewer/print';
 import { getFilePlugin } from '@react-pdf-viewer/get-file';
+import { deleteSingleObject } from '../../services/deleteObjects'; // Import hàm xóa từ deleteObjects.ts
 
 export default function SupplierInvoiceDetail() {
   const { id } = useParams<{ id: string }>();
@@ -38,6 +39,7 @@ export default function SupplierInvoiceDetail() {
   const [originalProductPrices, setOriginalProductPrices] = useState<Map<string, { price?: number; oldPrice?: number }>>(new Map());
   const [isPriceChanged, setIsPriceChanged] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false); // Thêm trạng thái để xử lý khi đang xóa
   const [error, setError] = useState<string | null>(null);
   const [isPriceModalOpen, setIsPriceModalOpen] = useState(false);
   const [exchangeRate, setExchangeRate] = useState<number>(0);
@@ -124,8 +126,28 @@ export default function SupplierInvoiceDetail() {
     }
   };
 
-  const handleDelete = () => {
-    toast.error('Chức năng xóa chưa được triển khai');
+  const handleDelete = async () => {
+    if (!id || !invoice) return;
+
+    const confirmDelete = window.confirm('Bạn có chắc chắn muốn xóa đơn nhận hàng này không?');
+    if (!confirmDelete) return;
+
+    try {
+      setIsDeleting(true);
+      const objectToDelete = {
+        id: id,
+        dataType: 'XTSSupplierInvoice', // Giả định dataType là 'XTSSupplierInvoice'
+        presentation: `#${invoice.number}`
+      };
+      await deleteSingleObject(objectToDelete);
+      toast.success('Xóa đơn nhận hàng thành công');
+      navigate('/supplier-invoices'); // Quay lại danh sách sau khi xóa thành công
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Không thể xóa đơn nhận hàng';
+      toast.error(errorMessage);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleSetPrices = () => {
@@ -501,58 +523,68 @@ export default function SupplierInvoiceDetail() {
         </div>
       </div>
 
-      <div className="fixed bottom-4 right-4 flex flex-row gap-2 z-50">
-        <button
-          onClick={() => navigate('/supplier-invoices')}
-          className="p-2 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-          title="Quay lại danh sách"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
+      {/* Floating Action Buttons - Hàng ngang */}
+      <div className="fixed bottom-4 left-0 right-0 px-4 z-50">
+        <div className="flex justify-between items-center max-w-screen-xl mx-auto">
+          {/* Nút Back và Delete bên trái */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => navigate('/supplier-invoices')}
+              className="p-2 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+              title="Quay lại danh sách"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="p-2 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+              title="Xóa"
+            >
+              {isDeleting ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Trash2 className="h-5 w-5" />
+              )}
+            </button>
+          </div>
 
-        <button
-          onClick={handleEdit}
-          className="p-2 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          title="Chỉnh sửa"
-        >
-          <Pencil className="h-5 w-5" />
-        </button>
-
-        <button
-          onClick={handleDelete}
-          className="p-2 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-          title="Xóa"
-        >
-          <Trash2 className="h-5 w-5" />
-        </button>
-
-        <button
-          onClick={handleSetPrices}
-          className="p-2 bg-green-600 text-white rounded-full shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-          title="Đặt giá bán"
-        >
-          <DollarSign className="h-5 w-5" />
-        </button>
-
-        {invoice.posted && (
-          <button
-            onClick={handlePrint}
-            className="p-2 bg-purple-600 text-white rounded-full shadow-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-            title="In"
-          >
-            <Printer className="h-5 w-5" />
-          </button>
-        )}
-
-        {isPriceChanged && (
-          <button
-            onClick={handleSavePrices}
-            className="p-2 bg-purple-600 text-white rounded-full shadow-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-            title="Lưu giá bán"
-          >
-            <Save className="h-5 w-5" />
-          </button>
-        )}
+          {/* Các nút còn lại bên phải */}
+          <div className="flex gap-2">
+            <button
+              onClick={handleEdit}
+              className="p-2 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              title="Chỉnh sửa"
+            >
+              <Pencil className="h-5 w-5" />
+            </button>
+            <button
+              onClick={handleSetPrices}
+              className="p-2 bg-green-600 text-white rounded-full shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              title="Đặt giá bán"
+            >
+              <DollarSign className="h-5 w-5" />
+            </button>
+            {invoice.posted && (
+              <button
+                onClick={handlePrint}
+                className="p-2 bg-purple-600 text-white rounded-full shadow-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                title="In"
+              >
+                <Printer className="h-5 w-5" />
+              </button>
+            )}
+            {isPriceChanged && (
+              <button
+                onClick={handleSavePrices}
+                className="p-2 bg-purple-600 text-white rounded-full shadow-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                title="Lưu giá bán"
+              >
+                <Save className="h-5 w-5" />
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {isPriceModalOpen && (

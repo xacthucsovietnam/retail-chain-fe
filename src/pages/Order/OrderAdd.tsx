@@ -6,7 +6,8 @@ import {
   Save,
   Package,
   Trash2,
-  PlusCircle
+  PlusCircle,
+  Plus
 } from 'lucide-react';
 import Select from 'react-select';
 import toast from 'react-hot-toast';
@@ -23,6 +24,7 @@ import {
 import { createPartner } from '../../services/partner';
 import { getSession } from '../../utils/storage';
 import { getProductDetail, type ProductDetail } from '../../services/product';
+import ProductAddPopup from '../../components/ProductAddPopup'; // Import popup thêm sản phẩm
 
 interface FormData {
   customerId: string;
@@ -99,6 +101,8 @@ export default function OrderAdd() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
+  const [showProductAddPopup, setShowProductAddPopup] = useState(false); // State để hiển thị ProductAddPopup
+  const [currentProductIndex, setCurrentProductIndex] = useState<number | null>(null); // Lưu index của sản phẩm đang thêm
 
   useEffect(() => {
     const loadData = async () => {
@@ -118,7 +122,6 @@ export default function OrderAdd() {
           try {
             const parsedData = JSON.parse(savedData) as OrderPreloadData;
             
-            // Tìm customer khớp với customerId hoặc customerName
             const selectedCustomer = customerData.find(c => 
               c.id === parsedData.customerId || c.name === parsedData.customerName
             );
@@ -201,6 +204,12 @@ export default function OrderAdd() {
   const handleProductChange = async (index: number, selectedOption: any) => {
     if (!selectedOption) return;
 
+    if (selectedOption.value === 'create-product') {
+      setCurrentProductIndex(index);
+      setShowProductAddPopup(true);
+      return;
+    }
+
     try {
       const productDetail = await getProductDetail(selectedOption.value);
       const defaultUnit = productDetail.uoms[0] || { id: '', presentation: '', coefficient: 1 };
@@ -275,6 +284,61 @@ export default function OrderAdd() {
       };
       return { ...prev, products: newProducts };
     });
+  };
+
+  const handleProductAdded = async (newProduct: { id: string; presentation: string }) => {
+    try {
+      const productDetail = await getProductDetail(newProduct.id);
+      const defaultUnit = productDetail.uoms[0] || { id: '', presentation: '', coefficient: 1 };
+      const fileStorageURL = session?.fileStorageURL || '';
+      const imageUrl = productDetail.imageUrl && productDetail.images.length > 0 
+        ? `${fileStorageURL}${productDetail.images[0].id}`
+        : undefined;
+
+      // Thêm sản phẩm vào danh sách products để chọn
+      const newProductOption: ProductDropdownItem = {
+        id: productDetail.id,
+        name: productDetail.name,
+        code: productDetail.code
+      };
+      setProducts(prev => [...prev, newProductOption]);
+      if (isReturnOrder) {
+        setAvailableProducts(prev => [...prev, newProductOption]);
+      }
+
+      // Cập nhật formData với sản phẩm vừa thêm
+      if (currentProductIndex !== null) {
+        setFormData(prev => {
+          const newProducts = [...prev.products];
+          newProducts[currentProductIndex] = {
+            id: productDetail.id,
+            name: productDetail.name,
+            sku: productDetail.code,
+            unitId: defaultUnit.id,
+            unitName: defaultUnit.presentation,
+            quantity: 1,
+            price: productDetail.price,
+            total: calculateProductTotal({
+              unitName: defaultUnit.presentation,
+              quantity: 1,
+              price: productDetail.price,
+              coefficient: defaultUnit.coefficient
+            }),
+            coefficient: defaultUnit.coefficient,
+            availableUnits: productDetail.uoms,
+            imageUrl
+          };
+          return { ...prev, products: newProducts };
+        });
+      }
+
+      setShowProductAddPopup(false);
+      setCurrentProductIndex(null);
+      toast.success('Sản phẩm đã được thêm vào đơn hàng');
+    } catch (error) {
+      toast.error('Không thể tải chi tiết sản phẩm vừa thêm');
+      console.error('Error fetching new product detail:', error);
+    }
   };
 
   const validateForm = (): boolean => {
@@ -358,10 +422,13 @@ export default function OrderAdd() {
     }))
   ];
 
-  const productOptions = (isReturnOrder ? availableProducts : products).map(product => ({
-    value: product.id,
-    label: product.name
-  }));
+  const productOptions = [
+    { value: 'create-product', label: 'Thêm mới sản phẩm', isCreateOption: true },
+    ...(isReturnOrder ? availableProducts : products).map(product => ({
+      value: product.id,
+      label: product.name
+    }))
+  ];
 
   const CustomOption = (props: any) => {
     const { data, innerRef, innerProps } = props;
@@ -572,6 +639,7 @@ export default function OrderAdd() {
                       isSearchable
                       className="text-sm"
                       classNamePrefix="select"
+                      components={{ Option: CustomOption }}
                     />
                     <p className="text-xs text-gray-500 mt-1">{product.sku || 'SKU'}</p>
                   </div>
@@ -641,12 +709,13 @@ export default function OrderAdd() {
             ))}
           </div>
 
-          <div className="mt-4">
+          <div className="mt-6 flex justify-center">
             <button
               onClick={handleAddProduct}
-              className="text-sm text-blue-600 hover:text-blue-700"
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Thêm sản phẩm
+              <Plus className="h-5 w-5" />
+              <span className="text-base font-medium">Thêm sản phẩm</span>
             </button>
           </div>
 
@@ -768,6 +837,16 @@ export default function OrderAdd() {
             </div>
           </div>
         </div>
+      )}
+
+      {showProductAddPopup && (
+        <ProductAddPopup
+          onClose={() => {
+            setShowProductAddPopup(false);
+            setCurrentProductIndex(null);
+          }}
+          onProductAdded={handleProductAdded}
+        />
       )}
     </div>
   );

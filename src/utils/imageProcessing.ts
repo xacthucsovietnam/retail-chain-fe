@@ -249,16 +249,16 @@ export const processImages = async (images: File[]): Promise<ProcessResult> => {
           (obj: any) => obj.attributeValue === item.productCode && obj.lineNumber.toString() === item.lineNumber
         );
         if (foundObj) {
-          // Lưu toàn bộ dữ liệu từ foundObj vào existed
+          // Lưu toàn bộ dữ liệu từ foundObj vào existed, nhưng giữ nguyên price từ OCR Gemini
           existed.push({
             _type: "XTSFoundObject",
             lineNumber: foundObj.lineNumber,
             attributeValue: foundObj.attributeValue,
             objects: foundObj.objects.map((product: any) => ({
-              ...product, // Giữ nguyên toàn bộ dữ liệu sản phẩm
-              // Có thể thêm các trường từ originalItems nếu cần
+              ...product, // Giữ nguyên toàn bộ dữ liệu sản phẩm từ searchObject
+              // Ghi đè các trường từ originalItems (OCR Gemini)
               quantity: item.quantity,
-              price: item.price,
+              price: item.price, // Sử dụng price từ OCR Gemini
               total: item.total,
               productDescription: item.productDescription,
               productCharacteristic: item.productCharacteristic,

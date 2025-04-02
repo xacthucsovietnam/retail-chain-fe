@@ -45,7 +45,6 @@ export default function Layout({ children }: LayoutProps) {
     { icon: Coins, label: t('menu.cashReceipts'), path: '/cash-receipts' },
     { icon: CreditCard, label: t('menu.transferReceipts'), path: '/transfer-receipts' },
     { icon: DollarSign, label: t('menu.currency'), path: '/currency' },
-    { icon: Tags, label: t('menu.priceList'), path: '/price-list' },
     { icon: User, label: t('menu.profile'), path: '/profile' }
   ];
 

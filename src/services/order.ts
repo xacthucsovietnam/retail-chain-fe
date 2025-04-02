@@ -326,7 +326,7 @@ export const getProductDropdownData = async (): Promise<ProductDropdownItem[]> =
     _dbId: '',
     _msgId: '',
     dataType: 'XTSProduct',
-    columnSet: ['objectId'], // Chỉ yêu cầu các trường cần thiết
+    columnSet: ['objectId', 'sku'], // Chỉ yêu cầu các trường cần thiết
     sortBy: [],
     positionFrom: 1,
     positionTo: 10000000,
@@ -343,7 +343,7 @@ export const getProductDropdownData = async (): Promise<ProductDropdownItem[]> =
 
     return response.data.items.map((item: any) => ({
       id: item.object.objectId.id,
-      name: item.object.objectId.presentation,
+      name: `${item.object.sku}: ${item.object.objectId.presentation}`,
     }));
   } catch (error) {
     console.error('Failed to fetch products:', error);

@@ -14,8 +14,9 @@ import Select from 'react-select';
 import toast from 'react-hot-toast';
 import { createSupplierInvoice, getSupplierDropdownData } from '../../services/supplierInvoice';
 import { handleProcessImages, ProcessedImageData } from '../../utils/imageProcessing';
-import { getProducts, createProduct, type Product } from '../../services/product';
+import { getProducts, createProduct, type Product, getProductDetail } from '../../services/product';
 import ProductPreviewPopup from './ProductPreviewPopup';
+import ProductAddPopup from '../../components/ProductAddPopup';
 import type { CreateSupplierInvoiceProduct, CreateSupplierInvoiceData } from '../../services/supplierInvoice';
 import { getSession } from '../../utils/storage';
 import { getCurrencies } from '../../services/currency';
@@ -27,6 +28,7 @@ interface Product {
   code?: string;
   price: number;
   riCoefficient?: number;
+  availableQuantity?: number; // Thêm để giới hạn số lượng trả
 }
 
 interface FormData {
@@ -41,6 +43,8 @@ interface FormData {
   externalAccountId: string;
   externalAccountName: string;
   amount: number;
+  originalOrderId?: string; // Thêm để lưu ID đơn hàng gốc
+  originalOrderNumber?: string; // Thêm để lưu số đơn hàng gốc
   products: Array<{
     productId: string;
     productName: string;
@@ -50,6 +54,7 @@ interface FormData {
     price: number;
     coefficient: number;
     total: number;
+    availableQuantity?: number; // Thêm để giới hạn số lượng trả
   }>;
 }
 
@@ -63,13 +68,12 @@ interface Currency {
   name: string;
 }
 
-// Định nghĩa interface cho XTSFoundObject từ imageProcessing.ts
 interface XTSFoundObject {
   _type: "XTSFoundObject";
   lineNumber: number;
   attributeValue: string;
   objects: any[];
-  selectedObject?: any; // Thêm trường selectedObject
+  selectedObject?: any;
 }
 
 export default function SupplierInvoiceAdd() {
@@ -93,12 +97,16 @@ export default function SupplierInvoiceAdd() {
   const [supplierName, setSupplierName] = useState('');
   const [supplierPhone, setSupplierPhone] = useState('');
   const [supplierAddress, setSupplierAddress] = useState('');
+  const [showProductAddPopup, setShowProductAddPopup] = useState(false);
+  const [currentProductIndex, setCurrentProductIndex] = useState<number | null>(null);
+  const [isReturnOrder, setIsReturnOrder] = useState(false); // Đánh dấu là đơn trả hàng
+  const [originalProducts, setOriginalProducts] = useState<Product[]>([]); // Danh sách sản phẩm từ đơn gốc
 
   const session = getSession();
   const defaultValues = session?.defaultValues || {};
 
   const [formData, setFormData] = useState<FormData>({
-    date: new Date().toISOString().slice(16),
+    date: new Date().toISOString().slice(0, 16),
     customerId: '',
     customerName: '',
     currencyId: '',
@@ -114,6 +122,39 @@ export default function SupplierInvoiceAdd() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [isFetchingProducts, setIsFetchingProducts] = useState(false);
+
+  // Load dữ liệu từ sessionStorage khi là đơn trả hàng
+  useEffect(() => {
+    const preloadData = sessionStorage.getItem('newSupplierInvoiceData');
+    if (preloadData) {
+      const parsedData = JSON.parse(preloadData);
+      setIsReturnOrder(parsedData.isReturnOrder || false);
+      setOriginalProducts(parsedData.originalProducts || []);
+      setFormData(prev => ({
+        ...prev,
+        customerId: parsedData.supplierId || '',
+        customerName: parsedData.supplierName || '',
+        employeeId: parsedData.employeeId || prev.employeeId,
+        employeeName: parsedData.employeeName || prev.employeeName,
+        comment: `Trả hàng từ đơn #${parsedData.originalOrderNumber || ''}`,
+        originalOrderId: parsedData.originalOrderId || '',
+        originalOrderNumber: parsedData.originalOrderNumber || '',
+        products: parsedData.originalProducts.map((p: any) => ({
+          productId: p.productId,
+          productName: p.productName,
+          unitId: '5736c39c-5b28-11ef-a699-00155d058802',
+          unitName: p.unit,
+          quantity: 0, // Mặc định số lượng là 0, người dùng sẽ nhập
+          price: p.price,
+          coefficient: p.coefficient,
+          total: 0,
+          availableQuantity: p.availableQuantity
+        }))
+      }));
+      // Xóa dữ liệu sau khi sử dụng
+      sessionStorage.removeItem('newSupplierInvoiceData');
+    }
+  }, []);
 
   const fetchSuppliers = async () => {
     setIsFetchingSuppliers(true);
@@ -141,8 +182,6 @@ export default function SupplierInvoiceAdd() {
           currencyId: cnyCurrency.id,
           currencyName: cnyCurrency.name
         }));
-      } else {
-        toast.error('Không tìm thấy tiền tệ CNY trong danh sách');
       }
     } catch (error) {
       toast.error('Không thể tải danh sách loại tiền tệ');
@@ -153,15 +192,19 @@ export default function SupplierInvoiceAdd() {
   };
 
   const fetchProductsOnce = async () => {
-    setIsFetchingProducts(true);
-    try {
-      const response = await getProducts('', '', 1, 10000);
-      setProducts(response.items || []);
-    } catch (error) {
-      toast.error('Không thể tải danh sách sản phẩm');
-      console.error('Error fetching products:', error);
-    } finally {
-      setIsFetchingProducts(false);
+    if (!isReturnOrder) {
+      setIsFetchingProducts(true);
+      try {
+        const response = await getProducts('', '', 1, 10000);
+        setProducts(response.items || []);
+      } catch (error) {
+        toast.error('Không thể tải danh sách sản phẩm');
+        console.error('Error fetching products:', error);
+      } finally {
+        setIsFetchingProducts(false);
+      }
+    } else {
+      setProducts(originalProducts); // Chỉ sử dụng sản phẩm từ đơn gốc
     }
   };
 
@@ -176,6 +219,10 @@ export default function SupplierInvoiceAdd() {
   };
 
   const handleAddProduct = () => {
+    if (isReturnOrder && formData.products.length >= originalProducts.length) {
+      toast.error('Không thể thêm sản phẩm mới cho đơn trả hàng');
+      return;
+    }
     setFormData(prev => ({
       ...prev,
       products: [
@@ -185,10 +232,11 @@ export default function SupplierInvoiceAdd() {
           productName: '',
           unitId: '5736c39c-5b28-11ef-a699-00155d058802',
           unitName: 'c',
-          quantity: 1,
+          quantity: 0,
           price: 0,
           coefficient: 1,
-          total: 0
+          total: 0,
+          availableQuantity: 0
         }
       ]
     }));
@@ -209,27 +257,81 @@ export default function SupplierInvoiceAdd() {
         [field]: value
       };
 
-      if (field === 'quantity' || field === 'price') {
+      if (field === 'quantity') {
+        const maxQuantity = newProducts[index].availableQuantity || Infinity;
+        newProducts[index].quantity = Math.min(Number(value), maxQuantity);
         newProducts[index].total = newProducts[index].quantity * newProducts[index].price;
       }
 
+      if (field === 'price') {
+        newProducts[index].total = newProducts[index].quantity * Number(value);
+      }
+
       if (field === 'productId') {
+        if (value === 'create-product' && !isReturnOrder) {
+          setCurrentProductIndex(index);
+          setShowProductAddPopup(true);
+          return prev;
+        }
+
         const selected = products.find(p => p.id === value);
         if (selected) {
           newProducts[index].productName = selected.name;
           newProducts[index].price = selected.price;
           newProducts[index].coefficient = selected.riCoefficient || 1;
           newProducts[index].total = selected.price * newProducts[index].quantity;
+          newProducts[index].availableQuantity = selected.availableQuantity || Infinity;
         } else {
           newProducts[index].productName = '';
           newProducts[index].price = 0;
           newProducts[index].coefficient = 1;
           newProducts[index].total = 0;
+          newProducts[index].availableQuantity = 0;
         }
       }
 
       return { ...prev, products: newProducts };
     });
+  };
+
+  const handleProductAdded = async (newProduct: { id: string; presentation: string }) => {
+    try {
+      const productDetail = await getProductDetail(newProduct.id);
+      const defaultUnit = productDetail.uoms[0] || { id: '5736c39c-5b28-11ef-a699-00155d058802', presentation: 'c', coefficient: 1 };
+
+      const newProductOption: Product = {
+        id: productDetail.id,
+        name: productDetail.name,
+        code: productDetail.code,
+        price: productDetail.price,
+        riCoefficient: productDetail.riCoefficient || 1
+      };
+      setProducts(prev => [...prev, newProductOption]);
+
+      if (currentProductIndex !== null) {
+        setFormData(prev => {
+          const newProducts = [...prev.products];
+          newProducts[currentProductIndex] = {
+            productId: productDetail.id,
+            productName: productDetail.name,
+            unitId: defaultUnit.id,
+            unitName: defaultUnit.presentation,
+            quantity: 1,
+            price: productDetail.price,
+            coefficient: defaultUnit.coefficient,
+            total: productDetail.price * 1
+          };
+          return { ...prev, products: newProducts };
+        });
+      }
+
+      setShowProductAddPopup(false);
+      setCurrentProductIndex(null);
+      toast.success('Sản phẩm đã được thêm vào đơn nhận hàng');
+    } catch (error) {
+      toast.error('Không thể tải chi tiết sản phẩm vừa thêm');
+      console.error('Error fetching new product detail:', error);
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -287,8 +389,7 @@ export default function SupplierInvoiceAdd() {
     const customerId = formData.customerId || updatedGeneralInfo.supplierId;
     const customerName = formData.customerName || updatedGeneralInfo.supplier;
 
-    // Xử lý các sản phẩm mới (notExist)
-    if (updatedNotExist.length > 0) {
+    if (updatedNotExist.length > 0 && !isReturnOrder) {
       try {
         const createPromises = updatedNotExist.map(async (item) => {
           const adjustedPrice = Number(item.price);
@@ -326,12 +427,10 @@ export default function SupplierInvoiceAdd() {
       }
     }
 
-    // Xử lý các sản phẩm đã tồn tại (existed)
     const combinedProducts = [
-      // Ánh xạ từ updatedExisted (XTSFoundObject[])
       ...updatedExisted.map(item => {
-        const selectedObj = item.selectedObject; // Lấy selectedObject từ mỗi XTSFoundObject
-        const adjustedPrice = Number(selectedObj.price || selectedObj._price || 0);
+        const selectedObj = item.selectedObject;
+        const adjustedPrice = Number(selectedObj.price || 0);
         const adjustedCoefficient = Number(selectedObj.coefficient || selectedObj._uomCoefficient || 1);
         return {
           productId: selectedObj.objectId.id || '',
@@ -344,7 +443,6 @@ export default function SupplierInvoiceAdd() {
           total: Number(selectedObj.total) || (Number(selectedObj.quantity) * adjustedPrice)
         };
       }),
-      // Ánh xạ từ processedNotExist
       ...processedNotExist.map(item => {
         const adjustedPrice = Number(item.price);
         const adjustedCoefficient = Number(item.coefficient) || 1;
@@ -401,8 +499,13 @@ export default function SupplierInvoiceAdd() {
         return false;
       }
 
-      if (product.quantity <= 0) {
-        toast.error('Số lượng phải lớn hơn 0');
+      if (product.quantity < 0) {
+        toast.error('Số lượng không được âm');
+        return false;
+      }
+
+      if (isReturnOrder && product.quantity > (product.availableQuantity || 0)) {
+        toast.error(`Số lượng trả của ${product.productName} vượt quá số lượng trong đơn gốc`);
         return false;
       }
 
@@ -472,9 +575,10 @@ export default function SupplierInvoiceAdd() {
   }));
 
   const productOptions = [
+    ...(isReturnOrder ? [] : [{ value: 'create-product', label: 'Thêm mới sản phẩm', isCreateOption: true }]),
     ...products.map(product => ({
       value: product.id,
-      label: product.name
+      label: `${product.name} (Tồn: ${product.availableQuantity || 'N/A'})`
     })),
     ...formData.products
       .filter(p => p.productId && !products.some(mp => mp.id === p.productId))
@@ -578,60 +682,64 @@ export default function SupplierInvoiceAdd() {
     <div className="min-h-screen bg-gray-50 pb-20">
       <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
         <div className="px-4 py-3">
-          <h1 className="text-lg font-semibold text-gray-900">Thêm mới</h1>
+          <h1 className="text-lg font-semibold text-gray-900">
+            {isReturnOrder ? `Trả hàng từ đơn #${formData.originalOrderNumber}` : 'Thêm mới'}
+          </h1>
         </div>
       </div>
 
       <div className="pt-4 px-4">
         <div className="space-y-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Tải lên hình ảnh hoá đơn
-            </label>
-            <div className="flex items-center gap-2">
-              <label className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white hover:bg-gray-50 cursor-pointer">
-                <Upload className="h-4 w-4 mr-2" />
-                Tải ảnh
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleImageUpload}
-                  disabled={uploadedImages.length === 5 || isProcessingImages}
-                />
+          {!isReturnOrder && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Tải lên hình ảnh hoá đơn
               </label>
+              <div className="flex items-center gap-2">
+                <label className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white hover:bg-gray-50 cursor-pointer">
+                  <Upload className="h-4 w-4 mr-2" />
+                  Tải ảnh
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageUpload}
+                    disabled={uploadedImages.length === 5 || isProcessingImages}
+                  />
+                </label>
+                {uploadedImages.length > 0 && (
+                  <button
+                    onClick={handleProcessImagesClick}
+                    className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                    disabled={isProcessingImages}
+                  >
+                    Xử lý ảnh
+                  </button>
+                )}
+              </div>
               {uploadedImages.length > 0 && (
-                <button
-                  onClick={handleProcessImagesClick}
-                  className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
-                  disabled={isProcessingImages}
-                >
-                  Xử lý ảnh
-                </button>
+                <div className="mt-2 overflow-x-auto flex gap-2">
+                  {uploadedImages.map((image, index) => (
+                    <div key={index} className="relative flex-shrink-0">
+                      <img
+                        src={URL.createObjectURL(image)}
+                        alt={`Uploaded ${index}`}
+                        className="w-20 h-20 object-cover rounded-lg"
+                      />
+                      <button
+                        onClick={() => handleRemoveImage(index)}
+                        className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full hover:bg-red-700"
+                        disabled={isProcessingImages}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
-            {uploadedImages.length > 0 && (
-              <div className="mt-2 overflow-x-auto flex gap-2">
-                {uploadedImages.map((image, index) => (
-                  <div key={index} className="relative flex-shrink-0">
-                    <img
-                      src={URL.createObjectURL(image)}
-                      alt={`Uploaded ${index}`}
-                      className="w-20 h-20 object-cover rounded-lg"
-                    />
-                    <button
-                      onClick={() => handleRemoveImage(index)}
-                      className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full hover:bg-red-700"
-                      disabled={isProcessingImages}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -639,7 +747,7 @@ export default function SupplierInvoiceAdd() {
             </label>
             <input
               type="datetime-local"
-              value={formData.date.slice(0, 16)}
+              value={formData.date}
               onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
               className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               disabled={isProcessingImages}
@@ -655,11 +763,11 @@ export default function SupplierInvoiceAdd() {
               value={supplierOptions.find(option => option.value === formData.customerId) || null}
               onChange={handleSupplierChange}
               placeholder="Chọn nhà cung cấp"
-              isClearable
+              isClearable={!isReturnOrder} // Không cho xóa khi là đơn trả hàng
               isSearchable
               className="text-sm"
               classNamePrefix="select"
-              isDisabled={isFetchingSuppliers || isProcessingImages}
+              isDisabled={isFetchingSuppliers || isProcessingImages || isReturnOrder} // Khóa khi là đơn trả hàng
               components={{ Option: CustomOption }}
             />
           </div>
@@ -697,13 +805,15 @@ export default function SupplierInvoiceAdd() {
         <div>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-base font-medium text-gray-900">Danh sách sản phẩm</h2>
-            <button
-              onClick={handleAddProduct}
-              className="text-sm text-blue-600 hover:text-blue-700"
-              disabled={isProcessingImages}
-            >
-              Thêm sản phẩm
-            </button>
+            {!isReturnOrder && (
+              <button
+                onClick={handleAddProduct}
+                className="text-sm text-blue-600 hover:text-blue-700"
+                disabled={isProcessingImages}
+              >
+                Thêm sản phẩm
+              </button>
+            )}
           </div>
 
           <div className="space-y-4">
@@ -726,11 +836,12 @@ export default function SupplierInvoiceAdd() {
                           handleProductChange(index, 'productId', selectedOption ? selectedOption.value : '');
                         }}
                         placeholder="Chọn sản phẩm"
-                        isClearable
+                        isClearable={!isReturnOrder}
                         isSearchable
                         className="text-sm"
                         classNamePrefix="select"
                         isDisabled={isFetchingProducts || isProcessingImages}
+                        components={{ Option: CustomOption }}
                       />
                       <div className="mt-2 flex items-center gap-2">
                         <span className="text-sm text-gray-500">Mã sản phẩm:</span>
@@ -753,13 +864,14 @@ export default function SupplierInvoiceAdd() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">
-                        Số lượng
+                        Số lượng {isReturnOrder ? `(Tối đa: ${product.availableQuantity})` : ''}
                       </label>
                       <input
                         type="number"
                         value={product.quantity}
                         onChange={(e) => handleProductChange(index, 'quantity', Number(e.target.value))}
-                        min="1"
+                        min="0"
+                        max={isReturnOrder ? product.availableQuantity : undefined}
                         className="w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         inputMode="numeric"
                         disabled={isProcessingImages}
@@ -777,7 +889,7 @@ export default function SupplierInvoiceAdd() {
                         step="1000"
                         className="w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         inputMode="numeric"
-                        disabled={isProcessingImages}
+                        disabled={isProcessingImages || isReturnOrder} // Khóa giá khi là đơn trả hàng
                       />
                     </div>
                   </div>
@@ -924,6 +1036,16 @@ export default function SupplierInvoiceAdd() {
           suppliers={suppliers}
           onClose={handlePopupClose}
           onSave={handleSaveFromPopup}
+        />
+      )}
+
+      {showProductAddPopup && (
+        <ProductAddPopup
+          onClose={() => {
+            setShowProductAddPopup(false);
+            setCurrentProductIndex(null);
+          }}
+          onProductAdded={handleProductAdded}
         />
       )}
 

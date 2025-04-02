@@ -34,8 +34,8 @@ export default function ProductAdd() {
     code: '',
     name: '',
     purchasePrice: 0,
-    sellingPrice: 0,
-    riCoefficient: 1,
+    sellingPrice: 0, // Giá trị mặc định là 0
+    riCoefficient: 1.1, // Giá trị mặc định là 1.1
     description: ''
   });
 
@@ -112,6 +112,42 @@ export default function ProductAdd() {
     } finally {
       setIsLoading(false);
       setShowConfirmation(false);
+    }
+  };
+
+  const handleSellingPriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = Number(e.target.value);
+    if (value < 0) return; // Không cho phép số âm
+    setFormData(prev => ({ ...prev, sellingPrice: value }));
+  };
+
+  const handleSellingPriceFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (formData.sellingPrice === 0) {
+      e.target.value = ''; // Xóa số 0 khi focus
+    }
+  };
+
+  const handleSellingPriceBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (e.target.value === '') {
+      setFormData(prev => ({ ...prev, sellingPrice: 0 })); // Nếu để trống, đặt lại về 0
+    }
+  };
+
+  const handleRiCoefficientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = Number(e.target.value);
+    if (value < 0) return; // Không cho phép số âm
+    setFormData(prev => ({ ...prev, riCoefficient: value }));
+  };
+
+  const handleRiCoefficientFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (formData.riCoefficient === 1.1) {
+      e.target.value = ''; // Xóa số 1.1 khi focus
+    }
+  };
+
+  const handleRiCoefficientBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (e.target.value === '') {
+      setFormData(prev => ({ ...prev, riCoefficient: 1.1 })); // Nếu để trống, đặt lại về 1.1
     }
   };
 
@@ -204,9 +240,11 @@ export default function ProductAdd() {
             <input
               type="number"
               value={formData.sellingPrice}
-              onChange={(e) => setFormData(prev => ({ ...prev, sellingPrice: Number(e.target.value) }))}
+              onChange={handleSellingPriceChange}
+              onFocus={handleSellingPriceFocus}
+              onBlur={handleSellingPriceBlur}
               min="0"
-              step="1000"
+              step="1" // Tăng/giảm 1 khi click nút lên/xuống
               placeholder="Nhập giá bán"
               className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
             />
@@ -219,9 +257,11 @@ export default function ProductAdd() {
             <input
               type="number"
               value={formData.riCoefficient}
-              onChange={(e) => setFormData(prev => ({ ...prev, riCoefficient: Number(e.target.value) }))}
-              min="1"
-              step="1"
+              onChange={handleRiCoefficientChange}
+              onFocus={handleRiCoefficientFocus}
+              onBlur={handleRiCoefficientBlur}
+              min="0"
+              step="0.1" // Tăng/giảm 0.1 khi click nút lên/xuống
               placeholder="Nhập hệ số ri"
               className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
             />

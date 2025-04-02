@@ -123,7 +123,7 @@ export default function ProductDetail() {
       setIsDeleting(true);
       const objectToDelete = {
         id: id,
-        dataType: 'Product', // Giả định dataType là 'Product', cần điều chỉnh nếu khác
+        dataType: 'XTSProduct', // Giả định dataType là 'Product', cần điều chỉnh nếu khác
         presentation: product.name
       };
       await deleteSingleObject(objectToDelete);

@@ -57,10 +57,10 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
       selectedObject: {
         ...item.objects[0],
         quantity: item.objects[0]?.quantity || '1',
-        price: item.objects[0]?._price || '0',
-        total: (Number(item.objects[0]?.quantity || 1) * Number(item.objects[0]?._price || 0)).toString(),
+        price: item.objects[0]?.price || '0', // Sử dụng price từ OCR Gemini
+        total: (Number(item.objects[0]?.quantity || 1) * Number(item.objects[0]?.price || 0)).toString(),
         discount: '',
-        originalPrice: item.objects[0]?._price || '0',
+        originalPrice: item.objects[0]?.price || '0', // Sử dụng price từ OCR Gemini
         coefficient: item.objects[0]?._uomCoefficient || '1',
         productCharacteristic: item.objects[0]?.descriptionFull || ''
       }
@@ -146,10 +146,10 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
       updatedExisted[index].selectedObject = {
         ...selectedObj,
         quantity: updatedExisted[index].selectedObject.quantity || selectedObj.quantity || '1',
-        price: updatedExisted[index].selectedObject.price || selectedObj._price || '0',
-        total: updatedExisted[index].selectedObject.total || (Number(selectedObj.quantity || 1) * Number(selectedObj._price || 0)).toString(),
+        price: updatedExisted[index].selectedObject.price || selectedObj.price || '0', // Giữ nguyên price từ OCR Gemini
+        total: updatedExisted[index].selectedObject.total || (Number(selectedObj.quantity || 1) * Number(selectedObj.price || 0)).toString(),
         discount: updatedExisted[index].selectedObject.discount || '',
-        originalPrice: selectedObj._price || '0',
+        originalPrice: selectedObj.price || '0', // Sử dụng price từ OCR Gemini
         coefficient: selectedObj._uomCoefficient || updatedExisted[index].selectedObject.coefficient || '1',
         productCharacteristic: selectedObj.descriptionFull || ''
       };

@@ -288,26 +288,15 @@ export default function Orders() {
                   </span>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center text-sm text-gray-600">
-                    <User className="h-4 w-4 mr-1.5" />
-                    {order.customerName}
-                  </div>
-
+                <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-500">
-                      {order.totalProducts} sản phẩm
+                      {order.customerName}
                     </span>
                     <span className="text-sm font-medium text-blue-600">
                       {formatCurrency(order.totalAmount)}
                     </span>
                   </div>
-
-                  {order.notes && (
-                    <p className="text-xs text-gray-500 italic line-clamp-2">
-                      {order.notes}
-                    </p>
-                  )}
                 </div>
               </div>
             ))}
