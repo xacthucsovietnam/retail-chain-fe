@@ -1,27 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Building, User, Users, FileText, Tag, DollarSign, Plus, Calendar, X, Filter } from 'lucide-react';
+import { Search, Building, User, FileText, Tag, DollarSign, Plus, Calendar, X, Filter } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getSupplierInvoices } from '../../services/supplierInvoice';
-import { useLanguage } from '../../contexts/LanguageContext';
-
-interface SupplierInvoice {
-  id: string;
-  number: string;
-  date: string;
-  author: string;
-  contract: string;
-  counterparty: string;
-  operationType: string;
-  amount: number;
-  currency: string;
-  employeeResponsible: string;
-  vatTaxation: string;
-  structuralUnit: string;
-  orderBasis: string;
-  comment: string;
-  posted: boolean;
-}
+import { getSession } from '../../utils/storage';
+import type { SupplierInvoice } from '../../services/supplierInvoice';
 
 export default function SupplierInvoices() {
   const navigate = useNavigate();
@@ -33,8 +16,8 @@ export default function SupplierInvoices() {
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const lastScrollY = useRef(0);
-  const { t } = useLanguage();
 
   // Search filters
   const [searchId, setSearchId] = useState('');
@@ -46,16 +29,19 @@ export default function SupplierInvoices() {
   const [operationType, setOperationType] = useState('');
 
   const observer = useRef<IntersectionObserver>();
-  const lastInvoiceRef = useCallback((node: HTMLDivElement | null) => {
-    if (isLoadingMore || !node) return;
-    if (observer.current) observer.current.disconnect();
-    observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore) {
-        setPage(prevPage => prevPage + 1);
-      }
-    });
-    observer.current.observe(node);
-  }, [isLoadingMore, hasMore]);
+  const lastInvoiceRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (isLoadingMore || !node) return;
+      if (observer.current) observer.current.disconnect();
+      observer.current = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && hasMore) {
+          setPage((prevPage) => prevPage + 1);
+        }
+      });
+      observer.current.observe(node);
+    },
+    [isLoadingMore, hasMore]
+  );
 
   useEffect(() => {
     const handleScroll = () => {
@@ -74,7 +60,16 @@ export default function SupplierInvoices() {
   }, []);
 
   const fetchInvoices = async (pageNumber: number, isNewSearch: boolean = false) => {
+    const defaultValues = getSession()?.defaultValues;
+
+    if (!defaultValues?.company?.id) {
+      setError('Không thể tải dữ liệu do thiếu thông tin công ty trong phiên làm việc');
+      setIsLoading(false);
+      return;
+    }
+
     try {
+      setError(null);
       const conditions = [];
 
       if (searchId) {
@@ -82,7 +77,7 @@ export default function SupplierInvoices() {
           _type: 'XTSCondition',
           property: 'objectId.presentation',
           value: searchId,
-          comparisonOperator: 'contains'
+          comparisonOperator: 'contains',
         });
       }
 
@@ -91,7 +86,7 @@ export default function SupplierInvoices() {
           _type: 'XTSCondition',
           property: 'date',
           value: { start: startDate, end: endDate },
-          comparisonOperator: 'between'
+          comparisonOperator: 'between',
         });
       }
 
@@ -100,7 +95,7 @@ export default function SupplierInvoices() {
           _type: 'XTSCondition',
           property: 'author.presentation',
           value: authorSearch,
-          comparisonOperator: 'contains'
+          comparisonOperator: 'contains',
         });
       }
 
@@ -109,7 +104,7 @@ export default function SupplierInvoices() {
           _type: 'XTSCondition',
           property: 'company.presentation',
           value: companySearch,
-          comparisonOperator: 'contains'
+          comparisonOperator: 'contains',
         });
       }
 
@@ -118,7 +113,7 @@ export default function SupplierInvoices() {
           _type: 'XTSCondition',
           property: 'counterparty.presentation',
           value: counterpartySearch,
-          comparisonOperator: 'contains'
+          comparisonOperator: 'contains',
         });
       }
 
@@ -127,21 +122,23 @@ export default function SupplierInvoices() {
           _type: 'XTSCondition',
           property: 'operationKind.presentation',
           value: operationType,
-          comparisonOperator: '='
+          comparisonOperator: '=',
         });
       }
 
       const response = await getSupplierInvoices(pageNumber, 50, conditions);
-      
+
       if (isNewSearch) {
         setInvoices(response.items);
       } else {
-        setInvoices(prev => [...prev, ...response.items]);
+        setInvoices((prev) => [...prev, ...response.items]);
       }
-      
+
       setHasMore(response.hasMore);
     } catch (error) {
-      toast.error('Không thể tải danh sách đơn nhập hàng');
+      const errorMessage = error instanceof Error ? error.message : 'Không thể tải danh sách đơn nhập hàng';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
@@ -149,10 +146,6 @@ export default function SupplierInvoices() {
   };
 
   useEffect(() => {
-    setIsLoading(true);
-    setInvoices([]);
-    setPage(1);
-    setHasMore(true);
     fetchInvoices(1, true);
   }, []);
 
@@ -182,23 +175,26 @@ export default function SupplierInvoices() {
     setCounterpartySearch('');
     setOperationType('');
     setIsFilterOpen(false);
+    handleSearch();
   };
 
-  const formatCurrency = (amount: number, currencyString: string) => {
+  const formatCurrency = (amount: number, currency: ObjectId) => {
+    const currencyString = currency?.presentation || 'VND';
     const normalizedCurrency = currencyString
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .toUpperCase();
 
     const currencyMap: { [key: string]: string } = {
-      'DONG': 'VND',
-      'VND': 'VND',
-      'USD': 'USD',
-      'DOLLAR': 'USD',
-      'EURO': 'EUR',
-      'EUR': 'EUR',
-      'JPY': 'JPY',
-      'YEN': 'JPY'
+      DONG: 'VND',
+      VND: 'VND',
+      USD: 'USD',
+      DOLLAR: 'USD',
+      EURO: 'EUR',
+      EUR: 'EUR',
+      JPY: 'JPY',
+      YEN: 'JPY',
+      CNY: 'CNY',
     };
 
     const currencyCode = currencyMap[normalizedCurrency] || 'VND';
@@ -206,7 +202,7 @@ export default function SupplierInvoices() {
     try {
       return new Intl.NumberFormat('vi-VN', {
         style: 'currency',
-        currency: currencyCode
+        currency: currencyCode,
       }).format(amount);
     } catch (error) {
       return new Intl.NumberFormat('vi-VN').format(amount) + ' ' + currencyString;
@@ -219,9 +215,25 @@ export default function SupplierInvoices() {
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   };
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-500">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg"
+          >
+            Thử lại
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -231,15 +243,15 @@ export default function SupplierInvoices() {
           isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
         }`}
       >
-        {/* Title Bar */}
         <div className="bg-white px-4 py-3 shadow-sm">
           <h1 className="text-lg font-semibold text-gray-900">Danh sách đơn nhập hàng</h1>
         </div>
 
-        {/* Search Bar */}
-        <div className={`bg-white px-4 py-2 shadow-sm transition-transform duration-300 ${
-          isHeaderVisible ? 'translate-y-0' : 'translate-y-full'
-        }`}>
+        <div
+          className={`bg-white px-4 py-2 shadow-sm transition-transform duration-300 ${
+            isHeaderVisible ? 'translate-y-0' : 'translate-y-full'
+          }`}
+        >
           <div className="flex items-center gap-2">
             <div className={`relative flex-1 transition-all duration-300 ${isSearchExpanded ? 'flex-grow' : ''}`}>
               {isSearchExpanded ? (
@@ -287,11 +299,9 @@ export default function SupplierInvoices() {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="pt-12 px-4 pb-20">
         <div className="grid grid-cols-1 gap-4">
           {isLoading ? (
-            // Loading Skeletons
             Array.from({ length: 4 }).map((_, index) => (
               <div key={index} className="bg-white rounded-lg shadow animate-pulse p-4">
                 <div className="h-4 bg-gray-200 rounded w-3/4 mb-3" />
@@ -314,11 +324,11 @@ export default function SupplierInvoices() {
                     <h3 className="text-base font-semibold text-gray-900">#{invoice.number}</h3>
                     <p className="text-sm text-gray-500">{formatDate(invoice.date)}</p>
                   </div>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    invoice.posted
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-yellow-100 text-yellow-800'
-                  }`}>
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      invoice.posted ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                    }`}
+                  >
                     {invoice.posted ? 'Đã ghi sổ' : 'Chưa ghi sổ'}
                   </span>
                 </div>
@@ -326,18 +336,18 @@ export default function SupplierInvoices() {
                 <div className="space-y-1.5">
                   <div className="flex items-center text-sm text-gray-600">
                     <User className="h-4 w-4 mr-2" />
-                    {invoice.counterparty}
+                    {invoice.counterparty?.presentation || 'Không xác định'}
                   </div>
 
                   <div className="flex items-center text-sm font-medium text-blue-600">
                     <DollarSign className="h-4 w-4 mr-2" />
-                    {invoice.amount} ¥
+                    {formatCurrency(invoice.documentAmount, invoice.documentCurrency)}
                   </div>
 
-                  {invoice.employeeResponsible && (
+                  {invoice.employeeResponsible?.presentation && (
                     <div className="flex items-center text-sm text-gray-600">
                       <User className="h-4 w-4 mr-2" />
-                      {invoice.employeeResponsible}
+                      {invoice.employeeResponsible.presentation}
                     </div>
                   )}
 
@@ -359,14 +369,11 @@ export default function SupplierInvoices() {
           )}
 
           {!isLoading && invoices.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              Không tìm thấy đơn nhập hàng
-            </div>
+            <div className="text-center py-8 text-gray-500">Không tìm thấy đơn nhập hàng</div>
           )}
         </div>
       </div>
 
-      {/* Filter Bottom Sheet */}
       {isFilterOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
           <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl p-4">
@@ -481,13 +488,11 @@ export default function SupplierInvoices() {
               </div>
             </div>
 
-            {/* Bottom Safe Area */}
             <div className="h-6" />
           </div>
         </div>
       )}
 
-      {/* Floating Action Button */}
       <button
         onClick={() => navigate('/supplier-invoices/add')}
         className="fixed right-4 bottom-4 p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"

@@ -1,3 +1,4 @@
+// src/pages/OrderDetail.tsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -17,12 +18,14 @@ import {
   Files,
   Plus,
   ArrowUpToLine,
-  ArrowDownToLine
+  ArrowDownToLine,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getOrderDetail, updateOrder, getRelatedDocuments, type RelatedDocument } from '../../services/order';
-import { deleteObjects } from '../../services/deleteObjects'; // Import deleteObjects
-import type { OrderDetail } from '../../services/order';
+import { deleteObjects } from '../../services/deleteObjects';
+import type { OrderDetail, UpdateOrderData } from '../../services/order';
 import { formatCurrency } from '../../utils/currency';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { DEFAULT_IMAGE_URL } from '../../services/file';
@@ -33,6 +36,7 @@ import '@react-pdf-viewer/default-layout/lib/styles/index.css';
 import { zoomPlugin } from '@react-pdf-viewer/zoom';
 import { printPlugin } from '@react-pdf-viewer/print';
 import { getFilePlugin } from '@react-pdf-viewer/get-file';
+import { getSession } from '../../utils/storage';
 
 interface PaymentFormData {
   cash: number;
@@ -54,12 +58,18 @@ export default function OrderDetail() {
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
   const [showPdfViewer, setShowPdfViewer] = useState(false);
   const { t } = useLanguage();
+  const [isOrderInfoExpanded, setIsOrderInfoExpanded] = useState(true);
+  const [isPaymentExpanded, setIsPaymentExpanded] = useState(true);
+  const [isProductListExpanded, setIsProductListExpanded] = useState(true);
 
   const [paymentData, setPaymentData] = useState<PaymentFormData>({
     cash: 0,
     bankTransfer: 0,
     credit: 0
   });
+
+  const session = getSession();
+  const defaultValues = session?.defaultValues || {};
 
   const zoomPluginInstance = zoomPlugin();
   const printPluginInstance = printPlugin();
@@ -182,41 +192,81 @@ export default function OrderDetail() {
     try {
       setIsProcessing(true);
       
-      const nextState = getNextOrderState(order.orderState, 'payment');
+      const nextStateId = getNextOrderState(order.orderState, 'payment');
 
-      await updateOrder({
+      const updateData: UpdateOrderData = {
         id: order.id,
         number: order.number,
         title: order.title,
-        customerId: order.customer,
-        customerName: order.customer,
-        employeeId: order.employeeResponsible || '',
-        employeeName: order.employeeResponsible || '',
-        orderState: nextState,
-        deliveryAddress: order.deliveryAddress || '',
-        comment: order.comment || '',
+        deletionMark: order.deletionMark,
+        author: order.author,
+        comment: order.comment,
+        companyId: defaultValues.company?.id || '',
+        company: order.company,
+        contractId: order.contract ? order.contract.split(': ')[1] : null, // Giả sử contract có dạng "ID: Name"
+        contractName: order.contract,
+        customerId: order.customerId,
+        customerName: order.customerName,
+        deliveryAddress: order.deliveryAddress,
+        deliveryAddressValue: order.deliveryAddressValue,
+        discountCardId: order.discountCard ? order.discountCard.split(': ')[1] : null,
+        discountCard: order.discountCard,
+        emailAddress: order.emailAddress,
+        orderKindId: defaultValues.salesOrderOrderKind?.id || '5736c2cc-5b28-11ef-a699-00155d058802',
+        orderKind: order.orderKind,
+        operationTypeId: defaultValues.salesOrderOperationKind?.id || 'OrderForSale',
+        operationType: order.operationType,
+        priceKindId: defaultValues.priceKind?.id || '1a1fb49c-5b28-11ef-a699-00155d058802',
+        priceKind: order.priceKind,
+        shipmentDate: order.shipmentDate,
         documentAmount: order.documentAmount,
+        documentCurrencyId: defaultValues.documentCurrency?.id || 'c26a4d87-c6e2-4aca-ab05-1b02be6ecaec',
+        documentCurrency: order.documentCurrency,
+        employeeResponsibleId: order.employeeResponsibleId,
+        employeeResponsibleName: order.employeeResponsibleName,
+        orderStateId: nextStateId,
+        orderState: nextStateId === 'Preparing' ? 'Đang chuẩn bị' : order.orderState,
+        shippingCost: order.shippingCost,
+        phone: order.phone,
+        completionOptionId: order.completionOption ? order.completionOption.split(': ')[1] : null,
+        completionOption: order.completionOption,
+        cash: paymentData.cash,
+        bankTransfer: paymentData.bankTransfer,
+        postPayment: paymentData.credit,
+        paymentNote: order.paymentNote,
+        rate: order.rate,
+        multiplicity: order.multiplicity,
+        vatTaxationId: defaultValues.vatTaxation?.id || 'NotTaxableByVAT',
+        vatTaxation: order.vatTaxation,
+        status: order.status,
+        externalAccountId: order.externalAccount ? order.externalAccount.split(': ')[1] : null,
+        externalAccount: order.externalAccount,
+        receiptableIncrease: order.receiptableIncrease,
+        receiptableDecrease: order.receiptableDecrease,
+        receiptableBalance: order.receiptableBalance,
         products: order.products.map(p => ({
           lineNumber: p.lineNumber,
           productId: p.productId,
           productName: p.productName,
+          characteristic: p.characteristic,
+          unitId: p.unitId, // Changed from uomId
+          unitName: p.unitName, // Changed from uomName
           quantity: p.quantity,
           price: p.price,
-          unitId: '5736c39c-5b28-11ef-a699-00155d058802',
-          unitName: p.unit,
-          coefficient: p.coefficient,
-          sku: p.sku
+          amount: p.amount,
+          automaticDiscountAmount: p.automaticDiscountAmount,
+          discountsMarkupsAmount: p.discountsMarkupsAmount,
+          vatAmount: p.vatAmount,
+          vatRateId: p.vatRateId,
+          vatRateName: p.vatRateName,
+          total: p.total,
+          code: p.code,
+          coefficient: p.coefficient
         })),
-        date: order.date,
-        contractId: '',
-        contractName: '',
-        externalAccountId: '',
-        externalAccountName: '',
-        cashAmount: paymentData.cash,
-        transferAmount: paymentData.bankTransfer,
-        postPayAmount: paymentData.credit,
-        paymentNotes: ''
-      });
+        date: order.date
+      };
+
+      await updateOrder(updateData);
 
       toast.success('Payment updated successfully');
       setShowPaymentModal(false);
@@ -237,41 +287,81 @@ export default function OrderDetail() {
     try {
       setIsProcessing(true);
       
-      const nextState = getNextOrderState(order.orderState, 'delivery');
+      const nextStateId = getNextOrderState(order.orderState, 'delivery');
 
-      await updateOrder({
+      const updateData: UpdateOrderData = {
         id: order.id,
         number: order.number,
         title: order.title,
-        customerId: order.customer,
-        customerName: order.customer,
-        employeeId: order.employeeResponsible || '',
-        employeeName: order.employeeResponsible || '',
-        orderState: nextState,
-        deliveryAddress: order.deliveryAddress || '',
-        comment: order.comment || '',
+        deletionMark: order.deletionMark,
+        author: order.author,
+        comment: order.comment,
+        companyId: defaultValues.company?.id || '',
+        company: order.company,
+        contractId: order.contract ? order.contract.split(': ')[1] : null,
+        contractName: order.contract,
+        customerId: order.customerId,
+        customerName: order.customerName,
+        deliveryAddress: order.deliveryAddress,
+        deliveryAddressValue: order.deliveryAddressValue,
+        discountCardId: order.discountCard ? order.discountCard.split(': ')[1] : null,
+        discountCard: order.discountCard,
+        emailAddress: order.emailAddress,
+        orderKindId: defaultValues.salesOrderOrderKind?.id || '5736c2cc-5b28-11ef-a699-00155d058802',
+        orderKind: order.orderKind,
+        operationTypeId: defaultValues.salesOrderOperationKind?.id || 'OrderForSale',
+        operationType: order.operationType,
+        priceKindId: defaultValues.priceKind?.id || '1a1fb49c-5b28-11ef-a699-00155d058802',
+        priceKind: order.priceKind,
+        shipmentDate: order.shipmentDate,
         documentAmount: order.documentAmount,
+        documentCurrencyId: defaultValues.documentCurrency?.id || 'c26a4d87-c6e2-4aca-ab05-1b02be6ecaec',
+        documentCurrency: order.documentCurrency,
+        employeeResponsibleId: order.employeeResponsibleId,
+        employeeResponsibleName: order.employeeResponsibleName,
+        orderStateId: nextStateId,
+        orderState: nextStateId === 'Delivered' ? 'Đã giao hàng' : order.orderState,
+        shippingCost: order.shippingCost,
+        phone: order.phone,
+        completionOptionId: order.completionOption ? order.completionOption.split(': ')[1] : null,
+        completionOption: order.completionOption,
+        cash: order.cash,
+        bankTransfer: order.bankTransfer,
+        postPayment: order.postPayment,
+        paymentNote: order.paymentNote,
+        rate: order.rate,
+        multiplicity: order.multiplicity,
+        vatTaxationId: defaultValues.vatTaxation?.id || 'NotTaxableByVAT',
+        vatTaxation: order.vatTaxation,
+        status: order.status,
+        externalAccountId: order.externalAccount ? order.externalAccount.split(': ')[1] : null,
+        externalAccount: order.externalAccount,
+        receiptableIncrease: order.receiptableIncrease,
+        receiptableDecrease: order.receiptableDecrease,
+        receiptableBalance: order.receiptableBalance,
         products: order.products.map(p => ({
           lineNumber: p.lineNumber,
           productId: p.productId,
           productName: p.productName,
+          characteristic: p.characteristic,
+          unitId: p.unitId, // Changed from uomId
+          unitName: p.unitName, // Changed from uomName
           quantity: p.quantity,
           price: p.price,
-          unitId: '5736c39c-5b28-11ef-a699-00155d058802',
-          unitName: p.unit,
-          coefficient: p.coefficient,
-          sku: p.sku
+          amount: p.amount,
+          automaticDiscountAmount: p.automaticDiscountAmount,
+          discountsMarkupsAmount: p.discountsMarkupsAmount,
+          vatAmount: p.vatAmount,
+          vatRateId: p.vatRateId,
+          vatRateName: p.vatRateName,
+          total: p.total,
+          code: p.code,
+          coefficient: p.coefficient
         })),
-        date: order.date,
-        contractId: '',
-        contractName: '',
-        externalAccountId: '',
-        externalAccountName: '',
-        cashAmount: order.cash || 0,
-        transferAmount: order.bankTransfer || 0,
-        postPayAmount: order.postPayment || 0,
-        paymentNotes: ''
-      });
+        date: order.date
+      };
+
+      await updateOrder(updateData);
 
       toast.success('Order marked as delivered');
       
@@ -294,37 +384,30 @@ export default function OrderDetail() {
   };
 
   const handleReturn = () => {
-  if (!order) return;
-
-  const preloadData = {
-      supplierId: order.customerId || '', // Sử dụng customerId từ đơn hàng gốc làm supplierId
-      supplierName: order.customer, // Tên khách hàng làm tên nhà cung cấp
-      employeeId: order.employeeResponsible || '',
-      employeeName: order.employeeResponsible || '',
-      deliveryAddress: order.deliveryAddress || '',
+    if (!order) return;
+  
+    const preloadData = {
       isReturnOrder: true,
-      originalOrderId: order.id, // Thêm ID đơn hàng gốc để tham chiếu
-      originalOrderNumber: order.number, // Thêm số đơn hàng gốc
+      customerId: order.customerId || '',
+      customerName: order.customerName || '',
+      employeeId: order.employeeResponsibleId || '',
+      employeeName: order.employeeResponsibleName || '',
+      originalOrderId: order.id,
+      originalOrderNumber: order.number,
       originalProducts: order.products.map(p => ({
-        productId: p.productId,
-        productName: p.productName,
-        sku: p.sku,
-        unit: p.unit,
-        quantity: p.quantity, // Số lượng tối đa có thể trả
+        id: p.productId,
+        name: p.productName,
+        code: p.code,
         price: p.price,
-        coefficient: p.coefficient,
-        availableQuantity: p.quantity // Thêm trường để giới hạn số lượng trả
+        riCoefficient: p.coefficient,
+        availableQuantity: p.quantity
       }))
     };
   
-    // Lưu dữ liệu vào sessionStorage để sử dụng trong màn hình thêm mới đơn nhập
     sessionStorage.setItem('newSupplierInvoiceData', JSON.stringify(preloadData));
-    
-    // Chuyển hướng đến màn hình thêm mới đơn nhập hàng
     navigate('/supplier-invoices/add');
   };
 
-  // Hàm xử lý xóa đơn hàng
   const handleDelete = async () => {
     if (!order || !id) return;
 
@@ -341,13 +424,96 @@ export default function OrderDetail() {
 
       await deleteObjects([objectToDelete]);
       toast.success('Đơn hàng đã được xóa thành công');
-      navigate('/orders'); // Quay lại danh sách sau khi xóa
+      navigate('/orders');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Không thể xóa đơn hàng';
       toast.error(errorMessage);
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleEdit = () => {
+    if (!order || !id) return;
+
+    const updateData: UpdateOrderData = {
+      id: order.id,
+      number: order.number,
+      title: order.title,
+      deletionMark: order.deletionMark,
+      author: order.author,
+      comment: order.comment,
+      companyId: defaultValues.company?.id || '',
+      company: order.company,
+      contractId: order.contract ? order.contract.split(': ')[1] : null,
+      contractName: order.contract,
+      customerId: order.customerId,
+      customerName: order.customerName,
+      deliveryAddress: order.deliveryAddress,
+      deliveryAddressValue: order.deliveryAddressValue,
+      discountCardId: order.discountCard ? order.discountCard.split(': ')[1] : null,
+      discountCard: order.discountCard,
+      emailAddress: order.emailAddress,
+      orderKindId: defaultValues.salesOrderOrderKind?.id || '5736c2cc-5b28-11ef-a699-00155d058802',
+      orderKind: order.orderKind,
+      operationTypeId: defaultValues.salesOrderOperationKind?.id || 'OrderForSale',
+      operationType: order.operationType,
+      priceKindId: defaultValues.priceKind?.id || '1a1fb49c-5b28-11ef-a699-00155d058802',
+      priceKind: order.priceKind,
+      shipmentDate: order.shipmentDate,
+      documentAmount: order.documentAmount,
+      documentCurrencyId: defaultValues.documentCurrency?.id || 'c26a4d87-c6e2-4aca-ab05-1b02be6ecaec',
+      documentCurrency: order.documentCurrency,
+      employeeResponsibleId: order.employeeResponsibleId,
+      employeeResponsibleName: order.employeeResponsibleName,
+      orderStateId: order.orderState === 'Đang soạn' ? 'Editing' : 
+                    order.orderState === 'Đã giao hàng' ? 'Delivered' : 
+                    order.orderState === 'Chờ trả trước' ? 'ToPrepay' : 
+                    order.orderState === 'Đang chuẩn bị' ? 'Preparing' : 
+                    order.orderState === 'Đã hủy' ? 'ecfc6706-bdd8-11ef-a6a7-00155d058802' : 
+                    order.orderState === 'Đã hoàn thành' ? 'Completed' : 'Editing',
+      orderState: order.orderState,
+      shippingCost: order.shippingCost,
+      phone: order.phone,
+      completionOptionId: order.completionOption ? order.completionOption.split(': ')[1] : null,
+      completionOption: order.completionOption,
+      cash: order.cash,
+      bankTransfer: order.bankTransfer,
+      postPayment: order.postPayment,
+      paymentNote: order.paymentNote,
+      rate: order.rate,
+      multiplicity: order.multiplicity,
+      vatTaxationId: defaultValues.vatTaxation?.id || 'NotTaxableByVAT',
+      vatTaxation: order.vatTaxation,
+      status: order.status,
+      externalAccountId: order.externalAccount ? order.externalAccount.split(': ')[1] : null,
+      externalAccount: order.externalAccount,
+      receiptableIncrease: order.receiptableIncrease,
+      receiptableDecrease: order.receiptableDecrease,
+      receiptableBalance: order.receiptableBalance,
+      products: order.products.map(p => ({
+        lineNumber: p.lineNumber,
+        productId: p.productId,
+        productName: p.productName,
+        characteristic: p.characteristic,
+        unitId: p.unitId, // Changed from uomId
+        unitName: p.unitName, // Changed from uomName
+        quantity: p.quantity,
+        price: p.price,
+        amount: p.amount,
+        automaticDiscountAmount: p.automaticDiscountAmount,
+        discountsMarkupsAmount: p.discountsMarkupsAmount,
+        vatAmount: p.vatAmount,
+        vatRateId: p.vatRateId,
+        vatRateName: p.vatRateName,
+        total: p.total,
+        code: p.code,
+        coefficient: p.coefficient
+      })),
+      date: order.date
+    };
+
+    navigate(`/orders/edit/${id}`, { state: { orderData: updateData } });
   };
 
   const getStatusColor = (status: string) => {
@@ -390,7 +556,6 @@ export default function OrderDetail() {
     const leftButtons = [];
     const rightButtons = [];
 
-    // Nút Back luôn có
     leftButtons.push(
       <button
         key="back"
@@ -402,7 +567,6 @@ export default function OrderDetail() {
       </button>
     );
 
-    // Các nút chung cho mọi trạng thái
     rightButtons.push(
       <button
         key="related"
@@ -415,7 +579,6 @@ export default function OrderDetail() {
       </button>
     );
 
-    // Các nút theo trạng thái
     if (status.includes('đang soạn') || status.includes('chờ trả trước')) {
       leftButtons.push(
         <button
@@ -431,7 +594,7 @@ export default function OrderDetail() {
       rightButtons.push(
         <button
           key="edit"
-          onClick={() => navigate(`/orders/edit/${id}`)}
+          onClick={handleEdit}
           className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           title="Chỉnh sửa"
         >
@@ -520,7 +683,7 @@ export default function OrderDetail() {
           </h2>
           <button
             onClick={() => navigate('/orders')}
-            classNama="text-blue-600 hover:text-blue-800 flex items-center gap-2 mx-auto"
+            className="text-blue-600 hover:text-blue-800 flex items-center gap-2 mx-auto"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Orders
@@ -534,148 +697,169 @@ export default function OrderDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <div className="fixed top-12 left-0 right-0 z-50 bg-white shadow-sm">
+      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
         <div className="px-4 py-3">
-          <div className="flex justify-between items-start">
-            <div>
-              <div className="text-2xl font-bold text-gray-900 mt-1">#{order.number}</div>
-            </div>
-            <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${getStatusColor(order.orderState)}`}>
-              {order.orderState}
-            </span>
-          </div>
+          <h1 className="text-lg font-semibold text-gray-900">Chi tiết đơn hàng #{order.number}</h1>
         </div>
       </div>
 
-      <div className="pt-12 px-4">
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-          <div className="space-y-4">
-            <div className="flex justify-between items-center pb-3 border-b border-gray-100">
-              <div className="text-sm text-gray-500">Ngày đặt hàng</div>
-              <div className="text-sm font-medium">{formatDate(order.date)}</div>
+      <div className="pt-2 px-4">
+        {/* Nhóm 1: Thông tin đơn hàng */}
+        <div className="mb-6 bg-white rounded-lg shadow-sm">
+          <div 
+            className="flex justify-between items-center px-4 py-3 cursor-pointer"
+            onClick={() => setIsOrderInfoExpanded(!isOrderInfoExpanded)}
+          >
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-medium text-gray-900">Thông tin đơn hàng</h2>
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.orderState)}`}>
+                {order.orderState}
+              </span>
             </div>
-
-            <div className="flex justify-between items-start pb-3 border-b border-gray-100">
-              <div className="text-sm text-gray-500">Khách hàng</div>
-              <div className="text-sm font-medium text-right">{order.customer}</div>
-            </div>
-
-            {order.employeeResponsible && (
-              <div className="flex justify-between items-center pb-3 border-b border-gray-100">
-                <div className="text-sm text-gray-500">Nhân viên bán hàng</div>
-                <div className="text-sm font-medium">{order.employeeResponsible}</div>
-              </div>
+            {isOrderInfoExpanded ? (
+              <ChevronUp className="h-5 w-5 text-gray-600" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-gray-600" />
             )}
-
-            {order.deliveryAddress && (
-              <div className="flex justify-between items-start pb-3 border-b border-gray-100">
-                <div className="text-sm text-gray-500">Địa chỉ giao hàng</div>
-                <div className="text-sm font-medium text-right max-w-[60%]">{order.deliveryAddress}</div>
+          </div>
+          {isOrderInfoExpanded && (
+            <div className="px-4 pb-4 space-y-4">
+              <div className="flex justify-between items-center">
+                <div className="text-sm text-gray-500">Ngày đặt hàng</div>
+                <div className="text-sm font-medium">{formatDate(order.date)}</div>
               </div>
-            )}
 
-            {order.comment && (
               <div className="flex justify-between items-start">
-                <div className="text-sm text-gray-500">Ghi chú</div>
-                <div className="text-sm font-medium text-right max-w-[60%]">{order.comment}</div>
+                <div className="text-sm text-gray-500">Khách hàng</div>
+                <div className="text-sm font-medium text-right">{order.customerName}</div>
               </div>
+
+              {order.employeeResponsibleName && (
+                <div className="flex justify-between items-center">
+                  <div className="text-sm text-gray-500">Nhân viên bán hàng</div>
+                  <div className="text-sm font-medium">{order.employeeResponsibleName}</div>
+                </div>
+              )}
+
+              {order.deliveryAddress && (
+                <div className="flex justify-between items-start">
+                  <div className="text-sm text-gray-500">Địa chỉ giao hàng</div>
+                  <div className="text-sm font-medium text-right max-w-[60%]">{order.deliveryAddress}</div>
+                </div>
+              )}
+
+              {order.comment && (
+                <div className="flex justify-between items-start">
+                  <div className="text-sm text-gray-500">Ghi chú</div>
+                  <div className="text-sm font-medium text-right max-w-[60%]">{order.comment}</div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Nhóm 2: Tổng tiền và thanh toán */}
+        <div className="mb-6 bg-white rounded-lg shadow-sm">
+          <div 
+            className="flex justify-between items-center px-4 py-3 cursor-pointer"
+            onClick={() => setIsPaymentExpanded(!isPaymentExpanded)}
+          >
+            <h2 className="text-base font-medium text-gray-900">Tổng tiền và thanh toán</h2>
+            {isPaymentExpanded ? (
+              <ChevronUp className="h-5 w-5 text-gray-600" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-gray-600" />
             )}
           </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-          <div className="space-y-4">
-            <div className="flex justify-between items-center text-lg font-bold">
-              <div>Tổng tiền</div>
-              <div className="text-blue-600">{formatCurrency(order.documentAmount, order.documentCurrency)}</div>
-            </div>
-
-            <div className="pt-3 border-t border-gray-100">
-              <div className="grid grid-cols-3 gap-2">
-                <div className="text-center">
-                  <div className="text-xs text-gray-500 mb-1">Tiền mặt</div>
-                  <div className="text-sm font-medium text-green-600">
-                    {formatCurrency(order.cash || 0, order.documentCurrency)}
-                  </div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xs text-gray-500 mb-1">Chuyển khoản</div>
-                  <div className="text-sm font-medium text-blue-600">
-                    {formatCurrency(order.bankTransfer || 0, order.documentCurrency)}
-                  </div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xs text-gray-500 mb-1">Công nợ</div>
-                  <div className="text-sm font-medium text-red-600">
-                    {formatCurrency(order.postPayment || 0, order.documentCurrency)}
-                  </div>
-                </div>
+          {isPaymentExpanded && (
+            <div className="px-4 pb-4 space-y-4">
+              <div className="flex justify-between items-center text-lg font-bold">
+                <div>Tổng tiền</div>
+                <div className="text-blue-600">{formatCurrency(order.documentAmount, order.documentCurrency)}</div>
               </div>
-            </div>
-          </div>
-        </div>
 
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <h2 className="px-4 py-3 text-base font-medium text-gray-900 border-b border-gray-200">
-            Danh sách sản phẩm
-          </h2>
-          
-          <div className="divide-y divide-gray-200">
-            {order.products.map((product, index) => (
-              <div key={product.lineNumber} className="p-4">
-                <div className="flex gap-3">
-                  <div className="h-20 w-20 bg-gray-100 rounded-lg flex-shrink-0">
-                    {product.picture ? (
-                      <img
-                        src={product.picture}
-                        alt={product.productName}
-                        className="h-full w-full object-cover rounded-lg"
-                        onError={(e) => {
-                          e.currentTarget.src = DEFAULT_IMAGE_URL;
-                        }}
-                      />
-                    ) : (
-                      <div className="h-full w-full flex items-center justify-center">
-                        <Package className="h-8 w-8 text-gray-400" />
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-500">#{index + 1}</span>
-                          <h3 className="text-sm font-medium text-gray-900 line-clamp-2">
-                            {product.productName}
-                          </h3>
-                        </div>
-                        <p className="text-sm text-gray-500 mt-0.5">SKU: {product.sku}</p>
-                      </div>
+              <div className="pt-3 border-t border-gray-100">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="text-center">
+                    <div className="text-xs text-gray-500 mb-1">Tiền mặt</div>
+                    <div className="text-sm font-medium text-green-600">
+                      {formatCurrency(order.cash || 0, order.documentCurrency)}
                     </div>
-                    
-                    <div className="mt-2 text-sm">
-                      <div className="flex items-center justify-between text-gray-500">
-                        <div className="flex items-center gap-1">
-                          <span>{product.quantity}</span>
-                          <span>{product.unit}</span>
-                          <span>x</span>
-                          <span>{product.price} đồng/chiếc</span>
-                        </div>
-                        <span className="font-medium text-blue-600">
-                          {formatCurrency(product.total, order.documentCurrency)}
-                        </span>
-                      </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xs text-gray-500 mb-1">Chuyển khoản</div>
+                    <div className="text-sm font-medium text-blue-600">
+                      {formatCurrency(order.bankTransfer || 0, order.documentCurrency)}
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xs text-gray-500 mb-1">Công nợ</div>
+                    <div className="text-sm font-medium text-red-600">
+                      {formatCurrency(order.postPayment || 0, order.documentCurrency)}
                     </div>
                   </div>
                 </div>
               </div>
-            ))}
+            </div>
+          )}
+        </div>
+
+        {/* Nhóm 3: Danh sách sản phẩm */}
+        <div className="bg-white rounded-lg shadow-sm">
+          <div 
+            className="flex justify-between items-center px-4 py-3 cursor-pointer"
+            onClick={() => setIsProductListExpanded(!isProductListExpanded)}
+          >
+            <h2 className="text-base font-medium text-gray-900">Danh sách sản phẩm</h2>
+            {isProductListExpanded ? (
+              <ChevronUp className="h-5 w-5 text-gray-600" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-gray-600" />
+            )}
           </div>
+          {isProductListExpanded && (
+            <div className="px-4 pb-4 space-y-2">
+              {order.products.map((product, index) => (
+                <div key={product.lineNumber} className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                      {product.picture ? (
+                        <img
+                          src={product.picture}
+                          alt={product.productName}
+                          className="h-full w-full object-cover rounded-lg"
+                          onError={(e) => {
+                            e.currentTarget.src = DEFAULT_IMAGE_URL;
+                          }}
+                        />
+                      ) : (
+                        <Package className="h-6 w-6 text-gray-400" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        #{index + 1} {product.productName}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        SKU: {product.code}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {product.quantity} {product.unitName} x {product.price.toLocaleString()} đồng/chiếc
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-blue-600">
+                      {formatCurrency(product.total, order.documentCurrency)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Hiển thị nút theo hàng ngang */}
       <div className="fixed bottom-4 left-0 right-0 z-50">
         {getActionButtons()}
       </div>

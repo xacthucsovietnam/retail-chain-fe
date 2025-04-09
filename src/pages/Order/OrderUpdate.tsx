@@ -1,5 +1,6 @@
+// src/pages/OrderUpdate.tsx
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   Save,
@@ -21,57 +22,169 @@ import {
   type EmployeeDropdownItem,
   type ProductDropdownItem,
   type OrderStateDropdownItem,
+  type UpdateOrderData,
   type UpdateOrderProduct
 } from '../../services/order';
 import { createPartner } from '../../services/partner';
 import { getSession } from '../../utils/storage';
 import { getProductDetail, type ProductDetail } from '../../services/product';
 
+// Cập nhật FormData để khớp với UpdateOrderData
 interface FormData {
   id: string;
   number: string;
   title: string;
+  deletionMark: boolean | null;
+  author: string;
+  comment: string | null;
+  companyId: string;
+  company: string;
+  contractId: string | null;
+  contractName: string | null;
   customerId: string;
   customerName: string;
-  employeeId: string;
-  employeeName: string;
+  deliveryAddress: string | null;
+  deliveryAddressValue: string | null;
+  discountCardId: string | null;
+  discountCard: string | null;
+  emailAddress: string | null;
+  orderKindId: string;
+  orderKind: string;
+  operationTypeId: string;
+  operationType: string;
+  priceKindId: string;
+  priceKind: string;
+  shipmentDate: string;
+  documentAmount: number;
+  documentCurrencyId: string;
+  documentCurrency: string;
+  employeeResponsibleId: string | null;
+  employeeResponsibleName: string | null;
+  orderStateId: string;
   orderState: string;
-  deliveryAddress: string;
-  comment: string;
+  shippingCost: number | null;
+  phone: string | null;
+  completionOptionId: string | null;
+  completionOption: string | null;
+  cash: number | null;
+  bankTransfer: number | null;
+  postPayment: number | null;
+  paymentNote: string | null;
+  rate: number;
+  multiplicity: number;
+  vatTaxationId: string;
+  vatTaxation: string;
+  status: string | null;
+  externalAccountId: string | null;
+  externalAccount: string | null;
+  receiptableIncrease: number;
+  receiptableDecrease: number;
+  receiptableBalance: number;
   products: Array<{
-    id: string;
-    name: string;
-    sku: string;
-    unitId: string;
-    unitName: string;
+    lineNumber: number;
+    productId: string;
+    productName: string;
+    characteristic: string | null;
+    unitId: string; // Changed from uomId
+    unitName: string; // Changed from uomName
     quantity: number;
     price: number;
+    amount: number;
+    automaticDiscountAmount: number;
+    discountsMarkupsAmount: number;
+    vatAmount: number;
+    vatRateId: string;
+    vatRateName: string;
     total: number;
+    code: string; // Changed from sku
     coefficient: number;
-    lineNumber: number;
     availableUnits: Array<{ id: string; presentation: string; coefficient: number }>;
     imageUrl?: string;
   }>;
+  date: string;
 }
 
 export default function OrderUpdate() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const session = getSession();
   const defaultValues = session?.defaultValues || {};
 
+  const initialOrderData = location.state?.orderData as UpdateOrderData | undefined;
+
   const [formData, setFormData] = useState<FormData>({
-    id: '',
-    number: '',
-    title: '',
-    customerId: '',
-    customerName: '',
-    employeeId: defaultValues.employeeResponsible?.id || '',
-    employeeName: defaultValues.employeeResponsible?.presentation || '',
-    orderState: '',
-    deliveryAddress: '',
-    comment: '',
-    products: []
+    id: initialOrderData?.id || '',
+    number: initialOrderData?.number || '',
+    title: initialOrderData?.title || '',
+    deletionMark: initialOrderData?.deletionMark || null,
+    author: initialOrderData?.author || '',
+    comment: initialOrderData?.comment || '',
+    companyId: initialOrderData?.companyId || '',
+    company: initialOrderData?.company || '',
+    contractId: initialOrderData?.contractId || null,
+    contractName: initialOrderData?.contractName || '',
+    customerId: initialOrderData?.customerId || '',
+    customerName: initialOrderData?.customerName || '',
+    deliveryAddress: initialOrderData?.deliveryAddress || '',
+    deliveryAddressValue: initialOrderData?.deliveryAddressValue || '',
+    discountCardId: initialOrderData?.discountCardId || null,
+    discountCard: initialOrderData?.discountCard || '',
+    emailAddress: initialOrderData?.emailAddress || '',
+    orderKindId: initialOrderData?.orderKindId || '5736c2cc-5b28-11ef-a699-00155d058802',
+    orderKind: initialOrderData?.orderKind || '',
+    operationTypeId: initialOrderData?.operationTypeId || 'OrderForSale',
+    operationType: initialOrderData?.operationType || '',
+    priceKindId: initialOrderData?.priceKindId || '1a1fb49c-5b28-11ef-a699-00155d058802',
+    priceKind: initialOrderData?.priceKind || '',
+    shipmentDate: initialOrderData?.shipmentDate || '',
+    documentAmount: initialOrderData?.documentAmount || 0,
+    documentCurrencyId: initialOrderData?.documentCurrencyId || 'c26a4d87-c6e2-4aca-ab05-1b02be6ecaec',
+    documentCurrency: initialOrderData?.documentCurrency || '',
+    employeeResponsibleId: initialOrderData?.employeeResponsibleId || defaultValues.employeeResponsible?.id || '',
+    employeeResponsibleName: initialOrderData?.employeeResponsibleName || defaultValues.employeeResponsible?.presentation || '',
+    orderStateId: initialOrderData?.orderStateId || '',
+    orderState: initialOrderData?.orderState || '',
+    shippingCost: initialOrderData?.shippingCost || null,
+    phone: initialOrderData?.phone || '',
+    completionOptionId: initialOrderData?.completionOptionId || null,
+    completionOption: initialOrderData?.completionOption || '',
+    cash: initialOrderData?.cash || null,
+    bankTransfer: initialOrderData?.bankTransfer || null,
+    postPayment: initialOrderData?.postPayment || null,
+    paymentNote: initialOrderData?.paymentNote || '',
+    rate: initialOrderData?.rate || 1,
+    multiplicity: initialOrderData?.multiplicity || 1,
+    vatTaxationId: initialOrderData?.vatTaxationId || 'NotTaxableByVAT',
+    vatTaxation: initialOrderData?.vatTaxation || '',
+    status: initialOrderData?.status || '',
+    externalAccountId: initialOrderData?.externalAccountId || null,
+    externalAccount: initialOrderData?.externalAccount || '',
+    receiptableIncrease: initialOrderData?.receiptableIncrease || 0,
+    receiptableDecrease: initialOrderData?.receiptableDecrease || 0,
+    receiptableBalance: initialOrderData?.receiptableBalance || 0,
+    products: initialOrderData?.products.map(p => ({
+      lineNumber: p.lineNumber || 0,
+      productId: p.productId || '',
+      productName: p.productName || '',
+      characteristic: p.characteristic || null,
+      unitId: p.unitId || '', // Changed from uomId
+      unitName: p.unitName || '', // Changed from uomName
+      quantity: p.quantity || 1,
+      price: p.price || 0,
+      amount: p.amount || 0,
+      automaticDiscountAmount: p.automaticDiscountAmount || 0,
+      discountsMarkupsAmount: p.discountsMarkupsAmount || 0,
+      vatAmount: p.vatAmount || 0,
+      vatRateId: p.vatRateId || '',
+      vatRateName: p.vatRateName || '',
+      total: p.total || 0,
+      code: p.code || '', // Changed from sku
+      coefficient: p.coefficient || 1,
+      availableUnits: [],
+      imageUrl: undefined
+    })) || [],
+    date: initialOrderData?.date || ''
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -96,7 +209,7 @@ export default function OrderUpdate() {
       try {
         setIsLoading(true);
         const [orderData, customerData, employeeData, productData, orderStateData] = await Promise.all([
-          getOrderDetail(id),
+          initialOrderData ? Promise.resolve(null) : getOrderDetail(id),
           getCustomerDropdownData(),
           getEmployeeDropdownData(),
           getProductDropdownData(),
@@ -108,58 +221,117 @@ export default function OrderUpdate() {
         setProducts(productData);
         setOrderStates(orderStateData);
 
-        // Map order data to form, including product details
-        const productsWithDetails = await Promise.all(
-          orderData.products.map(async (p) => {
-            const productDetail = await getProductDetail(p.productId);
-            const fileStorageURL = session?.fileStorageURL || '';
-            const imageUrl = productDetail.imageUrl && productDetail.images.length > 0 
-              ? `${fileStorageURL}${productDetail.images[0].id}`
-              : undefined;
+        if (!initialOrderData && orderData) {
+          const productsWithDetails = await Promise.all(
+            orderData.products.map(async (p) => {
+              const productDetail = await getProductDetail(p.productId);
+              const fileStorageURL = session?.fileStorageURL || '';
+              const imageUrl = productDetail.imageUrl && productDetail.images.length > 0 
+                ? `${fileStorageURL}${productDetail.images[0].id}`
+                : undefined;
 
-            // Tìm đơn vị tính khớp với dữ liệu đơn hàng
-            const selectedUnit = productDetail.uoms.find(u => u.id === p.unit || u.presentation === p.unit) || 
-                               productDetail.uoms[0] || { id: '', presentation: '', coefficient: 1 };
+              const selectedUnit = productDetail.uoms.find(u => u.id === p.unitId) || 
+                                 productDetail.uoms[0] || { id: '', presentation: '', coefficient: 1 };
 
-            return {
-              id: p.productId,
-              name: p.productName,
-              sku: p.sku,
-              unitId: selectedUnit.id,
-              unitName: selectedUnit.presentation,
-              quantity: p.quantity,
-              price: p.price,
-              total: p.total,
-              coefficient: selectedUnit.coefficient,
-              lineNumber: p.lineNumber,
-              availableUnits: productDetail.uoms,
-              imageUrl
-            };
-          })
-        );
+              return {
+                lineNumber: p.lineNumber,
+                productId: p.productId,
+                productName: p.productName,
+                characteristic: p.characteristic,
+                unitId: selectedUnit.id,
+                unitName: selectedUnit.presentation,
+                quantity: p.quantity,
+                price: p.price,
+                amount: p.amount,
+                automaticDiscountAmount: p.automaticDiscountAmount,
+                discountsMarkupsAmount: p.discountsMarkupsAmount,
+                vatAmount: p.vatAmount,
+                vatRateId: p.vatRateId,
+                vatRateName: p.vatRateName,
+                total: p.total,
+                code: p.code,
+                coefficient: selectedUnit.coefficient,
+                availableUnits: productDetail.uoms,
+                imageUrl
+              };
+            })
+          );
 
-        // Tìm customer khớp với dữ liệu đơn hàng
-        const selectedCustomer = customerData.find(c => c.id === orderData.customer || c.name === orderData.customer);
-        
-        // Tìm orderState khớp với dữ liệu đơn hàng
-        const selectedOrderState = orderStateData.find(s => s.id === orderData.orderState || s.name === orderData.orderState);
+          const selectedCustomer = customerData.find(c => c.id === orderData.customerId);
+          const selectedOrderState = orderStateData.find(s => s.name === orderData.orderState) || 
+                                   orderStateData.find(s => s.id === 'Editing'); // Mặc định "Đang soạn" nếu không khớp
+          const selectedEmployee = employeeData.find(e => e.id === orderData.employeeResponsibleId);
 
-        // Tìm employee khớp với dữ liệu đơn hàng
-        const selectedEmployee = employeeData.find(e => e.id === orderData.employeeResponsible || e.presentation === orderData.employeeResponsible);
-
-        setFormData({
-          id: orderData.id || '',
-          number: orderData.number || '',
-          title: orderData.title || '',
-          customerId: selectedCustomer?.id || orderData.customer || '',
-          customerName: selectedCustomer?.name || orderData.customer || '',
-          employeeId: selectedEmployee?.id || orderData.employeeResponsible || defaultValues.employeeResponsible?.id || '',
-          employeeName: selectedEmployee?.presentation || orderData.employeeResponsible || defaultValues.employeeResponsible?.presentation || '',
-          orderState: selectedOrderState?.id || orderData.orderState || '',
-          deliveryAddress: orderData.deliveryAddress || '',
-          comment: orderData.comment || '',
-          products: productsWithDetails
-        });
+          setFormData({
+            id: orderData.id || '',
+            number: orderData.number || '',
+            title: orderData.title || '',
+            deletionMark: orderData.deletionMark || null,
+            author: orderData.author || '',
+            comment: orderData.comment || '',
+            companyId: defaultValues.company?.id || '',
+            company: orderData.company || '',
+            contractId: orderData.contractId || null,
+            contractName: orderData.contract || '',
+            customerId: selectedCustomer?.id || orderData.customerId || '',
+            customerName: selectedCustomer?.name || orderData.customerName || '',
+            deliveryAddress: orderData.deliveryAddress || '',
+            deliveryAddressValue: orderData.deliveryAddressValue || '',
+            discountCardId: orderData.discountCardId || null,
+            discountCard: orderData.discountCard || '',
+            emailAddress: orderData.emailAddress || '',
+            orderKindId: '5736c2cc-5b28-11ef-a699-00155d058802',
+            orderKind: orderData.orderKind || '',
+            operationTypeId: 'OrderForSale',
+            operationType: orderData.operationType || '',
+            priceKindId: '1a1fb49c-5b28-11ef-a699-00155d058802',
+            priceKind: orderData.priceKind || '',
+            shipmentDate: orderData.shipmentDate || '',
+            documentAmount: orderData.documentAmount || 0,
+            documentCurrencyId: 'c26a4d87-c6e2-4aca-ab05-1b02be6ecaec',
+            documentCurrency: orderData.documentCurrency || '',
+            employeeResponsibleId: selectedEmployee?.id || orderData.employeeResponsibleId || defaultValues.employeeResponsible?.id || '',
+            employeeResponsibleName: selectedEmployee?.name || orderData.employeeResponsibleName || defaultValues.employeeResponsible?.presentation || '',
+            orderStateId: selectedOrderState?.id || 'Editing',
+            orderState: selectedOrderState?.name || 'Đang soạn',
+            shippingCost: orderData.shippingCost || null,
+            phone: orderData.phone || '',
+            completionOptionId: orderData.completionOptionId || null,
+            completionOption: orderData.completionOption || '',
+            cash: orderData.cash || null,
+            bankTransfer: orderData.bankTransfer || null,
+            postPayment: orderData.postPayment || null,
+            paymentNote: orderData.paymentNote || '',
+            rate: orderData.rate || 1,
+            multiplicity: orderData.multiplicity || 1,
+            vatTaxationId: 'NotTaxableByVAT',
+            vatTaxation: orderData.vatTaxation || '',
+            status: orderData.status || '',
+            externalAccountId: orderData.externalAccountId || null,
+            externalAccount: orderData.externalAccount || '',
+            receiptableIncrease: orderData.receiptableIncrease || 0,
+            receiptableDecrease: orderData.receiptableDecrease || 0,
+            receiptableBalance: orderData.receiptableBalance || 0,
+            products: productsWithDetails,
+            date: orderData.date || ''
+          });
+        } else if (initialOrderData) {
+          const productsWithDetails = await Promise.all(
+            initialOrderData.products.map(async (p) => {
+              const productDetail = await getProductDetail(p.productId);
+              const selectedUnit = productDetail.uoms.find(u => u.id === p.unitId) || 
+                                 productDetail.uoms[0] || { id: '', presentation: '', coefficient: 1 };
+              return {
+                ...formData.products.find(prod => prod.productId === p.productId && prod.lineNumber === p.lineNumber)!,
+                availableUnits: productDetail.uoms,
+                unitId: selectedUnit.id,
+                unitName: selectedUnit.presentation,
+                coefficient: selectedUnit.coefficient
+              };
+            })
+          );
+          setFormData(prev => ({ ...prev, products: productsWithDetails }));
+        }
       } catch (error) {
         toast.error('Không thể tải dữ liệu đơn hàng');
         console.error('Error loading data:', error);
@@ -169,15 +341,10 @@ export default function OrderUpdate() {
     };
 
     loadData();
-  }, [id]);
+  }, [id, initialOrderData]);
 
   const calculateProductTotal = (product: FormData['products'][0]) => {
-    if (product.unitName === 'c') {
-      return product.quantity * product.price;
-    } else if (product.unitName.toLowerCase().includes('ri')) {
-      return product.quantity * product.coefficient * product.price;
-    }
-    return product.quantity * product.price;
+    return product.quantity * product.price * product.coefficient;
   };
 
   const calculateTotal = () => {
@@ -190,16 +357,23 @@ export default function OrderUpdate() {
       products: [
         ...prev.products,
         {
-          id: '',
-          name: '',
-          sku: '',
+          lineNumber: prev.products.length + 1,
+          productId: '',
+          productName: '',
+          characteristic: null,
           unitId: '',
           unitName: '',
           quantity: 1,
           price: 0,
+          amount: 0,
+          automaticDiscountAmount: 0,
+          discountsMarkupsAmount: 0,
+          vatAmount: 0,
+          vatRateId: '',
+          vatRateName: '',
           total: 0,
+          code: '',
           coefficient: 1,
-          lineNumber: prev.products.length + 1,
           availableUnits: []
         }
       ]
@@ -227,21 +401,27 @@ export default function OrderUpdate() {
       setFormData(prev => {
         const newProducts = [...prev.products];
         newProducts[index] = {
-          id: productDetail.id,
-          name: productDetail.name,
-          sku: productDetail.code,
+          lineNumber: newProducts[index].lineNumber,
+          productId: productDetail.id,
+          productName: productDetail.name,
+          characteristic: null,
           unitId: defaultUnit.id,
           unitName: defaultUnit.presentation,
           quantity: 1,
           price: productDetail.price,
+          amount: productDetail.price * 1,
+          automaticDiscountAmount: 0,
+          discountsMarkupsAmount: 0,
+          vatAmount: 0,
+          vatRateId: '',
+          vatRateName: '',
           total: calculateProductTotal({
-            unitName: defaultUnit.presentation,
             quantity: 1,
             price: productDetail.price,
             coefficient: defaultUnit.coefficient
           }),
+          code: productDetail.code,
           coefficient: defaultUnit.coefficient,
-          lineNumber: newProducts[index].lineNumber,
           availableUnits: productDetail.uoms,
           imageUrl
         };
@@ -267,7 +447,6 @@ export default function OrderUpdate() {
           coefficient: selectedUnit.coefficient,
           total: calculateProductTotal({
             ...newProducts[index],
-            unitName: selectedUnit.presentation,
             coefficient: selectedUnit.coefficient,
             quantity: newProducts[index].quantity,
             price: newProducts[index].price
@@ -279,14 +458,16 @@ export default function OrderUpdate() {
   };
 
   const handleFieldChange = (index: number, field: keyof FormData['products'][0], value: any) => {
+    const newValue = value === '' ? 0 : Number(value);
+
     setFormData(prev => {
       const newProducts = [...prev.products];
       newProducts[index] = {
         ...newProducts[index],
-        [field]: value,
+        [field]: newValue,
         total: calculateProductTotal({
           ...newProducts[index],
-          [field]: value
+          [field]: newValue
         })
       };
       return { ...prev, products: newProducts };
@@ -299,7 +480,7 @@ export default function OrderUpdate() {
       return false;
     }
 
-    if (!formData.orderState) {
+    if (!formData.orderStateId) {
       toast.error('Vui lòng chọn trạng thái đơn hàng');
       return false;
     }
@@ -310,7 +491,7 @@ export default function OrderUpdate() {
     }
 
     for (const product of formData.products) {
-      if (!product.id) {
+      if (!product.productId) {
         toast.error('Vui lòng chọn sản phẩm');
         return false;
       }
@@ -321,7 +502,7 @@ export default function OrderUpdate() {
       }
 
       if (product.price < 0) {
-        toast.error('Đơn giá chiếc không được âm');
+        toast.error('Đơn giá không được âm');
         return false;
       }
     }
@@ -340,39 +521,79 @@ export default function OrderUpdate() {
 
       const orderProducts: UpdateOrderProduct[] = formData.products.map(product => ({
         lineNumber: product.lineNumber,
-        productId: product.id,
-        productName: product.name,
-        quantity: product.quantity,
-        price: product.price,
+        productId: product.productId,
+        productName: product.productName,
+        characteristic: product.characteristic,
         unitId: product.unitId,
         unitName: product.unitName,
-        coefficient: product.coefficient,
-        sku: product.sku
+        quantity: product.quantity,
+        price: product.price,
+        amount: product.amount,
+        automaticDiscountAmount: product.automaticDiscountAmount,
+        discountsMarkupsAmount: product.discountsMarkupsAmount,
+        vatAmount: product.vatAmount,
+        vatRateId: product.vatRateId,
+        vatRateName: product.vatRateName,
+        total: product.total,
+        code: product.code,
+        coefficient: product.coefficient
       }));
 
-      await updateOrder({
+      const updateData: UpdateOrderData = {
         id: formData.id,
         number: formData.number,
         title: formData.title,
+        deletionMark: formData.deletionMark,
+        author: formData.author,
+        comment: formData.comment,
+        companyId: formData.companyId,
+        company: formData.company,
+        contractId: formData.contractId,
+        contractName: formData.contractName,
         customerId: formData.customerId,
         customerName: formData.customerName,
-        employeeId: formData.employeeId,
-        employeeName: formData.employeeName,
-        orderState: formData.orderState,
         deliveryAddress: formData.deliveryAddress,
-        comment: formData.comment,
+        deliveryAddressValue: formData.deliveryAddressValue,
+        discountCardId: formData.discountCardId,
+        discountCard: formData.discountCard,
+        emailAddress: formData.emailAddress,
+        orderKindId: formData.orderKindId,
+        orderKind: formData.orderKind,
+        operationTypeId: formData.operationTypeId,
+        operationType: formData.operationType,
+        priceKindId: formData.priceKindId,
+        priceKind: formData.priceKind,
+        shipmentDate: formData.shipmentDate,
         documentAmount: calculateTotal(),
+        documentCurrencyId: formData.documentCurrencyId,
+        documentCurrency: formData.documentCurrency,
+        employeeResponsibleId: formData.employeeResponsibleId,
+        employeeResponsibleName: formData.employeeResponsibleName,
+        orderStateId: formData.orderStateId,
+        orderState: formData.orderState,
+        shippingCost: formData.shippingCost,
+        phone: formData.phone,
+        completionOptionId: formData.completionOptionId,
+        completionOption: formData.completionOption,
+        cash: formData.cash,
+        bankTransfer: formData.bankTransfer,
+        postPayment: formData.postPayment,
+        paymentNote: formData.paymentNote,
+        rate: formData.rate,
+        multiplicity: formData.multiplicity,
+        vatTaxationId: formData.vatTaxationId,
+        vatTaxation: formData.vatTaxation,
+        status: formData.status,
+        externalAccountId: formData.externalAccountId,
+        externalAccount: formData.externalAccount,
+        receiptableIncrease: formData.receiptableIncrease,
+        receiptableDecrease: formData.receiptableDecrease,
+        receiptableBalance: formData.receiptableBalance,
         products: orderProducts,
-        date: new Date().toISOString(),
-        contractId: '',
-        contractName: '',
-        externalAccountId: '',
-        externalAccountName: '',
-        cashAmount: 0,
-        transferAmount: 0,
-        postPayAmount: 0,
-        paymentNotes: ''
-      });
+        date: formData.date || new Date().toISOString()
+      };
+
+      await updateOrder(updateData);
 
       toast.success('Cập nhật đơn hàng thành công');
       navigate(`/orders/${formData.id}`);
@@ -438,9 +659,11 @@ export default function OrderUpdate() {
   };
 
   const handleOrderStateChange = (selectedOption: any) => {
+    const selectedOrderState = orderStates.find(s => s.id === selectedOption?.value);
     setFormData(prev => ({
       ...prev,
-      orderState: selectedOption ? selectedOption.value : ''
+      orderStateId: selectedOption ? selectedOption.value : '',
+      orderState: selectedOrderState ? selectedOrderState.name : ''
     }));
   };
 
@@ -483,7 +706,13 @@ export default function OrderUpdate() {
         doOperationsByDocuments: false
       });
 
-      const updatedCustomers = [...customers, { id: newCustomer.id, name: customerName, code: newCustomer.code || '' }];
+      const updatedCustomers = [...customers, { 
+        id: newCustomer.id, 
+        name: customerName, 
+        code: newCustomer.code || '',
+        phoneNumber: customerPhone || null,
+        address: customerAddress || null
+      }];
       setCustomers(updatedCustomers);
 
       setFormData(prev => ({
@@ -520,7 +749,7 @@ export default function OrderUpdate() {
         </div>
       </div>
 
-      <div className="pt-2 px-4">
+      <div className="pt-16 px-4">
         <div className="space-y-4 mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -545,7 +774,7 @@ export default function OrderUpdate() {
             </label>
             <input
               type="text"
-              value={formData.employeeName || 'Không xác định'}
+              value={formData.employeeResponsibleName || 'Không xác định'}
               disabled
               className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50"
             />
@@ -557,7 +786,7 @@ export default function OrderUpdate() {
             </label>
             <Select
               options={orderStateOptions}
-              value={orderStateOptions.find(option => option.value === formData.orderState) || null}
+              value={orderStateOptions.find(option => option.value === formData.orderStateId) || null}
               onChange={handleOrderStateChange}
               placeholder="Chọn trạng thái"
               isSearchable
@@ -604,7 +833,7 @@ export default function OrderUpdate() {
                     {product.imageUrl ? (
                       <img 
                         src={product.imageUrl} 
-                        alt={product.name} 
+                        alt={product.productName} 
                         className="h-full w-full object-cover"
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = 'none';
@@ -617,14 +846,14 @@ export default function OrderUpdate() {
                   <div className="flex-1 min-w-0">
                     <Select
                       options={productOptions}
-                      value={productOptions.find(option => option.value === product.id) || null}
+                      value={productOptions.find(option => option.value === product.productId) || null}
                       onChange={(option) => handleProductChange(index, option)}
                       placeholder="Chọn sản phẩm..."
                       isSearchable
                       className="text-sm"
                       classNamePrefix="select"
                     />
-                    <p className="text-xs text-gray-500 mt-1">{product.sku || 'SKU'}</p>
+                    <p className="text-xs text-gray-500 mt-1">{product.code || 'Code'}</p>
                   </div>
                   <button
                     onClick={() => handleRemoveProduct(index)}
@@ -642,7 +871,7 @@ export default function OrderUpdate() {
                     <input
                       type="number"
                       value={product.quantity}
-                      onChange={(e) => handleFieldChange(index, 'quantity', Number(e.target.value))}
+                      onChange={(e) => handleFieldChange(index, 'quantity', e.target.value)}
                       min="1"
                       className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1 focus:ring-blue-500 focus:border-blue-500"
                       inputMode="numeric"
@@ -650,12 +879,12 @@ export default function OrderUpdate() {
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">
-                      Đơn giá chiếc
+                      Đơn giá
                     </label>
                     <input
                       type="number"
                       value={product.price}
-                      onChange={(e) => handleFieldChange(index, 'price', Number(e.target.value))}
+                      onChange={(e) => handleFieldChange(index, 'price', e.target.value)}
                       min="0"
                       step="1000"
                       className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1 focus:ring-blue-500 focus:border-blue-500"

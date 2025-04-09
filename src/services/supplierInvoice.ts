@@ -1,8 +1,9 @@
 // src/services/supplierInvoice.ts
 import api from './axiosClient';
-import { ListRequest, PaginatedResponse } from './types';
+import { ListRequest, PaginatedResponse, ObjectId } from './types';
+import { getSession } from '../utils/storage';
 
-// Add new interfaces for dropdown data
+// Interfaces
 export interface SupplierDropdownItem {
   id: string;
   name: string;
@@ -13,96 +14,124 @@ export interface ProductDropdownItem {
   id: string;
   name: string;
   code: string;
-  baseUnit: string;
-  baseUnitId: string;
-  price: number;
-}
-
-// Keep existing interfaces
-export interface XTSObjectId {
-  _type: string;
-  dataType: string;
-  id: string;
-  presentation: string;
-  url?: string;
-  navigationRef?: any;
 }
 
 export interface SupplierProduct {
   lineNumber: number;
-  productId: string;
-  productName: string;
-  code: string;
-  unit: string;
+  product: ObjectId;
+  characteristic: ObjectId | null;
+  uom: ObjectId | null;
   quantity: number;
   price: number;
   amount: number;
+  discountsMarkupsAmount: number | null;
+  vatAmount: number | null;
+  vatRate: ObjectId | null;
   total: number;
+  sku: string;
   coefficient: number;
-  picture: string | null;
+  priceOriginal: number;
+  vatRateRate: number | null;
+  picture: ObjectId | null;
+  comment?: string;
 }
 
 export interface SupplierInvoiceDetail {
   id: string;
   number: string;
   date: string;
-  author: XTSObjectId;
-  contract: XTSObjectId;
-  counterparty: XTSObjectId;
-  operationType: XTSObjectId;
-  amount: number;
-  currency: XTSObjectId;
-  employeeResponsible: XTSObjectId;
-  vatTaxation: XTSObjectId;
-  structuralUnit: XTSObjectId;
-  orderBasis: XTSObjectId;
-  comment: string;
+  deletionMark: boolean | null;
   posted: boolean;
-  products: SupplierProduct[];
+  author: ObjectId | null;
+  comment: string | null;
+  company: ObjectId;
+  contract: ObjectId;
+  counterparty: ObjectId;
+  emailAddress: string | null;
+  operationKind: ObjectId;
+  counterpartyPriceKind: ObjectId | null;
+  documentAmount: number;
+  documentCurrency: ObjectId;
+  employeeResponsible: ObjectId;
+  phone: string | null;
+  rate: number | null;
+  multiplicity: number;
+  vatTaxation: ObjectId;
+  structuralUnit: ObjectId;
+  returnPriceKind: ObjectId | null;
+  documentBasis: ObjectId | null;
+  docOrder: ObjectId | null;
+  department: ObjectId | null;
+  inventory: SupplierProduct[];
 }
 
 export interface SupplierInvoice {
   id: string;
   number: string;
   date: string;
-  author: string;
-  contract: string;
-  counterparty: string;
-  operationType: string;
-  amount: number;
-  currency: string;
-  employeeResponsible: string;
-  vatTaxation: string;
-  structuralUnit: string;
-  orderBasis: string;
-  comment: string;
+  deletionMark: boolean;
   posted: boolean;
-}
-
-export interface CreateSupplierInvoiceProduct {
-  productId: string;
-  productName: string;
-  unitId: string;
-  unitName: string;
-  quantity: number;
-  price: number;
-  coefficient: number;
+  author: ObjectId | null;
+  comment: string | null;
+  company: ObjectId;
+  contract: ObjectId;
+  counterparty: ObjectId;
+  emailAddress: string | null;
+  operationKind: ObjectId;
+  counterpartyPriceKind: ObjectId | null;
+  documentAmount: number;
+  documentCurrency: ObjectId;
+  employeeResponsible: ObjectId;
+  phone: string | null;
+  rate: number;
+  multiplicity: number;
+  vatTaxation: ObjectId;
+  structuralUnit: ObjectId;
+  returnPriceKind: ObjectId | null;
+  documentBasis: ObjectId | null;
+  docOrder: ObjectId | null;
+  department: ObjectId | null;
+  inventory: any[];
 }
 
 export interface CreateSupplierInvoiceData {
   date: string;
-  customerId: string;
-  customerName: string;
+  posted: boolean;
+  operationKindId: string;
+  operationKindPresentation: string;
+  companyId: string;
+  companyName: string;
+  counterpartyId: string;
+  counterpartyName: string;
+  contractId: string;
+  contractName: string;
   currencyId: string;
   currencyName: string;
+  amount: number;
+  vatTaxationId: string;
+  vatTaxationName: string;
   rate: number;
+  multiplicity: number;
   comment: string;
   employeeId: string;
   employeeName: string;
-  externalAccountId: string;
-  externalAccountName: string;
-  amount: number;
-  products: CreateSupplierInvoiceProduct[];
+  structuralUnitId: string;
+  structuralUnitName: string;
+  products: SupplierProduct[];
+  counterpartyPriceKindId?: string;
+  counterpartyPriceKindName?: string;
+  returnPriceKindId?: string;
+  returnPriceKindName?: string;
+  authorId?: string;
+  authorName?: string;
+  deliveryAddress?: string;
+  deliveryAddressValue?: string;
+  departmentId?: string;
+  departmentName?: string;
+  documentBasisId?: string;
+  documentBasisName?: string;
+  docOrderId?: string;
+  docOrderName?: string;
 }
 
 export interface UpdateSupplierInvoiceData {
@@ -110,112 +139,181 @@ export interface UpdateSupplierInvoiceData {
   number: string;
   title: string;
   date: string;
-  customerId: string;
-  customerName: string;
+  posted: boolean;
+  operationKindId: string;
+  operationKindPresentation: string;
+  companyId: string;
+  companyName: string;
+  counterpartyId: string;
+  counterpartyName: string;
   contractId: string;
   contractName: string;
   currencyId: string;
   currencyName: string;
+  amount: number;
+  vatTaxationId: string;
+  vatTaxationName: string;
   rate: number;
+  multiplicity: number;
   comment: string;
   employeeId: string;
   employeeName: string;
-  externalAccountId: string;
-  externalAccountName: string;
-  amount: number;
-  products: CreateSupplierInvoiceProduct[];
-  posted: boolean;
+  structuralUnitId: string;
+  structuralUnitName: string;
+  products: SupplierProduct[];
+  counterpartyPriceKindId?: string;
+  counterpartyPriceKindName?: string;
+  returnPriceKindId?: string;
+  returnPriceKindName?: string;
+  authorId?: string;
+  authorName?: string;
+  deliveryAddress?: string;
+  deliveryAddressValue?: string;
+  departmentId?: string;
+  departmentName?: string;
+  documentBasisId?: string;
+  documentBasisName?: string;
+  docOrderId?: string;
+  docOrderName?: string;
 }
 
-// Add new functions for dropdown data
+// Utility Functions
+interface DefaultValues {
+  company: { id: string; presentation: string };
+  vatTaxation?: { id: string; presentation: string };
+  employeeResponsible?: { id: string; presentation: string };
+  externalAccount?: { id: string; presentation: string };
+}
+
+const getDefaultValues = (): DefaultValues => {
+  const session = getSession();
+  const defaults = session?.defaultValues || {};
+  if (!defaults.company?.id) {
+    throw new Error('Company ID is missing in default values');
+  }
+  return defaults as DefaultValues;
+};
+
+const createObjectId = (
+  dataType: string,
+  id: string,
+  presentation: string,
+  url: string = '',
+  navigationRef: any = null
+): ObjectId => ({
+  _type: 'XTSObjectId',
+  dataType,
+  id,
+  presentation,
+  url,
+  navigationRef,
+});
+
+const handleApiError = (error: unknown, context: string): never => {
+  console.error(`${context} error:`, error);
+  const message = error instanceof Error ? `${context} failed: ${error.message}` : `${context} failed`;
+  throw new Error(message);
+};
+
+const mapSupplierProducts = (
+  products: SupplierProduct[],
+  type: string = 'XTSSupplierInvoiceInventory'
+): any[] => products.map((item, index) => ({
+  _type: type,
+  _lineNumber: index + 1,
+  product: item.product,
+  characteristic: item.characteristic || createObjectId('', '', ''),
+  uom: item.uom || createObjectId('', '', ''),
+  quantity: item.quantity || 0,
+  price: item.price || 0,
+  amount: item.amount || (item.quantity || 0) * (item.price || 0),
+  discountsMarkupsAmount: item.discountsMarkupsAmount ?? 0,
+  vatAmount: item.vatAmount ?? 0,
+  vatRate: item.vatRate || createObjectId('', '', ''),
+  total: item.total || (item.quantity || 0) * (item.price || 0),
+  _sku: item.sku || '',
+  _coefficient: item.coefficient || 1,
+  _price: item.priceOriginal || item.price || 0,
+  _vatRateRate: item.vatRateRate ?? 0,
+  _picture: item.picture || createObjectId('', '', ''),
+  comment: item.comment || '',
+}));
+
+// API Functions
 export const getSupplierDropdownData = async (): Promise<SupplierDropdownItem[]> => {
-  const request = {
+  const request: ListRequest = {
     _type: 'XTSGetObjectListRequest',
     _dbId: '',
     _msgId: '',
     dataType: 'XTSCounterparty',
-    columnSet: [],
+    columnSet: ['objectId', 'code'],
     sortBy: [],
     positionFrom: 1,
-    positionTo: 100,
-    limit: 50,
-    conditions: [
-      {
-        _type: 'XTSCondition',
-        property: 'vendor',
-        value: true,
-        comparisonOperator: '='
-      }
-    ]
+    positionTo: 1000,
+    limit: 1000,
+    conditions: [{ _type: 'XTSCondition', property: 'vendor', value: true, comparisonOperator: '=' }],
   };
 
   try {
     const response = await api.post('', request);
+    const items = response.data?.items;
+    if (!Array.isArray(items)) throw new Error('Invalid supplier list response format');
     
-    if (!response.data?.items) {
-      throw new Error('Invalid supplier list response format');
-    }
-
-    return response.data.items.map((item: any) => ({
+    return items.map(item => ({
       id: item.object.objectId.id,
       name: item.object.objectId.presentation,
-      code: item.object.code || ''
+      code: item.object.code || '',
     }));
   } catch (error) {
-    console.error('Failed to fetch suppliers:', error);
-    throw new Error('Không thể tải danh sách nhà cung cấp');
+    return handleApiError(error, 'Failed to fetch suppliers');
   }
 };
 
 export const getProductDropdownData = async (): Promise<ProductDropdownItem[]> => {
-  const request = {
+  const request: ListRequest = {
     _type: 'XTSGetObjectListRequest',
     _dbId: '',
     _msgId: '',
     dataType: 'XTSProduct',
-    columnSet: [],
+    columnSet: ['objectId', 'sku'],
     sortBy: [],
     positionFrom: 1,
     positionTo: 10000,
     limit: 10000,
-    conditions: []
+    conditions: [],
   };
 
   try {
     const response = await api.post('', request);
+    const items = response.data?.items;
+    if (!Array.isArray(items)) throw new Error('Invalid product list response format');
     
-    if (!response.data?.items) {
-      throw new Error('Invalid product list response format');
-    }
-
-    return response.data.items.map((item: any) => ({
+    return items.map(item => ({
       id: item.object.objectId.id,
       name: item.object.description,
-      code: item.object.code || '',
-      baseUnit: item.object.measurementUnit?.presentation || '',
-      baseUnitId: item.object.measurementUnit?.id || '',
-      price: item.object._price || 0
+      code: item.object.sku || '',
     }));
   } catch (error) {
-    console.error('Failed to fetch products:', error);
-    throw new Error('Không thể tải danh sách sản phẩm');
+    return handleApiError(error, 'Failed to fetch products');
   }
 };
 
-// Keep existing functions
-export const getSupplierInvoices = async (page: number = 1, pageSize: number = 50, conditions: any[] = []) => {
+export const getSupplierInvoices = async (
+  page: number = 1,
+  pageSize: number = 50,
+  conditions: any[] = []
+): Promise<PaginatedResponse<SupplierInvoice>> => {
+  const defaultValues = getDefaultValues();
   const positionFrom = (page - 1) * pageSize + 1;
   const positionTo = page * pageSize;
 
-  const invoiceListData: ListRequest = {
+  const request: ListRequest = {
     _type: 'XTSGetObjectListRequest',
     _dbId: '',
     _msgId: '',
     dataType: 'XTSSupplierInvoice',
     columnSet: [],
-    sortBy: [
-      'date DESC'
-    ],
+    sortBy: ['date DESC'],
     positionFrom,
     positionTo,
     limit: pageSize,
@@ -223,362 +321,214 @@ export const getSupplierInvoices = async (page: number = 1, pageSize: number = 5
       {
         _type: 'XTSCondition',
         property: 'company',
-        value: {
-          _type: 'XTSObjectId',
-          id: 'a4e5cb74-5b27-11ef-a699-00155d058802',
-          dataType: 'XTSCompany',
-          presentation: 'Cửa hàng Dung-Baby',
-          navigationRef: null
-        },
-        comparisonOperator: '='
+        value: createObjectId('XTSCompany', defaultValues.company.id, defaultValues.company.presentation),
+        comparisonOperator: '=',
       },
-      ...conditions
-    ]
+      ...conditions,
+    ],
   };
 
   try {
-    const response = await api.post('', invoiceListData);
+    const response = await api.post('', request);
+    const items = response.data?.items;
+    if (!Array.isArray(items)) throw new Error('Invalid supplier invoice list response format');
 
-    if (!response.data || !Array.isArray(response.data.items)) {
-      throw new Error('Invalid supplier invoice list response format');
-    }
+    const invoices: SupplierInvoice[] = items.map(item => {
+      const obj = item.object;
+      return {
+        id: obj.objectId?.id || '',
+        number: obj.number || '',
+        date: obj.date || '',
+        deletionMark: Boolean(obj.deletionMark),
+        posted: Boolean(obj.posted),
+        author: obj.author || null,
+        comment: obj.comment || null,
+        company: obj.company || createObjectId('XTSCompany', '', ''),
+        contract: obj.contract || createObjectId('XTSCounterpartyContract', '', ''),
+        counterparty: obj.counterparty || createObjectId('XTSCounterparty', '', ''),
+        emailAddress: obj.emailAddress || null,
+        operationKind: obj.operationKind || createObjectId('XTSOperationKindsSupplierInvoice', '', ''),
+        counterpartyPriceKind: obj.counterpartyPriceKind || null,
+        documentAmount: obj.documentAmount || 0,
+        documentCurrency: obj.documentCurrency || createObjectId('XTSCurrency', '', ''),
+        employeeResponsible: obj.employeeResponsible || createObjectId('XTSEmployee', '', ''),
+        phone: obj.phone || null,
+        rate: obj.rate || 1,
+        multiplicity: obj.multiplicity || 1,
+        vatTaxation: obj.vatTaxation || createObjectId('XTSVATTaxationType', '', ''),
+        structuralUnit: obj.structuralUnit || createObjectId('XTSStructuralUnit', '', ''),
+        returnPriceKind: obj.returnPriceKind || null,
+        documentBasis: obj.documentBasis || null,
+        docOrder: obj.docOrder || null,
+        department: obj.department || null,
+        inventory: obj.inventory || [],
+      };
+    });
 
-    const invoices = response.data.items.map((item: any) => {
-      try {
-        if (!item.object) {
-          throw new Error('Missing object property in supplier invoice item');
-        }
-
-        return {
-          id: item.object.objectId?.id || '',
-          number: item.object.number || '',
-          date: item.object.date || '',
-          author: item.object.author?.presentation || '',
-          contract: item.object.contract?.presentation || '',
-          counterparty: item.object.counterparty?.presentation || '',
-          operationType: item.object.operationType?.presentation || '',
-          amount: item.object.documentAmount || 0,
-          currency: item.object.currency?.presentation || '',
-          employeeResponsible: item.object.employeeResponsible?.presentation || '',
-          vatTaxation: item.object.vatTaxation?.presentation || '',
-          structuralUnit: item.object.structuralUnit?.presentation || '',
-          orderBasis: item.object.orderBasis?.presentation || '',
-          comment: item.object.comment || '',
-          posted: Boolean(item.object.posted),
-        };
-      } catch (err) {
-        console.error('Error mapping supplier invoice item:', err, item);
-        return null;
-      }
-    }).filter(Boolean);
-
-    return {
-      items: invoices,
-      hasMore: response.data.items.length === pageSize
-    };
+    return { items: invoices, hasMore: items.length === pageSize };
   } catch (error) {
-    console.error('Supplier invoice fetch error:', error);
-    if (error instanceof Error) {
-      throw new Error(`Failed to fetch supplier invoices: ${error.message}`);
-    }
-    throw new Error('Failed to fetch supplier invoices');
+    return handleApiError(error, 'Failed to fetch supplier invoices');
   }
 };
 
 export const getSupplierInvoiceDetail = async (id: string): Promise<SupplierInvoiceDetail> => {
-  const supplierInvoiceData = {
+  const request = {
     _type: 'XTSGetObjectsRequest',
     _dbId: '',
     _msgId: '',
-    objectIds: [
-      {
-        _type: 'XTSObjectId',
-        dataType: 'XTSSupplierInvoice',
-        id: id,
-        presentation: '',
-        url: ''
-      }
-    ],
-    columnSet: []
+    objectIds: [createObjectId('XTSSupplierInvoice', id, '')],
+    columnSet: [],
   };
 
   try {
-    const response = await api.post('', supplierInvoiceData);
+    const response = await api.post('', request);
+    const invoice = response.data?.objects?.[0];
+    if (!invoice) throw new Error('Invalid supplier invoice detail response format');
 
-    if (!response.data?.objects?.[0]) {
-      throw new Error('Invalid supplier invoice detail response format');
-    }
-
-    const supplierInvoice = response.data.objects[0];
     return {
-      id: supplierInvoice.objectId?.id || '',
-      number: supplierInvoice.number || '',
-      date: supplierInvoice.date || '',
-      author: supplierInvoice.author || { _type: 'XTSObjectId', dataType: 'XTSEmployee', id: '', presentation: '' },
-      contract: supplierInvoice.contract || { _type: 'XTSObjectId', dataType: 'XTSCounterpartyContract', id: '', presentation: '' },
-      counterparty: supplierInvoice.counterparty || { _type: 'XTSObjectId', dataType: 'XTSCounterparty', id: '', presentation: '' },
-      operationType: supplierInvoice.operationKind || { _type: 'XTSObjectId', dataType: 'XTSOperationKindsSupplierInvoice', id: '', presentation: '' },
-      amount: supplierInvoice.documentAmount || 0,
-      currency: supplierInvoice.documentCurrency || { _type: 'XTSObjectId', dataType: 'XTSCurrency', id: '', presentation: '' },
-      employeeResponsible: supplierInvoice.employeeResponsible || { _type: 'XTSObjectId', dataType: 'XTSEmployee', id: '', presentation: '' },
-      vatTaxation: supplierInvoice.vatTaxation || { _type: 'XTSObjectId', dataType: 'XTSVATTaxationType', id: '', presentation: '' },
-      structuralUnit: supplierInvoice.structuralUnit || { _type: 'XTSObjectId', dataType: 'XTSStructuralUnit', id: '', presentation: '' },
-      orderBasis: supplierInvoice.orderBasis || { _type: 'XTSObjectId', dataType: 'XTSOrder', id: '', presentation: '' },
-      comment: supplierInvoice.comment || '',
-      posted: supplierInvoice.posted || false,
-      products: (supplierInvoice.inventory || []).map((item: any) => ({
+      id: invoice.objectId?.id || '',
+      number: invoice.number || '',
+      date: invoice.date || '',
+      deletionMark: invoice.deletionMark ?? null,
+      posted: Boolean(invoice.posted),
+      author: invoice.author || null,
+      comment: invoice.comment || null,
+      company: invoice.company || createObjectId('XTSCompany', '', ''),
+      contract: invoice.contract || createObjectId('XTSCounterpartyContract', '', ''),
+      counterparty: invoice.counterparty || createObjectId('XTSCounterparty', '', ''),
+      emailAddress: invoice.emailAddress || null,
+      operationKind: invoice.operationKind || createObjectId('XTSOperationKindsSupplierInvoice', 'ReceiptFromSupplier', 'Mua hàng từ nhà cung cấp'),
+      counterpartyPriceKind: invoice.counterpartyPriceKind || null,
+      documentAmount: invoice.documentAmount || 0,
+      documentCurrency: invoice.documentCurrency || createObjectId('XTSCurrency', '', ''),
+      employeeResponsible: invoice.employeeResponsible || createObjectId('XTSEmployee', '', ''),
+      phone: invoice.phone || null,
+      rate: invoice.rate ?? null,
+      multiplicity: invoice.multiplicity || 1,
+      vatTaxation: invoice.vatTaxation || createObjectId('XTSVATTaxationType', '', ''),
+      structuralUnit: invoice.structuralUnit || createObjectId('XTSStructuralUnit', '', ''),
+      returnPriceKind: invoice.returnPriceKind || null,
+      documentBasis: invoice.documentBasis || null,
+      docOrder: invoice.docOrder || null,
+      department: invoice.department || null,
+      inventory: (invoice.inventory || []).map((item: any) => ({
         lineNumber: item._lineNumber || 0,
-        productId: item.product?.id || '',
-        productName: item.product?.presentation || '',
-        code: item._sku || '',
-        unit: item.uom?.presentation || '',
+        product: item.product || createObjectId('XTSProduct', '', ''),
+        characteristic: item.characteristic || null,
+        uom: item.uom || null,
         quantity: item.quantity || 0,
         price: item.price || 0,
         amount: item.amount || 0,
+        discountsMarkupsAmount: item.discountsMarkupsAmount ?? null,
+        vatAmount: item.vatAmount ?? null,
+        vatRate: item.vatRate || null,
         total: item.total || 0,
+        sku: item._sku || '',
         coefficient: item._coefficient || 1,
-        picture: item._picture || null
-      }))
+        priceOriginal: item._price || 0,
+        vatRateRate: item._vatRateRate ?? null,
+        picture: item._picture || null,
+        comment: item.comment || '',
+      })),
     };
   } catch (error) {
-    console.error('Supplier invoice detail fetch error:', error);
-    throw new Error('Failed to fetch supplier invoice details');
+    return handleApiError(error, 'Failed to fetch supplier invoice details');
   }
 };
 
-export const createSupplierInvoice = async (data: CreateSupplierInvoiceData): Promise<{ id: string; number: string }> => {
-  const createData = {
+export const createSupplierInvoice = async (
+  data: CreateSupplierInvoiceData
+): Promise<{ id: string; number: string }> => {
+  const defaultValues = getDefaultValues();
+
+  const request = {
     _type: 'XTSCreateObjectsRequest',
     _dbId: '',
     _msgId: '',
-    objects: [
-      {
-        _type: 'XTSSupplierInvoice',
-        _isFullData: false,
-        objectId: {
-          _type: 'XTSObjectId',
-          dataType: 'XTSSupplierInvoice',
-          id: '',
-          presentation: '',
-          url: ''
-        },
-        date: data.date,
-        number: '',
-        posted: false,
-        operationKind: {
-          _type: 'XTSObjectId',
-          id: 'ReceiptFromSupplier',
-          dataType: 'XTSOperationKindsSupplierInvoice',
-          presentation: 'Mua hàng từ nhà cung cấp',
-          navigationRef: null
-        },
-        company: {
-          _type: 'XTSObjectId',
-          id: 'a4e5cb74-5b27-11ef-a699-00155d058802',
-          dataType: 'XTSCompany',
-          presentation: 'Cửa hàng Dung-Baby',
-          navigationRef: null
-        },
-        counterparty: {
-          _type: 'XTSObjectId',
-          dataType: 'XTSCounterparty',
-          id: data.customerId,
-          presentation: data.customerName,
-          url: ''
-        },
-        documentCurrency: {
-          _type: 'XTSObjectId',
-          id: data.currencyId,
-          dataType: 'XTSCurrency',
-          presentation: data.currencyName,
-          navigationRef: null
-        },
-        documentAmount: data.amount,
-        vatTaxation: {
-          _type: 'XTSObjectId',
-          id: 'NotTaxableByVAT',
-          dataType: 'XTSVATTaxationType',
-          presentation: 'Không chịu thuế (không thuế GTGT)',
-          navigationRef: null
-        },
-        rate: data.rate,
-        multiplicity: 1,
-        comment: data.comment,
-        employeeResponsible: {
-          _type: 'XTSObjectId',
-          id: data.employeeId,
-          dataType: 'XTSEmployee',
-          presentation: data.employeeName,
-          navigationRef: null
-        },
-        externalAccount: {
-          _type: 'XTSObjectId',
-          id: data.externalAccountId,
-          dataType: 'XTSExternalAccount',
-          presentation: data.externalAccountName,
-          navigationRef: null
-        },
-        inventory: data.products.map((product, index) => ({
-          _type: 'XTSOrderProductRow',
-          _lineNumber: index + 1,
-          product: {
-            _type: 'XTSObjectId',
-            dataType: 'XTSProduct',
-            id: product.productId,
-            presentation: product.productName,
-            url: ''
-          },
-          uom: {
-            _type: 'XTSObjectId',
-            dataType: 'XTSUOMClassifier',
-            id: product.unitId,
-            presentation: product.unitName,
-            url: ''
-          },
-          quantity: product.quantity,
-          price: product.price,
-          amount: product.quantity * product.price,
-          total: product.quantity * product.price,
-          _coefficient: product.coefficient,
-          _price: product.price
-        }))
-      }
-    ]
+    objects: [{
+      _type: 'XTSSupplierInvoice',
+      _isFullData: true,
+      objectId: createObjectId('XTSSupplierInvoice', '', ''),
+      date: data.date,
+      number: '',
+      posted: data.posted,
+      operationKind: createObjectId('XTSOperationKindsSupplierInvoice', data.operationKindId, data.operationKindPresentation),
+      counterpartyPriceKind: createObjectId('', data.counterpartyPriceKindId || '', data.counterpartyPriceKindName || ''),
+      returnPriceKind: createObjectId('', data.returnPriceKindId || '', data.returnPriceKindName || ''),
+      company: createObjectId('XTSCompany', data.companyId || defaultValues.company.id, data.companyName || defaultValues.company.presentation),
+      counterparty: createObjectId('XTSCounterparty', data.counterpartyId, data.counterpartyName),
+      contract: createObjectId('XTSCounterpartyContract', data.contractId, data.contractName),
+      documentCurrency: createObjectId('XTSCurrency', data.currencyId, data.currencyName),
+      documentAmount: data.amount,
+      vatTaxation: createObjectId('XTSVATTaxationType', data.vatTaxationId, data.vatTaxationName),
+      rate: data.rate,
+      multiplicity: data.multiplicity,
+      comment: data.comment,
+      author: createObjectId('', data.authorId || '', data.authorName || ''),
+      deliveryAddress: data.deliveryAddress || '',
+      deliveryAddressValue: data.deliveryAddressValue || '',
+      structuralUnit: createObjectId('XTSStructuralUnit', data.structuralUnitId, data.structuralUnitName),
+      department: createObjectId('', data.departmentId || '', data.departmentName || ''),
+      employeeResponsible: createObjectId('XTSEmployee', data.employeeId, data.employeeName),
+      documentBasis: createObjectId('', data.documentBasisId || '', data.documentBasisName || ''),
+      docOrder: createObjectId('', data.docOrderId || '', data.docOrderName || ''),
+      inventory: mapSupplierProducts(data.products),
+    }],
   };
 
   try {
-    const response = await api.post('', createData);
-
-    if (!response.data?.objects?.[0]?.objectId) {
-      throw new Error('Invalid create supplier invoice response format');
-    }
-
-    const createdInvoice = response.data.objects[0];
-    return {
-      id: createdInvoice.objectId.id,
-      number: createdInvoice.number
-    };
+    const response = await api.post('', request);
+    const createdInvoice = response.data?.objects?.[0];
+    if (!createdInvoice?.objectId) throw new Error('Invalid create supplier invoice response format');
+    
+    return { id: createdInvoice.objectId.id, number: createdInvoice.number };
   } catch (error) {
-    console.error('Supplier invoice creation error:', error);
-    throw new Error('Failed to create supplier invoice');
+    return handleApiError(error, 'Failed to create supplier invoice');
   }
 };
 
 export const updateSupplierInvoice = async (data: UpdateSupplierInvoiceData): Promise<void> => {
-  const updateData = {
+  const defaultValues = getDefaultValues();
+
+  const request = {
     _type: 'XTSUpdateObjectsRequest',
     _dbId: '',
     _msgId: '',
-    objects: [
-      {
-        _type: 'XTSSupplierInvoice',
-        _isFullData: true,
-        objectId: {
-          _type: 'XTSObjectId',
-          dataType: 'XTSSupplierInvoice',
-          id: data.id,
-          presentation: data.title,
-          url: ''
-        },
-        date: data.date,
-        number: data.number,
-        posted: data.posted,
-        operationKind: {
-          _type: 'XTSObjectId',
-          dataType: 'XTSOperationKindsSupplierInvoice',
-          id: 'ReceiptFromSupplier',
-          presentation: 'Mua hàng từ nhà cung cấp',
-          url: ''
-        },
-        company: {
-          _type: 'XTSObjectId',
-          dataType: 'XTSCompany',
-          id: 'a4e5cb74-5b27-11ef-a699-00155d058802',
-          presentation: 'Cửa hàng Dung-Baby',
-          url: ''
-        },
-        counterparty: {
-          _type: 'XTSObjectId',
-          dataType: 'XTSCounterparty',
-          id: data.customerId,
-          presentation: data.customerName,
-          url: ''
-        },
-        contract: {
-          _type: 'XTSObjectId',
-          dataType: 'XTSCounterpartyContract',
-          id: data.contractId,
-          presentation: data.contractName,
-          url: ''
-        },
-        documentCurrency: {
-          _type: 'XTSObjectId',
-          dataType: 'XTSCurrency',
-          id: data.currencyId,
-          presentation: data.currencyName,
-          url: ''
-        },
-        documentAmount: data.amount,
-        vatTaxation: {
-          _type: 'XTSObjectId',
-          dataType: 'XTSVATTaxationType',
-          id: 'NotTaxableByVAT',
-          presentation: 'Không chịu thuế (không thuế GTGT)',
-          url: ''
-        },
-        rate: data.rate,
-        multiplicity: 1,
-        comment: data.comment,
-        employeeResponsible: {
-          _type: 'XTSObjectId',
-          dataType: 'XTSEmployee',
-          id: data.employeeId,
-          presentation: data.employeeName,
-          url: ''
-        },
-        externalAccount: {
-          _type: 'XTSObjectId',
-          dataType: 'XTSExternalAccount',
-          id: data.externalAccountId,
-          presentation: data.externalAccountName,
-          url: ''
-        },
-        inventory: data.products.map((product, index) => ({
-          _type: 'XTSSupplierInvoiceInventory',
-          _lineNumber: index + 1,
-          product: {
-            _type: 'XTSObjectId',
-            dataType: 'XTSProduct',
-            id: product.productId,
-            presentation: product.productName,
-            url: ''
-          },
-          uom: {
-            _type: 'XTSObjectId',
-            dataType: 'XTSUOMClassifier',
-            id: product.unitId,
-            presentation: product.unitName,
-            url: ''
-          },
-          quantity: product.quantity,
-          price: product.price,
-          amount: product.quantity * product.price,
-          total: product.quantity * product.price,
-          _coefficient: product.coefficient,
-          _price: product.price
-        }))
-      }
-    ]
+    objects: [{
+      _type: 'XTSSupplierInvoice',
+      _isFullData: true,
+      objectId: createObjectId('XTSSupplierInvoice', data.id, data.title),
+      date: data.date,
+      number: data.number,
+      posted: data.posted,
+      operationKind: createObjectId('XTSOperationKindsSupplierInvoice', data.operationKindId, data.operationKindPresentation),
+      counterpartyPriceKind: createObjectId('', data.counterpartyPriceKindId || '', data.counterpartyPriceKindName || ''),
+      returnPriceKind: createObjectId('', data.returnPriceKindId || '', data.returnPriceKindName || ''),
+      company: createObjectId('XTSCompany', data.companyId, data.companyName),
+      counterparty: createObjectId('XTSCounterparty', data.counterpartyId, data.counterpartyName),
+      contract: createObjectId('XTSCounterpartyContract', data.contractId, data.contractName),
+      documentCurrency: createObjectId('XTSCurrency', data.currencyId, data.currencyName),
+      documentAmount: data.amount,
+      vatTaxation: createObjectId('XTSVATTaxationType', data.vatTaxationId, data.vatTaxationName),
+      rate: data.rate,
+      multiplicity: data.multiplicity,
+      comment: data.comment,
+      author: createObjectId('', data.authorId || '', data.authorName || ''),
+      deliveryAddress: data.deliveryAddress || '',
+      deliveryAddressValue: data.deliveryAddressValue || '',
+      structuralUnit: createObjectId('XTSStructuralUnit', data.structuralUnitId, data.structuralUnitName),
+      department: createObjectId('', data.departmentId || '', data.departmentName || ''),
+      employeeResponsible: createObjectId('XTSEmployee', data.employeeId, data.employeeName),
+      documentBasis: createObjectId('', data.documentBasisId || '', data.documentBasisName || ''),
+      docOrder: createObjectId('', data.docOrderId || '', data.docOrderName || ''),
+      inventory: mapSupplierProducts(data.products),
+    }],
   };
 
   try {
-    const response = await api.post('', updateData);
-    
-    if (!response.data?.objects?.[0]) {
-      throw new Error('Invalid update supplier invoice response format');
-    }
+    const response = await api.post('', request);
+    if (!response.data?.objects?.[0]) throw new Error('Invalid update supplier invoice response format');
   } catch (error) {
-    console.error('Supplier invoice update error:', error);
-    throw new Error('Failed to update supplier invoice');
+    return handleApiError(error, 'Failed to update supplier invoice');
   }
 };

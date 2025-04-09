@@ -7,7 +7,9 @@ import {
   Package,
   Trash2,
   PlusCircle,
-  Plus
+  Plus,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import Select from 'react-select';
 import toast from 'react-hot-toast';
@@ -19,12 +21,13 @@ import {
   type CustomerDropdownItem,
   type EmployeeDropdownItem,
   type ProductDropdownItem,
-  type CreateOrderProduct
+  type CreateOrderProduct,
+  type CreateOrderData
 } from '../../services/order';
 import { createPartner } from '../../services/partner';
 import { getSession } from '../../utils/storage';
 import { getProductDetail, type ProductDetail } from '../../services/product';
-import ProductAddPopup from '../../components/ProductAddPopup'; // Import popup thêm sản phẩm
+import ProductAddPopup from '../../components/ProductAddPopup';
 
 interface FormData {
   customerId: string;
@@ -34,18 +37,25 @@ interface FormData {
   orderState: string;
   deliveryAddress: string;
   comment: string;
+  documentAmount: number; // Added to match CreateOrderData
   products: Array<{
-    id: string;
-    name: string;
-    sku: string;
+    productId: string;
+    productName: string;
+    code: string; // Changed from sku
     unitId: string;
     unitName: string;
     quantity: number;
     price: number;
-    total: number;
     coefficient: number;
-    availableUnits: Array<{ id: string; presentation: string; coefficient: number }>;
-    imageUrl?: string;
+    amount: number; // Added to match CreateOrderProduct
+    automaticDiscountAmount: number; // Added to match CreateOrderProduct
+    discountsMarkupsAmount: number; // Added to match CreateOrderProduct
+    vatAmount: number; // Added to match CreateOrderProduct
+    vatRateId: string; // Added to match CreateOrderProduct
+    vatRateName: string; // Added to match CreateOrderProduct
+    total: number; // Added to match CreateOrderProduct
+    availableUnits?: Array<{ id: string; presentation: string; coefficient: number }>; // Optional for UI
+    imageUrl?: string; // Optional for UI
   }>;
 }
 
@@ -59,7 +69,7 @@ interface OrderPreloadData {
   originalProducts?: Array<{
     productId: string;
     productName: string;
-    sku: string;
+    code: string; // Changed from sku
     unit: string;
     quantity: number;
     price: number;
@@ -75,6 +85,7 @@ const initialFormData: FormData = {
   orderState: 'Editing',
   deliveryAddress: '',
   comment: '',
+  documentAmount: 0,
   products: []
 };
 
@@ -101,8 +112,11 @@ export default function OrderAdd() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
-  const [showProductAddPopup, setShowProductAddPopup] = useState(false); // State để hiển thị ProductAddPopup
-  const [currentProductIndex, setCurrentProductIndex] = useState<number | null>(null); // Lưu index của sản phẩm đang thêm
+  const [showProductAddPopup, setShowProductAddPopup] = useState(false);
+  const [currentProductIndex, setCurrentProductIndex] = useState<number | null>(null);
+  const [isOrderInfoExpanded, setIsOrderInfoExpanded] = useState(true);
+  const [isProductListExpanded, setIsProductListExpanded] = useState(true);
+  const [newProduct, setNewProduct] = useState<FormData['products'][0] | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -161,12 +175,7 @@ export default function OrderAdd() {
   }, []);
 
   const calculateProductTotal = (product: FormData['products'][0]) => {
-    if (product.unitName === 'c') {
-      return product.quantity * product.price;
-    } else if (product.unitName.toLowerCase().includes('ri')) {
-      return product.quantity * product.coefficient * product.price;
-    }
-    return product.quantity * product.price;
+    return product.quantity * product.price * product.coefficient;
   };
 
   const calculateTotal = () => {
@@ -174,24 +183,26 @@ export default function OrderAdd() {
   };
 
   const handleAddProduct = () => {
-    setFormData(prev => ({
-      ...prev,
-      products: [
-        ...prev.products,
-        {
-          id: '',
-          name: '',
-          sku: '',
-          unitId: '',
-          unitName: '',
-          quantity: 1,
-          price: 0,
-          total: 0,
-          coefficient: 1,
-          availableUnits: []
-        }
-      ]
-    }));
+    setNewProduct({
+      productId: '',
+      productName: '',
+      code: '',
+      unitId: '',
+      unitName: '',
+      quantity: 1,
+      price: 0,
+      coefficient: 1,
+      amount: 0,
+      automaticDiscountAmount: 0,
+      discountsMarkupsAmount: 0,
+      vatAmount: 0,
+      vatRateId: '',
+      vatRateName: '',
+      total: 0,
+      availableUnits: []
+    });
+    setShowProductAddPopup(true);
+    setIsOrderInfoExpanded(false);
   };
 
   const handleRemoveProduct = (index: number) => {
@@ -201,44 +212,47 @@ export default function OrderAdd() {
     }));
   };
 
-  const handleProductChange = async (index: number, selectedOption: any) => {
+  const handleProductChange = async (selectedOption: any) => {
     if (!selectedOption) return;
-
+  
     if (selectedOption.value === 'create-product') {
-      setCurrentProductIndex(index);
+      setShowProductAddPopup(false);
+      setCurrentProductIndex(0);
       setShowProductAddPopup(true);
       return;
     }
-
+  
     try {
       const productDetail = await getProductDetail(selectedOption.value);
-      const defaultUnit = productDetail.uoms[0] || { id: '', presentation: '', coefficient: 1 };
+      const availableUnits = productDetail.uoms || [];
+      const defaultUnit = availableUnits.length === 2 ? availableUnits[1] : availableUnits[0] || { id: '', presentation: '', coefficient: 1 };
       const fileStorageURL = session?.fileStorageURL || '';
       const imageUrl = productDetail.imageUrl && productDetail.images.length > 0 
         ? `${fileStorageURL}${productDetail.images[0].id}`
         : undefined;
-
-      setFormData(prev => {
-        const newProducts = [...prev.products];
-        newProducts[index] = {
-          id: productDetail.id,
-          name: productDetail.name,
-          sku: productDetail.code,
-          unitId: defaultUnit.id,
-          unitName: defaultUnit.presentation,
+  
+      setNewProduct({
+        productId: productDetail.id,
+        productName: productDetail.name,
+        code: productDetail.code,
+        unitId: defaultUnit.id,
+        unitName: defaultUnit.presentation,
+        quantity: 1,
+        price: productDetail.price,
+        coefficient: defaultUnit.coefficient,
+        amount: productDetail.price * 1,
+        automaticDiscountAmount: 0,
+        discountsMarkupsAmount: 0,
+        vatAmount: 0,
+        vatRateId: '',
+        vatRateName: '',
+        total: calculateProductTotal({
           quantity: 1,
           price: productDetail.price,
-          total: calculateProductTotal({
-            unitName: defaultUnit.presentation,
-            quantity: 1,
-            price: productDetail.price,
-            coefficient: defaultUnit.coefficient
-          }),
-          coefficient: defaultUnit.coefficient,
-          availableUnits: productDetail.uoms,
-          imageUrl
-        };
-        return { ...prev, products: newProducts };
+          coefficient: defaultUnit.coefficient
+        }),
+        availableUnits,
+        imageUrl
       });
     } catch (error) {
       toast.error('Không thể tải chi tiết sản phẩm');
@@ -246,95 +260,112 @@ export default function OrderAdd() {
     }
   };
 
-  const handleUnitChange = (index: number, selectedOption: any) => {
-    if (!selectedOption) return;
+  const handleUnitChange = (selectedOption: any) => {
+    if (!selectedOption || !newProduct) return;
 
-    setFormData(prev => {
-      const newProducts = [...prev.products];
-      const selectedUnit = newProducts[index].availableUnits.find(u => u.id === selectedOption.value);
-      if (selectedUnit) {
-        newProducts[index] = {
-          ...newProducts[index],
-          unitId: selectedUnit.id,
-          unitName: selectedUnit.presentation,
-          coefficient: selectedUnit.coefficient,
-          total: calculateProductTotal({
-            ...newProducts[index],
-            unitName: selectedUnit.presentation,
-            coefficient: selectedUnit.coefficient,
-            quantity: newProducts[index].quantity,
-            price: newProducts[index].price
-          })
-        };
-      }
-      return { ...prev, products: newProducts };
-    });
-  };
-
-  const handleFieldChange = (index: number, field: keyof FormData['products'][0], value: any) => {
-    setFormData(prev => {
-      const newProducts = [...prev.products];
-      newProducts[index] = {
-        ...newProducts[index],
-        [field]: value,
+    const selectedUnit = newProduct.availableUnits?.find(u => u.id === selectedOption.value);
+    if (selectedUnit) {
+      setNewProduct(prev => ({
+        ...prev!,
+        unitId: selectedUnit.id,
+        unitName: selectedUnit.presentation,
+        coefficient: selectedUnit.coefficient,
+        amount: prev!.quantity * prev!.price,
         total: calculateProductTotal({
-          ...newProducts[index],
-          [field]: value
+          ...prev!,
+          coefficient: selectedUnit.coefficient,
+          quantity: prev!.quantity,
+          price: prev!.price
         })
-      };
-      return { ...prev, products: newProducts };
-    });
+      }));
+    }
   };
 
-  const handleProductAdded = async (newProduct: { id: string; presentation: string }) => {
+  const handleFieldChange = (field: keyof FormData['products'][0], value: any) => {
+    const newValue = value === '' ? 0 : Number(value);
+
+    setNewProduct(prev => ({
+      ...prev!,
+      [field]: newValue,
+      amount: field === 'quantity' || field === 'price' ? newValue * (field === 'quantity' ? prev!.price : prev!.quantity) : prev!.amount,
+      total: calculateProductTotal({
+        ...prev!,
+        [field]: newValue
+      })
+    }));
+  };
+
+  const handleSaveProduct = () => {
+    if (!newProduct || !newProduct.productId) {
+      toast.error('Vui lòng chọn sản phẩm');
+      return;
+    }
+
+    if (newProduct.quantity <= 0) {
+      toast.error('Số lượng phải lớn hơn 0');
+      return;
+    }
+
+    if (newProduct.price < 0) {
+      toast.error('Đơn giá không được âm');
+      return;
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      products: [...prev.products, newProduct],
+      documentAmount: calculateTotal() + calculateProductTotal(newProduct)
+    }));
+    setShowProductAddPopup(false);
+    setNewProduct(null);
+  };
+
+  const handleProductAdded = async (newProductData: { id: string; presentation: string }) => {
     try {
-      const productDetail = await getProductDetail(newProduct.id);
-      const defaultUnit = productDetail.uoms[0] || { id: '', presentation: '', coefficient: 1 };
+      const productDetail = await getProductDetail(newProductData.id);
+      const availableUnits = productDetail.uoms || [];
+      const defaultUnit = availableUnits.length === 2 ? availableUnits[1] : availableUnits[0] || { id: '', presentation: '', coefficient: 1 };
       const fileStorageURL = session?.fileStorageURL || '';
       const imageUrl = productDetail.imageUrl && productDetail.images.length > 0 
         ? `${fileStorageURL}${productDetail.images[0].id}`
         : undefined;
-
-      // Thêm sản phẩm vào danh sách products để chọn
+  
       const newProductOption: ProductDropdownItem = {
         id: productDetail.id,
-        name: productDetail.name,
-        code: productDetail.code
+        name: productDetail.name
       };
       setProducts(prev => [...prev, newProductOption]);
       if (isReturnOrder) {
         setAvailableProducts(prev => [...prev, newProductOption]);
       }
-
-      // Cập nhật formData với sản phẩm vừa thêm
-      if (currentProductIndex !== null) {
-        setFormData(prev => {
-          const newProducts = [...prev.products];
-          newProducts[currentProductIndex] = {
-            id: productDetail.id,
-            name: productDetail.name,
-            sku: productDetail.code,
-            unitId: defaultUnit.id,
-            unitName: defaultUnit.presentation,
-            quantity: 1,
-            price: productDetail.price,
-            total: calculateProductTotal({
-              unitName: defaultUnit.presentation,
-              quantity: 1,
-              price: productDetail.price,
-              coefficient: defaultUnit.coefficient
-            }),
-            coefficient: defaultUnit.coefficient,
-            availableUnits: productDetail.uoms,
-            imageUrl
-          };
-          return { ...prev, products: newProducts };
-        });
-      }
-
-      setShowProductAddPopup(false);
+  
+      setNewProduct({
+        productId: productDetail.id,
+        productName: productDetail.name,
+        code: productDetail.code,
+        unitId: defaultUnit.id,
+        unitName: defaultUnit.presentation,
+        quantity: 1,
+        price: productDetail.price,
+        coefficient: defaultUnit.coefficient,
+        amount: productDetail.price * 1,
+        automaticDiscountAmount: 0,
+        discountsMarkupsAmount: 0,
+        vatAmount: 0,
+        vatRateId: '',
+        vatRateName: '',
+        total: calculateProductTotal({
+          quantity: 1,
+          price: productDetail.price,
+          coefficient: defaultUnit.coefficient
+        }),
+        availableUnits,
+        imageUrl
+      });
+  
+      setShowProductAddPopup(true);
       setCurrentProductIndex(null);
-      toast.success('Sản phẩm đã được thêm vào đơn hàng');
+      toast.success('Sản phẩm đã được thêm');
     } catch (error) {
       toast.error('Không thể tải chi tiết sản phẩm vừa thêm');
       console.error('Error fetching new product detail:', error);
@@ -352,23 +383,6 @@ export default function OrderAdd() {
       return false;
     }
 
-    for (const product of formData.products) {
-      if (!product.id) {
-        toast.error('Vui lòng chọn sản phẩm');
-        return false;
-      }
-
-      if (product.quantity <= 0) {
-        toast.error('Số lượng phải lớn hơn 0');
-        return false;
-      }
-
-      if (product.price < 0) {
-        toast.error('Đơn giá chiếc không được âm');
-        return false;
-      }
-    }
-
     return true;
   };
 
@@ -382,17 +396,25 @@ export default function OrderAdd() {
       setIsLoading(true);
 
       const orderProducts: CreateOrderProduct[] = formData.products.map(product => ({
-        productId: product.id,
-        productName: product.name,
-        quantity: product.quantity,
-        price: product.price,
+        productId: product.productId,
+        productName: product.productName,
+        characteristic: null, // Assuming no characteristic in this context
         unitId: product.unitId,
         unitName: product.unitName,
-        coefficient: product.coefficient,
-        sku: product.sku
+        quantity: product.quantity,
+        price: product.price,
+        amount: product.amount,
+        automaticDiscountAmount: product.automaticDiscountAmount,
+        discountsMarkupsAmount: product.discountsMarkupsAmount,
+        vatAmount: product.vatAmount,
+        vatRateId: product.vatRateId,
+        vatRateName: product.vatRateName,
+        total: product.total,
+        code: product.code,
+        coefficient: product.coefficient
       }));
 
-      const result = await createOrder({
+      const orderData: CreateOrderData = {
         customerId: formData.customerId,
         customerName: formData.customerName,
         employeeId: formData.employeeId,
@@ -402,7 +424,9 @@ export default function OrderAdd() {
         comment: formData.comment,
         documentAmount: calculateTotal(),
         products: orderProducts
-      });
+      };
+
+      const result = await createOrder(orderData);
 
       toast.success('Tạo đơn hàng thành công');
       navigate(`/orders/${result.id}`);
@@ -471,6 +495,50 @@ export default function OrderAdd() {
     setCustomerAddress('');
   };
 
+  const handleAddToOrder = () => {
+    if (!newProduct || !newProduct.productId) {
+      toast.error('Vui lòng chọn sản phẩm');
+      return;
+    }
+  
+    if (newProduct.quantity <= 0) {
+      toast.error('Số lượng phải lớn hơn 0');
+      return;
+    }
+  
+    if (newProduct.price < 0) {
+      toast.error('Đơn giá không được âm');
+      return;
+    }
+  
+    setFormData(prev => ({
+      ...prev,
+      products: [...prev.products, newProduct],
+      documentAmount: calculateTotal() + calculateProductTotal(newProduct)
+    }));
+    
+    toast.success('Đã thêm sản phẩm vào đơn hàng');
+    
+    setNewProduct({
+      productId: '',
+      productName: '',
+      code: '',
+      unitId: '',
+      unitName: '',
+      quantity: 1,
+      price: 0,
+      coefficient: 1,
+      amount: 0,
+      automaticDiscountAmount: 0,
+      discountsMarkupsAmount: 0,
+      vatAmount: 0,
+      vatRateId: '',
+      vatRateName: '',
+      total: 0,
+      availableUnits: []
+    });
+  };
+
   const handleConfirmCreateCustomer = async () => {
     if (!customerName.trim()) {
       toast.error('Vui lòng nhập Tên khách hàng');
@@ -484,7 +552,7 @@ export default function OrderAdd() {
         dateOfBirth: '',
         phone: customerPhone,
         email: '',
-        address: customerAddress,
+        address: customerAddress || '',
         notes: '',
         gender: '',
         picture: '',
@@ -503,7 +571,13 @@ export default function OrderAdd() {
         doOperationsByDocuments: false
       });
 
-      const updatedCustomers = [...customers, { id: newCustomer.id, name: customerName, code: newCustomer.code || '' }];
+      const updatedCustomers = [...customers, { 
+        id: newCustomer.id, 
+        name: customerName, 
+        code: newCustomer.code || '',
+        phoneNumber: customerPhone || null,
+        address: customerAddress || null
+      }];
       setCustomers(updatedCustomers);
 
       setFormData(prev => ({
@@ -519,6 +593,8 @@ export default function OrderAdd() {
       console.error('Error creating customer:', error);
     }
   };
+
+  const selectedCustomer = customers.find(c => c.id === formData.customerId);
 
   if (isLoadingData) {
     return (
@@ -540,199 +616,181 @@ export default function OrderAdd() {
       </div>
 
       <div className="pt-2 px-4">
-        <div className="space-y-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Khách hàng *
-            </label>
-            <Select
-              options={customerOptions}
-              value={customerOptions.find(option => option.value === formData.customerId) || null}
-              onChange={handleCustomerChange}
-              placeholder="Chọn khách hàng"
-              isClearable
-              isSearchable
-              className="text-sm"
-              classNamePrefix="select"
-              components={{ Option: CustomOption }}
-            />
+        {/* Nhóm 1: Thông tin đơn hàng */}
+        <div className="mb-6 bg-white rounded-lg shadow-sm">
+          <div 
+            className="flex justify-between items-center px-4 py-3 cursor-pointer"
+            onClick={() => setIsOrderInfoExpanded(!isOrderInfoExpanded)}
+          >
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-medium text-gray-900">Thông tin đơn hàng</h2>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                Đang soạn
+              </span>
+            </div>
+            {isOrderInfoExpanded ? (
+              <ChevronUp className="h-5 w-5 text-gray-600" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-gray-600" />
+            )}
           </div>
+          {isOrderInfoExpanded && (
+            <div className="px-4 pb-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Khách hàng *
+                </label>
+                <Select
+                  options={customerOptions}
+                  value={customerOptions.find(option => option.value === formData.customerId) || null}
+                  onChange={handleCustomerChange}
+                  placeholder="Chọn khách hàng"
+                  isClearable
+                  isSearchable
+                  className="text-sm"
+                  classNamePrefix="select"
+                  components={{ Option: CustomOption }}
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Người bán
-            </label>
-            <input
-              type="text"
-              value={formData.employeeName || 'Không xác định'}
-              disabled
-              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50"
-            />
-          </div>
+              {selectedCustomer && (
+                <>
+                  <div>
+                    <p className="text-sm text-gray-900">
+                      Số điện thoại: {selectedCustomer.phoneNumber || 'Không có'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    </label>
+                    <p className="text-sm text-gray-900">
+                      Địa chỉ: {selectedCustomer.address || 'Không có'}
+                    </p>
+                  </div>
+                </>
+              )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Trạng thái
-            </label>
-            <input
-              type="text"
-              value="Đang soạn"
-              disabled
-              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50"
-            />
-          </div>
+              <div>
+                <p className="text-sm text-gray-900">
+                  Người bán: {formData.employeeName || 'Không xác định'}
+                </p>
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Địa chỉ giao hàng
-            </label>
-            <textarea
-              value={formData.deliveryAddress}
-              onChange={(e) => setFormData(prev => ({ ...prev, deliveryAddress: e.target.value }))}
-              rows={2}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
-              placeholder="Nhập địa chỉ giao hàng..."
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Địa chỉ giao hàng
+                </label>
+                <textarea
+                  value={formData.deliveryAddress}
+                  onChange={(e) => setFormData(prev => ({ ...prev, deliveryAddress: e.target.value }))}
+                  rows={2}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
+                  placeholder="Nhập địa chỉ giao hàng..."
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Ghi chú
-            </label>
-            <textarea
-              value={formData.comment}
-              onChange={(e) => setFormData(prev => ({ ...prev, comment: e.target.value }))}
-              rows={2}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
-              placeholder="Nhập ghi chú..."
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Ghi chú
+                </label>
+                <textarea
+                  value={formData.comment}
+                  onChange={(e) => setFormData(prev => ({ ...prev, comment: e.target.value }))}
+                  rows={2}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
+                  placeholder="Nhập ghi chú..."
+                />
+              </div>
+            </div>
+          )}
         </div>
 
-        <div>
-          <h2 className="text-base font-medium text-gray-900 mb-4">Danh sách sản phẩm</h2>
-
-          <div className="space-y-4">
-            {formData.products.map((product, index) => (
-              <div key={index} className="bg-white rounded-lg shadow-sm p-4">
-                <div className="flex gap-3 mb-3">
-                  <div className="h-16 w-16 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
-                    {product.imageUrl ? (
-                      <img 
-                        src={product.imageUrl} 
-                        alt={product.name} 
-                        className="h-full w-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                          (e.target as HTMLImageElement).nextSibling?.removeAttribute('style');
-                        }}
-                      />
-                    ) : null}
-                    <Package className={`h-8 w-8 text-gray-400 ${product.imageUrl ? 'hidden' : ''}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <Select
-                      options={productOptions}
-                      value={productOptions.find(option => option.value === product.id) || null}
-                      onChange={(option) => handleProductChange(index, option)}
-                      placeholder="Chọn sản phẩm..."
-                      isSearchable
-                      className="text-sm"
-                      classNamePrefix="select"
-                      components={{ Option: CustomOption }}
-                    />
-                    <p className="text-xs text-gray-500 mt-1">{product.sku || 'SKU'}</p>
-                  </div>
-                  <button
-                    onClick={() => handleRemoveProduct(index)}
-                    className="text-red-600"
-                  >
-                    <Trash2 className="h-5 w-5" />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Số lượng
-                    </label>
-                    <input
-                      type="number"
-                      value={product.quantity}
-                      onChange={(e) => handleFieldChange(index, 'quantity', Number(e.target.value))}
-                      min="1"
-                      className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1 focus:ring-blue-500 focus:border-blue-500"
-                      inputMode="numeric"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Đơn giá chiếc
-                    </label>
-                    <input
-                      type="number"
-                      value={product.price}
-                      onChange={(e) => handleFieldChange(index, 'price', Number(e.target.value))}
-                      min="0"
-                      step="1000"
-                      className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1 focus:ring-blue-500 focus:border-blue-500"
-                      inputMode="numeric"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Đơn vị tính
-                    </label>
-                    <Select
-                      options={product.availableUnits.map(unit => ({
-                        value: unit.id,
-                        label: unit.presentation
-                      }))}
-                      value={product.availableUnits
-                        .map(unit => ({ value: unit.id, label: unit.presentation }))
-                        .find(option => option.value === product.unitId) || null}
-                      onChange={(option) => handleUnitChange(index, option)}
-                      placeholder="Chọn đơn vị tính..."
-                      className="text-sm"
-                      classNamePrefix="select"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
-                  <span className="text-xs text-gray-500">Thành tiền</span>
-                  <span className="text-sm font-medium text-blue-600">
-                    {product.total.toLocaleString()} đ
-                  </span>
-                </div>
-              </div>
-            ))}
+        {/* Nhóm 2: Danh sách sản phẩm */}
+        <div className="bg-white rounded-lg shadow-sm">
+          <div 
+            className="flex justify-between items-center px-4 py-3 cursor-pointer"
+            onClick={() => setIsProductListExpanded(!isProductListExpanded)}
+          >
+            <h2 className="text-base font-medium text-gray-900">Danh sách sản phẩm</h2>
+            {isProductListExpanded ? (
+              <ChevronUp className="h-5 w-5 text-gray-600" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-gray-600" />
+            )}
           </div>
-
-          <div className="mt-6 flex justify-center">
-            <button
-              onClick={handleAddProduct}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Plus className="h-5 w-5" />
-              <span className="text-base font-medium">Thêm sản phẩm</span>
-            </button>
-          </div>
-
-          {formData.products.length > 0 && (
-            <div className="mt-4 bg-white rounded-lg shadow-sm p-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-900">Tổng cộng</span>
-                <span className="text-base font-semibold text-blue-600">
-                  {calculateTotal().toLocaleString()} đ
-                </span>
+          {isProductListExpanded && (
+            <div className="px-4 pb-4">
+              <div className="space-y-2">
+                {formData.products.map((product, index) => (
+                  <div key={index} className={`flex items-center justify-between ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} rounded-lg p-3`}>
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                        {product.imageUrl ? (
+                          <img 
+                            src={product.imageUrl} 
+                            alt={product.productName} 
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              (e.target as HTMLImageElement).nextSibling?.removeAttribute('style');
+                            }}
+                          />
+                        ) : null}
+                        <Package className={`h-6 w-6 text-gray-400 ${product.imageUrl ? 'hidden' : ''}`} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          #{index + 1} {product.productName}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Code: {product.code}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {product.quantity} {product.unitName} x {product.price.toLocaleString()} đồng/chiếc
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-blue-600">
+                        {product.total.toLocaleString()} đ
+                      </p>
+                      <button
+                        onClick={() => handleRemoveProduct(index)}
+                        className="text-red-600"
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
+
+              <div className="mt-6 flex justify-center">
+                <button
+                  onClick={handleAddProduct}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Plus className="h-5 w-5" />
+                  <span className="text-base font-medium">Thêm sản phẩm</span>
+                </button>
+              </div>
+
+              {formData.products.length > 0 && (
+                <div className="mt-4 bg-white rounded-lg shadow-sm p-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-gray-900">Tổng cộng</span>
+                    <span className="text-base font-semibold text-blue-600">
+                      {calculateTotal().toLocaleString()} đ
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
 
-      <div className="fixed bottom-4 right-4 flex flex-col gap-2">
+      <div className="fixed bottom-4 left-0 right-0 flex justify-between px-4">
         <button
           onClick={() => navigate('/orders')}
           className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
@@ -839,14 +897,124 @@ export default function OrderAdd() {
         </div>
       )}
 
-      {showProductAddPopup && (
-        <ProductAddPopup
-          onClose={() => {
-            setShowProductAddPopup(false);
-            setCurrentProductIndex(null);
-          }}
-          onProductAdded={handleProductAdded}
-        />
+      {showProductAddPopup && newProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-lg p-4 w-full max-w-md">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Thêm sản phẩm
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Sản phẩm *
+                </label>
+                <Select
+                  options={productOptions}
+                  value={productOptions.find(option => option.value === newProduct.productId) || null}
+                  onChange={handleProductChange}
+                  placeholder="Chọn sản phẩm..."
+                  isSearchable
+                  className="text-sm"
+                  classNamePrefix="select"
+                  components={{ Option: CustomOption }}
+                />
+                <p className="text-xs text-gray-500 mt-1">{newProduct.code || 'Code'}</p>
+              </div>
+
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Đơn giá chiếc
+                  </label>
+                  <input
+                    type="number"
+                    value={newProduct.price === 0 ? '' : newProduct.price}
+                    onChange={(e) => handleFieldChange('price', e.target.value)}
+                    min="0"
+                    step="1000"
+                    className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1 focus:ring-blue-500 focus:border-blue-500"
+                    inputMode="numeric"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Đơn vị tính
+                  </label>
+                  <Select
+                    options={newProduct.availableUnits?.map(unit => ({
+                      value: unit.id,
+                      label: unit.presentation
+                    }))}
+                    value={newProduct.availableUnits
+                      ?.map(unit => ({ value: unit.id, label: unit.presentation }))
+                      .find(option => option.value === newProduct.unitId) || null}
+                    onChange={handleUnitChange}
+                    placeholder="Chọn ..."
+                    className="text-sm"
+                    classNamePrefix="select"
+                    styles={{
+                      control: (provided) => ({
+                        ...provided,
+                        minHeight: 'auto',
+                        height: '30px',
+                        fontSize: '14px',
+                      }),
+                      valueContainer: (provided) => ({
+                        ...provided,
+                        padding: '2px 8px',
+                      }),
+                      indicatorsContainer: (provided) => ({
+                        ...provided,
+                        height: '30px',
+                      }),
+                      menu: (provided) => ({
+                        ...provided,
+                        zIndex: 9999,
+                      }),
+                    }}
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Số lượng
+                  </label>
+                  <input
+                    type="number"
+                    value={newProduct.quantity === 0 ? '' : newProduct.quantity}
+                    onChange={(e) => handleFieldChange('quantity', e.target.value)}
+                    min="1"
+                    className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1 focus:ring-blue-500 focus:border-blue-500"
+                    inputMode="numeric"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
+                <span className="text-xs text-gray-500">Thành tiền</span>
+                <span className="text-sm font-medium text-blue-600">
+                  {newProduct.total.toLocaleString()} đ
+                </span>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => {
+                  setShowProductAddPopup(false);
+                  setNewProduct(null);
+                }}
+                className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={handleAddToOrder}
+                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+              >
+                Thêm vào đơn
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

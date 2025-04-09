@@ -1,5 +1,8 @@
 import api from './axiosClient';
-// First add the new interface for related documents
+import { getSession } from '../utils/storage';
+import { ListRequest, PaginatedResponse } from './types';
+
+// Interface for related documents
 export interface RelatedDocument {
   id: string;
   number: string;
@@ -11,11 +14,12 @@ export interface RelatedDocument {
   company: string;
   counterparty: string;
 }
-// Keep all existing interfaces and functions
+
 export interface CustomerDropdownItem {
   id: string;
   name: string;
   code: string;
+  phoneNumber: string | null;
   address: string | null;
 }
 
@@ -49,12 +53,19 @@ export interface OrderProduct {
   lineNumber: number;
   productId: string;
   productName: string;
-  sku: string;
-  unit: string;
+  characteristic: string | null;
+  unitId: string;                // Changed from uomId
+  unitName: string;              // Changed from uomName
   quantity: number;
   price: number;
   amount: number;
+  automaticDiscountAmount: number;
+  discountsMarkupsAmount: number;
+  vatAmount: number;
+  vatRateId: string;
+  vatRateName: string;
   total: number;
+  code: string;                  // Changed from sku
   coefficient: number;
   picture: string | null;
 }
@@ -64,39 +75,61 @@ export interface OrderDetail {
   number: string;
   date: string;
   title: string;
+  deletionMark: boolean | null;
   author: string;
   comment: string | null;
   company: string;
   contract: string | null;
-  customer: string;
+  customerId: string;
+  customerName: string;
   deliveryAddress: string | null;
+  deliveryAddressValue: string | null;
+  discountCard: string | null;
+  emailAddress: string | null;
   orderKind: string;
   operationType: string;
   priceKind: string;
   shipmentDate: string;
   documentAmount: number;
   documentCurrency: string;
-  employeeResponsible: string | null;
+  employeeResponsibleId: string | null;
+  employeeResponsibleName: string | null;
   orderState: string;
   shippingCost: number | null;
   phone: string | null;
+  completionOption: string | null;
   cash: number | null;
   bankTransfer: number | null;
   postPayment: number | null;
   paymentNote: string | null;
+  rate: number;
+  multiplicity: number;
   vatTaxation: string;
+  status: string | null;
+  externalAccount: string | null;
+  receiptableIncrease: number;
+  receiptableDecrease: number;
+  receiptableBalance: number;
   products: OrderProduct[];
 }
 
 export interface CreateOrderProduct {
   productId: string;
   productName: string;
+  characteristic: string | null;
+  unitId: string;                // Changed from uomId
+  unitName: string;              // Changed from uomName
   quantity: number;
   price: number;
-  unitId: string;
-  unitName: string;
+  amount: number;
+  automaticDiscountAmount: number;
+  discountsMarkupsAmount: number;
+  vatAmount: number;
+  vatRateId: string;
+  vatRateName: string;
+  total: number;
+  code: string;                  // Changed from sku
   coefficient: number;
-  sku: string;
 }
 
 export interface CreateOrderData {
@@ -112,42 +145,80 @@ export interface CreateOrderData {
 }
 
 export interface UpdateOrderProduct {
+  lineNumber: number;
   productId: string;
   productName: string;
+  characteristic: string | null;
+  unitId: string;                // Changed from uomId
+  unitName: string;              // Changed from uomName
   quantity: number;
   price: number;
-  unitId: string;
-  unitName: string;
+  amount: number;
+  automaticDiscountAmount: number;
+  discountsMarkupsAmount: number;
+  vatAmount: number;
+  vatRateId: string;
+  vatRateName: string;
+  total: number;
+  code: string;                  // Changed from sku
   coefficient: number;
-  sku: string;
-  lineNumber: number;
 }
 
 export interface UpdateOrderData {
   id: string;
   number: string;
   title: string;
+  deletionMark: boolean | null;
+  author: string;
+  comment: string | null;
+  companyId: string;
+  company: string;
+  contractId: string | null;
+  contractName: string | null;
   customerId: string;
   customerName: string;
-  employeeId: string;
-  employeeName: string;
-  orderState: string;
-  deliveryAddress: string;
-  comment: string;
+  deliveryAddress: string | null;
+  deliveryAddressValue: string | null;
+  discountCardId: string | null;
+  discountCard: string | null;
+  emailAddress: string | null;
+  orderKindId: string;
+  orderKind: string;
+  operationTypeId: string;
+  operationType: string;
+  priceKindId: string;
+  priceKind: string;
+  shipmentDate: string;
   documentAmount: number;
+  documentCurrencyId: string;
+  documentCurrency: string;
+  employeeResponsibleId: string | null;
+  employeeResponsibleName: string | null;
+  orderStateId: string;
+  orderState: string;
+  shippingCost: number | null;
+  phone: string | null;
+  completionOptionId: string | null;
+  completionOption: string | null;
+  cash: number | null;
+  bankTransfer: number | null;
+  postPayment: number | null;
+  paymentNote: string | null;
+  rate: number;
+  multiplicity: number;
+  vatTaxationId: string;
+  vatTaxation: string;
+  status: string | null;
+  externalAccountId: string | null;
+  externalAccount: string | null;
+  receiptableIncrease: number;
+  receiptableDecrease: number;
+  receiptableBalance: number;
   products: UpdateOrderProduct[];
   date: string;
-  contractId: string;
-  contractName: string;
-  externalAccountId: string;
-  externalAccountName: string;
-  cashAmount: number;
-  transferAmount: number;
-  postPayAmount: number;
-  paymentNotes: string;
 }
 
-// Add the new function to get related documents
+// Function to get related documents
 export const getRelatedDocuments = async (orderId: string, orderNumber: string): Promise<RelatedDocument[]> => {
   const request = {
     _type: "XTSGetRelatedDocumentsRequest",
@@ -243,8 +314,8 @@ export const getCustomerDropdownData = async (): Promise<CustomerDropdownItem[]>
     columnSet: [],
     sortBy: [],
     positionFrom: 1,
-    positionTo: 100,
-    limit: 100,
+    positionTo: 1000,
+    limit: 1000,
     conditions: [
       {
         _type: 'XTSCondition',
@@ -266,6 +337,7 @@ export const getCustomerDropdownData = async (): Promise<CustomerDropdownItem[]>
       id: item.object.objectId.id,
       name: item.object.objectId.presentation,
       code: item.object.code || '',
+      phoneNumber: item.object.phone,
       address: item.object.address
     }));
   } catch (error) {
@@ -313,7 +385,6 @@ export const getEmployeeDropdownData = async (): Promise<EmployeeDropdownItem[]>
 };
 
 export const getOrderStateDropdownData = async (): Promise<OrderStateDropdownItem[]> => {
-  // Return the mapped order states
   return orderStates.map(state => ({
     id: state.id,
     name: state.presentation
@@ -326,7 +397,7 @@ export const getProductDropdownData = async (): Promise<ProductDropdownItem[]> =
     _dbId: '',
     _msgId: '',
     dataType: 'XTSProduct',
-    columnSet: ['objectId', 'sku'], // Chỉ yêu cầu các trường cần thiết
+    columnSet: ['objectId', 'sku'],
     sortBy: [],
     positionFrom: 1,
     positionTo: 10000000,
@@ -356,6 +427,9 @@ export const getOrders = async (page: number = 1, pageSize: number = 20, conditi
   const positionFrom = (page - 1) * pageSize + 1;
   const positionTo = page * pageSize;
 
+  const sessionData = getSession();
+  const defaultCompany = sessionData?.defaultValues?.company;
+
   const orderListData: ListRequest = {
     _type: 'XTSGetObjectListRequest',
     _dbId: '',
@@ -370,13 +444,7 @@ export const getOrders = async (page: number = 1, pageSize: number = 20, conditi
       {
         _type: 'XTSCondition',
         property: 'company',
-        value: {
-          _type: 'XTSObjectId',
-          id: 'a4e5cb74-5b27-11ef-a699-00155d058802',
-          dataType: 'XTSCompany',
-          presentation: 'Cửa hàng Dung-Baby',
-          navigationRef: null
-        },
+        value: defaultCompany,
         comparisonOperator: '='
       },
       ...conditions
@@ -439,39 +507,60 @@ export const getOrderDetail = async (id: string): Promise<OrderDetail> => {
       number: order.number,
       date: order.date,
       title: order.objectId.presentation,
+      deletionMark: order.deletionMark,
       author: order.author?.presentation || '',
       comment: order.comment,
       company: order.company?.presentation || '',
       contract: order.contract?.presentation || null,
-      customer: order.customer?.presentation || '',
+      customerId: order.customer?.id || '',
+      customerName: order.customer?.presentation || '',
       deliveryAddress: order.deliveryAddress,
+      deliveryAddressValue: order.deliveryAddressValue,
+      discountCard: order.discountCard?.presentation || null,
+      emailAddress: order.emailAddress,
       orderKind: order.orderKind?.presentation || '',
       operationType: order.operationKind?.presentation || '',
       priceKind: order.priceKind?.presentation || '',
       shipmentDate: order.shipmentDate,
       documentAmount: order.documentAmount || 0,
       documentCurrency: order.documentCurrency?.presentation || '',
-      employeeResponsible: order.employeeResponsible?.presentation || null,
+      employeeResponsibleId: order.employeeResponsible?.id || null,
+      employeeResponsibleName: order.employeeResponsible?.presentation || null,
       orderState: order.orderState?.presentation || '',
       shippingCost: order.shippingCost,
       phone: order.phone,
+      completionOption: order.completionOption?.presentation || null,
       cash: order.cash,
       bankTransfer: order.bankTransfer,
       postPayment: order.postPayment,
       paymentNote: order.paymentNote,
+      rate: order.rate || 1,
+      multiplicity: order.multiplicity || 1,
       vatTaxation: order.vatTaxation?.presentation || '',
+      status: order.status,
+      externalAccount: order.externalAccount?.presentation || null,
+      receiptableIncrease: order._receiptableIncrease || 0,
+      receiptableDecrease: order._receiptableDecrease || 0,
+      receiptableBalance: order._receiptableBalance || 0,
       products: (order.inventory || []).map((item: any) => ({
         lineNumber: item._lineNumber || 0,
         productId: item.product?.id || '',
         productName: item.product?.presentation || '',
-        sku: item._sku || '',
-        unit: item.uom?.presentation || '',
+        characteristic: item.characteristic?.presentation || null,
+        unitId: item.uom?.id || '',
+        unitName: item.uom?.presentation || '', 
         quantity: item.quantity || 0,
         price: item.price || 0,
         amount: item.amount || 0,
+        automaticDiscountAmount: item.automaticDiscountAmount || 0,
+        discountsMarkupsAmount: item.discountsMarkupsAmount || 0,
+        vatAmount: item.vatAmount || 0,
+        vatRateId: item.vatRate?.id || '',
+        vatRateName: item.vatRate?.presentation || '',
         total: item.total || 0,
+        code: item._sku || '',
         coefficient: item._coefficient || 1,
-        picture: item._picture
+        picture: item._picture?.presentation || null
       }))
     };
   } catch (error) {
@@ -486,6 +575,13 @@ export const createOrder = async (data: CreateOrderData): Promise<{ id: string; 
   if (!data.products.length) throw new Error('At least one product is required');
   if (!data.orderState) throw new Error('Order state is required');
 
+  const sessionData = getSession();
+  const defaultCompany = sessionData?.defaultValues?.company;
+  const defaultVatTaxation = sessionData?.defaultValues?.vatTaxation;
+  const defaultOperationKind = sessionData?.defaultValues?.salesOrderOperationKind;
+  const defaultOrderKind = sessionData?.defaultValues?.salesOrderOrderKind;
+  const defaultPriceKind = sessionData?.defaultValues?.priceKind;
+  const defaultCurrency = sessionData?.defaultValues?.documentCurrency;
   const orderStatePresentation = getOrderStatePresentation(data.orderState);
 
   const orderData = {
@@ -506,26 +602,26 @@ export const createOrder = async (data: CreateOrderData): Promise<{ id: string; 
         date: new Date().toISOString(),
         number: '',
         operationKind: {
-          _type: 'XTSObjectId',
-          id: 'OrderForSale',
-          dataType: 'XTSOperationKindsSalesOrder',
-          presentation: 'Đơn hàng bán',
-          navigationRef: null
-        },
+          _type: "XTSObjectId",
+          dataType: defaultOperationKind.dataType,
+          id: defaultOperationKind.id,
+          presentation: defaultOperationKind.presentation,
+          url: ""
+        } || null,
         orderKind: {
-          _type: 'XTSObjectId',
-          id: '5736c2cc-5b28-11ef-a699-00155d058802',
-          dataType: 'XTSSalesOrderKind',
-          presentation: 'Thông tin chính',
-          navigationRef: null
-        },
+          _type: "XTSObjectId",
+          dataType: defaultOrderKind.dataType,
+          id: defaultOrderKind.id,
+          presentation: defaultOrderKind.presentation,
+          url: ""
+        } || null,
         priceKind: {
-          _type: 'XTSObjectId',
-          id: '1a1fb49c-5b28-11ef-a699-00155d058802',
-          dataType: 'XTSPriceKind',
-          presentation: 'Giá bán lẻ',
-          navigationRef: null
-        },
+          _type: "XTSObjectId",
+          dataType: defaultPriceKind.dataType,
+          id: defaultPriceKind.id,
+          presentation: defaultPriceKind.presentation,
+          url: ""
+        } || null,
         orderState: {
           _type: 'XTSObjectId',
           dataType: 'XTSSalesOrderState',
@@ -533,13 +629,7 @@ export const createOrder = async (data: CreateOrderData): Promise<{ id: string; 
           presentation: orderStatePresentation,
           url: ''
         },
-        company: {
-          _type: 'XTSObjectId',
-          id: 'a4e5cb74-5b27-11ef-a699-00155d058802',
-          dataType: 'XTSCompany',
-          presentation: 'Cửa hàng Dung-Baby',
-          navigationRef: null
-        },
+        company: defaultCompany,
         customer: {
           _type: 'XTSObjectId',
           id: data.customerId,
@@ -547,21 +637,9 @@ export const createOrder = async (data: CreateOrderData): Promise<{ id: string; 
           presentation: data.customerName,
           navigationRef: null
         },
-        documentCurrency: {
-          _type: 'XTSObjectId',
-          id: 'c26a4d87-c6e2-4aca-ab05-1b02be6ecaec',
-          dataType: 'XTSCurrency',
-          presentation: 'đồng',
-          navigationRef: null
-        },
+        documentCurrency: defaultCurrency || null,
         documentAmount: data.documentAmount,
-        vatTaxation: {
-          _type: 'XTSObjectId',
-          id: 'NotTaxableByVAT',
-          dataType: 'XTSVATTaxationType',
-          presentation: 'Không chịu thuế (không thuế GTGT)',
-          navigationRef: null
-        },
+        vatTaxation: defaultVatTaxation || null,
         rate: 1,
         multiplicity: 1,
         comment: data.comment,
@@ -589,13 +667,7 @@ export const createOrder = async (data: CreateOrderData): Promise<{ id: string; 
             presentation: '',
             url: ''
           },
-          vatRate: {
-            _type: 'XTSObjectId',
-            dataType: '',
-            id: '',
-            presentation: '',
-            url: ''
-          },
+          vatRate: defaultVatTaxation,
           uom: {
             _type: 'XTSObjectId',
             dataType: 'XTSMeasurementUnit',
@@ -611,7 +683,7 @@ export const createOrder = async (data: CreateOrderData): Promise<{ id: string; 
           discountsMarkupsAmount: 0,
           vatAmount: 0,
           total: product.price * product.quantity,
-          _sku: product.sku,
+          _sku: product.code,
           _coefficient: product.coefficient,
           _price: product.price,
           _vatRateRate: 0,
@@ -656,9 +728,14 @@ export const updateOrder = async (data: UpdateOrderData): Promise<void> => {
   if (!data.id) throw new Error('Order ID is required');
   if (!data.customerId) throw new Error('Customer is required');
   if (!data.products.length) throw new Error('At least one product is required');
-  if (!data.orderState) throw new Error('Order state is required');
+  if (!data.orderStateId) throw new Error('Order state is required');
 
-  const orderStatePresentation = getOrderStatePresentation(data.orderState);
+  const sessionData = getSession();
+  const defaultOperationKind = sessionData?.defaultValues?.salesOrderOperationKind;
+  const defaultOrderKind = sessionData?.defaultValues?.salesOrderOrderKind;
+  const defaultPriceKind = sessionData?.defaultValues?.priceKind;
+  const defaultCompany = sessionData?.defaultValues?.company;
+  const defaultCurrency = sessionData?.defaultValues?.documentCurrency;
 
   const orderData = {
     _type: 'XTSUpdateObjectsRequest',
@@ -678,38 +755,38 @@ export const updateOrder = async (data: UpdateOrderData): Promise<void> => {
         date: data.date,
         number: data.number,
         operationKind: {
-          _type: 'XTSObjectId',
-          dataType: 'XTSOperationKindsSalesOrder',
-          id: 'OrderForSale',
-          presentation: 'Đơn hàng bán',
-          url: ''
-        },
+          _type: "XTSObjectId",
+          dataType: defaultOperationKind.dataType,
+          id: defaultOperationKind.id,
+          presentation: defaultOperationKind.presentation,
+          url: ""
+        } || null,
         orderKind: {
-          _type: 'XTSObjectId',
-          dataType: 'XTSSalesOrderKind',
-          id: '5736c2cc-5b28-11ef-a699-00155d058802',
-          presentation: 'Thông tin chính',
-          url: ''
-        },
+          _type: "XTSObjectId",
+          dataType: defaultOrderKind.dataType,
+          id: defaultOrderKind.id,
+          presentation: defaultOrderKind.presentation,
+          url: ""
+        } || null,
         priceKind: {
-          _type: 'XTSObjectId',
-          dataType: 'XTSPriceKind',
-          id: '1a1fb49c-5b28-11ef-a699-00155d058802',
-          presentation: 'Giá bán lẻ',
-          url: ''
-        },
+          _type: "XTSObjectId",
+          dataType: defaultPriceKind.dataType,
+          id: defaultPriceKind.id,
+          presentation: defaultPriceKind.presentation,
+          url: ""
+        } || null,
         orderState: {
           _type: 'XTSObjectId',
           dataType: 'XTSSalesOrderState',
-          id: data.orderState,
-          presentation: orderStatePresentation,
+          id: data.orderStateId,
+          presentation: data.orderState,
           url: ''
         },
         company: {
           _type: 'XTSObjectId',
           dataType: 'XTSCompany',
-          id: 'a4e5cb74-5b27-11ef-a699-00155d058802',
-          presentation: 'Cửa hàng Dung-Baby',
+          id: defaultCompany.id,
+          presentation: defaultCompany.presentation,
           url: ''
         },
         customer: {
@@ -719,38 +796,56 @@ export const updateOrder = async (data: UpdateOrderData): Promise<void> => {
           presentation: data.customerName,
           url: ''
         },
-        contract: {
+        contract: data.contractId ? {
           _type: 'XTSObjectId',
           dataType: 'XTSCounterpartyContract',
           id: data.contractId,
           presentation: data.contractName,
           url: ''
-        },
+        } : null,
         documentCurrency: {
           _type: 'XTSObjectId',
           dataType: 'XTSCurrency',
-          id: 'c26a4d87-c6e2-4aca-ab05-1b02be6ecaec',
-          presentation: 'đồng',
+          id: defaultCurrency.id,
+          presentation: defaultCurrency.presentation,
           url: ''
         },
         documentAmount: data.documentAmount,
         vatTaxation: {
           _type: 'XTSObjectId',
           dataType: 'XTSVATTaxationType',
-          id: 'NotTaxableByVAT',
-          presentation: 'Không chịu thuế (không thuế GTGT)',
+          id: data.vatTaxationId,
+          presentation: data.vatTaxation,
           url: ''
         },
-        rate: 1,
-        multiplicity: 1,
+        rate: data.rate,
+        multiplicity: data.multiplicity,
         comment: data.comment,
-        shipmentDate: new Date().toISOString().split('T')[0],
+        shipmentDate: data.shipmentDate,
         deliveryAddress: data.deliveryAddress,
-        deliveryAddressValue: data.deliveryAddress,
-        cash: data.cashAmount,
-        bankTransfer: data.transferAmount,
-        postPayment: data.postPayAmount,
-        paymentNote: data.paymentNotes,
+        deliveryAddressValue: data.deliveryAddressValue,
+        discountCard: data.discountCardId ? {
+          _type: 'XTSObjectId',
+          dataType: 'XTSDiscountCard',
+          id: data.discountCardId,
+          presentation: data.discountCard,
+          url: ''
+        } : null,
+        emailAddress: data.emailAddress,
+        shippingCost: data.shippingCost,
+        phone: data.phone,
+        completionOption: data.completionOptionId ? {
+          _type: 'XTSObjectId',
+          dataType: 'XTSCompletionOption',
+          id: data.completionOptionId,
+          presentation: data.completionOption,
+          url: ''
+        } : null,
+        cash: data.cash,
+        bankTransfer: data.bankTransfer,
+        postPayment: data.postPayment,
+        paymentNote: data.paymentNote,
+        status: data.status,
         inventory: data.products.map(product => ({
           _type: 'XTSOrderProductRow',
           _lineNumber: product.lineNumber,
@@ -761,20 +856,13 @@ export const updateOrder = async (data: UpdateOrderData): Promise<void> => {
             presentation: product.productName,
             url: ''
           },
-          characteristic: {
+          characteristic: product.characteristic ? {
             _type: 'XTSObjectId',
-            dataType: '',
-            id: '',
-            presentation: '',
+            dataType: 'XTSProductCharacteristic',
+            id: product.characteristic,
+            presentation: product.characteristic,
             url: ''
-          },
-          vatRate: {
-            _type: 'XTSObjectId',
-            dataType: '',
-            id: '',
-            presentation: '',
-            url: ''
-          },
+          } : null,
           uom: {
             _type: 'XTSObjectId',
             dataType: 'XTSMeasurementUnit',
@@ -783,42 +871,48 @@ export const updateOrder = async (data: UpdateOrderData): Promise<void> => {
             url: ''
           },
           quantity: product.quantity,
-          comment: '',
           price: product.price,
-          amount: product.price * product.quantity,
-          automaticDiscountAmount: 0,
-          discountsMarkupsAmount: 0,
-          vatAmount: 0,
-          total: product.price * product.quantity,
-          _sku: product.sku,
+          amount: product.amount,
+          automaticDiscountAmount: product.automaticDiscountAmount,
+          discountsMarkupsAmount: product.discountsMarkupsAmount,
+          vatRate: product.vatRateId ? {
+            _type: 'XTSObjectId',
+            dataType: 'XTSVATRate',
+            id: product.vatRateId,
+            presentation: product.vatRateName,
+            url: ''
+          } : null,
+          vatAmount: product.vatAmount,
+          total: product.total,
+          _sku: product.code,
           _coefficient: product.coefficient,
           _price: product.price,
-          _vatRateRate: 0,
-          _picture: {
+          _vatRateRate: product.vatAmount && product.amount ? product.vatAmount / product.amount : 0,
+          _picture: product.picture ? {
             _type: 'XTSObjectId',
-            dataType: '',
+            dataType: 'XTSProductAttachedFile',
             id: '',
-            presentation: '',
+            presentation: product.picture,
             url: ''
-          }
+          } : null
         })),
-        externalAccount: {
+        externalAccount: data.externalAccountId ? {
           _type: 'XTSObjectId',
           dataType: 'XTSExternalAccount',
           id: data.externalAccountId,
-          presentation: data.externalAccountName,
-          url: ''
-        },
-        employeeResponsible: data.employeeId ? {
-          _type: 'XTSObjectId',
-          dataType: 'XTSEmployee',
-          id: data.employeeId,
-          presentation: data.employeeName,
+          presentation: data.externalAccount,
           url: ''
         } : null,
-        _receiptableIncrease: 0,
-        _receiptableDecrease: 0,
-        _receiptableBalance: 0
+        employeeResponsible: data.employeeResponsibleId ? {
+          _type: 'XTSObjectId',
+          dataType: 'XTSEmployee',
+          id: data.employeeResponsibleId,
+          presentation: data.employeeResponsibleName,
+          url: ''
+        } : null,
+        _receiptableIncrease: data.receiptableIncrease,
+        _receiptableDecrease: data.receiptableDecrease,
+        _receiptableBalance: data.receiptableBalance
       }
     ]
   };

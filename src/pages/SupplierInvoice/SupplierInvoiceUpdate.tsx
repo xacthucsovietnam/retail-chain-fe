@@ -1,4 +1,3 @@
-// src/pages/SupplierInvoiceUpdate.tsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -6,19 +5,15 @@ import {
   Save,
   Package,
   Trash2,
-  Upload,
-  X,
   PlusCircle,
   Loader2,
-  AlertCircle
+  AlertCircle,
 } from 'lucide-react';
 import Select from 'react-select';
 import toast from 'react-hot-toast';
 import { getSupplierInvoiceDetail, updateSupplierInvoice, getSupplierDropdownData } from '../../services/supplierInvoice';
-import { handleProcessImages, ProcessedImageData } from '../../utils/imageProcessing';
 import { getProducts, createProduct, type Product } from '../../services/product';
-import ProductPreviewPopup from './ProductPreviewPopup';
-import type { SupplierInvoiceDetail, UpdateSupplierInvoiceData } from '../../services/supplierInvoice';
+import type { SupplierInvoiceDetail, SupplierProduct, UpdateSupplierInvoiceData } from '../../services/supplierInvoice';
 import { getSession } from '../../utils/storage';
 import { getCurrencies } from '../../services/currency';
 import { createPartner } from '../../services/partner';
@@ -29,6 +24,8 @@ interface ProductItem {
   code?: string;
   price: number;
   riCoefficient?: number;
+  baseUnitId?: string;
+  baseUnit?: string;
 }
 
 interface FormData {
@@ -36,26 +33,17 @@ interface FormData {
   number: string;
   title: string;
   date: string;
-  customerId: string;
-  customerName: string;
+  counterpartyId: string;
+  counterpartyName: string;
   currencyId: string;
   currencyName: string;
   comment: string;
   employeeId: string;
   employeeName: string;
-  externalAccountId: string;
-  externalAccountName: string;
+  structuralUnitId: string;
+  structuralUnitName: string;
   amount: number;
-  products: Array<{
-    productId: string;
-    productName: string;
-    unitId: string;
-    unitName: string;
-    quantity: number;
-    price: number;
-    coefficient: number;
-    total: number;
-  }>;
+  products: SupplierProduct[];
 }
 
 interface Supplier {
@@ -71,19 +59,11 @@ interface Currency {
 export default function SupplierInvoiceUpdate() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const defaultValues = getSession()?.defaultValues || {};
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isProcessingImages, setIsProcessingImages] = useState(false);
-  const [isSavingFromPopup, setIsSavingFromPopup] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [uploadedImages, setUploadedImages] = useState<File[]>([]);
-  const [showPopup, setShowPopup] = useState(false);
-  const [previewData, setPreviewData] = useState<{
-    generalInfo: { date: string; documentAmount: string; documentQuantity: string; number: string; contactInfo: string; comment: string; supplier: string };
-    notExist: ProcessedImageData[];
-    existed: any[];
-  } | null>(null);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isFetchingSuppliers, setIsFetchingSuppliers] = useState(false);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
@@ -94,24 +74,23 @@ export default function SupplierInvoiceUpdate() {
   const [supplierAddress, setSupplierAddress] = useState('');
 
   const session = getSession();
-  const defaultValues = session?.defaultValues || {};
 
   const [formData, setFormData] = useState<FormData>({
     id: '',
     number: '',
     title: '',
     date: new Date().toISOString().slice(0, 16),
-    customerId: '',
-    customerName: '',
+    counterpartyId: '',
+    counterpartyName: '',
     currencyId: '',
     currencyName: '',
     comment: '',
     employeeId: defaultValues.employeeResponsible?.id || '',
     employeeName: defaultValues.employeeResponsible?.presentation || '',
-    externalAccountId: defaultValues.externalAccount?.id || '',
-    externalAccountName: defaultValues.externalAccount?.presentation || '',
+    structuralUnitId: defaultValues.externalAccount?.id || '',
+    structuralUnitName: defaultValues.externalAccount?.presentation || '',
     amount: 0,
-    products: []
+    products: [],
   });
 
   const [products, setProducts] = useState<ProductItem[]>([]);
@@ -128,32 +107,42 @@ export default function SupplierInvoiceUpdate() {
       setIsLoading(true);
       setError(null);
       const data = await getSupplierInvoiceDetail(id);
-      
+      console.log('Dữ liệu nhận được khi vào màn hình SupplierInvoiceUpdate:', data);
+
       setFormData({
         id: data.id,
         number: data.number,
         title: `#${data.number}`,
         date: data.date.slice(0, 16),
-        customerId: data.counterparty.id,
-        customerName: data.counterparty.presentation,
-        currencyId: data.currency.id,
-        currencyName: data.currency.presentation,
-        comment: data.comment,
-        employeeId: data.employeeResponsible?.id || defaultValues.employeeResponsible?.id || '',
-        employeeName: data.employeeResponsible?.presentation || defaultValues.employeeResponsible?.presentation || '',
-        externalAccountId: data.structuralUnit?.id || defaultValues.externalAccount?.id || '',
-        externalAccountName: data.structuralUnit?.presentation || defaultValues.externalAccount?.presentation || '',
-        amount: data.amount,
-        products: data.products.map(product => ({
-          productId: product.productId,
-          productName: product.productName,
-          unitId: '5736c39c-5b28-11ef-a699-00155d058802',
-          unitName: product.unit,
+        counterpartyId: data.counterparty.id,
+        counterpartyName: data.counterparty.presentation,
+        currencyId: data.documentCurrency.id,
+        currencyName: data.documentCurrency.presentation,
+        comment: data.comment || '',
+        employeeId: data.employeeResponsible.id || defaultValues.employeeResponsible?.id || '',
+        employeeName: data.employeeResponsible.presentation || defaultValues.employeeResponsible?.presentation || '',
+        structuralUnitId: data.structuralUnit.id || defaultValues.externalAccount?.id || '',
+        structuralUnitName: data.structuralUnit.presentation || defaultValues.externalAccount?.presentation || '',
+        amount: data.documentAmount,
+        products: data.inventory.map((product, index) => ({
+          lineNumber: product.lineNumber || index + 1,
+          product: { _type: 'XTSObjectId', dataType: 'XTSProduct', id: product.product.id, presentation: product.product.presentation },
+          characteristic: product.characteristic,
+          uom: product.uom,
           quantity: product.quantity,
           price: product.price,
+          amount: product.amount,
+          discountsMarkupsAmount: product.discountsMarkupsAmount,
+          vatAmount: product.vatAmount,
+          vatRate: product.vatRate,
+          total: product.total,
+          sku: product.sku,
           coefficient: product.coefficient,
-          total: product.total
-        }))
+          priceOriginal: product.priceOriginal,
+          vatRateRate: product.vatRateRate,
+          picture: product.picture,
+          comment: product.comment,
+        })),
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Không thể tải thông tin đơn nhận hàng';
@@ -215,199 +204,72 @@ export default function SupplierInvoiceUpdate() {
   };
 
   const handleAddProduct = () => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       products: [
         ...prev.products,
         {
-          productId: '',
-          productName: '',
-          unitId: '5736c39c-5b28-11ef-a699-00155d058802',
-          unitName: 'c',
+          lineNumber: prev.products.length + 1,
+          product: { _type: 'XTSObjectId', dataType: 'XTSProduct', id: '', presentation: '' },
+          characteristic: null,
+          uom: null,
           quantity: 1,
           price: 0,
+          amount: 0,
+          discountsMarkupsAmount: null,
+          vatAmount: null,
+          vatRate: null,
+          total: 0,
+          sku: '',
           coefficient: 1,
-          total: 0
-        }
-      ]
+          priceOriginal: 0,
+          vatRateRate: null,
+          picture: null,
+        },
+      ],
     }));
   };
 
   const handleRemoveProduct = (index: number) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      products: prev.products.filter((_, i) => i !== index)
+      products: prev.products.filter((_, i) => i !== index).map((p, i) => ({ ...p, lineNumber: i + 1 })),
     }));
   };
 
   const handleProductChange = (index: number, field: string, value: any) => {
-    setFormData(prev => {
+    setFormData((prev) => {
       const newProducts = [...prev.products];
       newProducts[index] = {
         ...newProducts[index],
-        [field]: value
+        [field]: value,
       };
 
       if (field === 'quantity' || field === 'price') {
         newProducts[index].total = newProducts[index].quantity * newProducts[index].price;
+        newProducts[index].amount = newProducts[index].quantity * newProducts[index].price;
       }
 
-      if (field === 'productId') {
-        const selected = products.find(p => p.id === value);
+      if (field === 'product') {
+        const selected = products.find((p) => p.id === value);
         if (selected) {
-          newProducts[index].productName = selected.name;
+          newProducts[index].product = { _type: 'XTSObjectId', dataType: 'XTSProduct', id: selected.id, presentation: selected.name };
+          newProducts[index].sku = selected.code || '';
           newProducts[index].price = selected.price;
           newProducts[index].coefficient = selected.riCoefficient || 1;
+          newProducts[index].uom = selected.baseUnitId ? { _type: 'XTSObjectId', dataType: 'XTSMeasurementUnit', id: selected.baseUnitId, presentation: selected.baseUnit || '' } : null;
           newProducts[index].total = selected.price * newProducts[index].quantity;
+          newProducts[index].amount = selected.price * newProducts[index].quantity;
+          newProducts[index].priceOriginal = selected.price;
         }
       }
 
-      return { ...prev, products: newProducts };
+      return { ...prev, products: newProducts, amount: calculateTotal() };
     });
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newImages = Array.from(e.target.files).slice(0, 5 - uploadedImages.length);
-      setUploadedImages(prev => [...prev, ...newImages]);
-    }
-  };
-
-  const handleRemoveImage = (index: number) => {
-    setUploadedImages(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleProcessImagesClick = async () => {
-    if (uploadedImages.length === 0) {
-      toast.error('Vui lòng tải lên ít nhất 1 ảnh');
-      return;
-    }
-    setIsProcessingImages(true);
-    try {
-      const result = await handleProcessImages(uploadedImages);
-      setPreviewData({
-        generalInfo: {
-          date: result.generalInfo.date,
-          documentAmount: result.generalInfo.documentAmount,
-          documentQuantity: result.generalInfo.documentQuantity,
-          number: result.generalInfo.number,
-          contactInfo: result.generalInfo.contactInfo,
-          comment: result.generalInfo.comment,
-          supplier: result.generalInfo.supplier,
-        },
-        notExist: result.notExist,
-        existed: result.existed,
-      });
-      setShowPopup(true);
-    } catch (error) {
-      toast.error('Không thể xử lý ảnh');
-    } finally {
-      setIsProcessingImages(false);
-    }
-  };
-
-  const handlePopupClose = () => {
-    setShowPopup(false);
-  };
-
-  const handleSaveFromPopup = async (updatedNotExist: ProcessedImageData[], updatedExisted: any[], updatedGeneralInfo: any) => {
-    setIsSavingFromPopup(true);
-    let processedNotExist = [...updatedNotExist];
-
-    const customerId = formData.customerId || updatedGeneralInfo.supplierId;
-    const customerName = formData.customerName || updatedGeneralInfo.supplier;
-
-    if (updatedNotExist.length > 0) {
-      try {
-        const createPromises = updatedNotExist.map(async (item) => {
-          const adjustedPrice = Number(item.price);
-          const createProductData = {
-            code: item.productCode,
-            name: item.productDescription || `Sản phẩm ${item.lineNumber}`,
-            category: "5736c39a-5b28-11ef-a699-00155d058802",
-            purchasePrice: adjustedPrice,
-            sellingPrice: adjustedPrice,
-            measurementUnit: "5736c39c-5b28-11ef-a699-00155d058802",
-            riCoefficient: Number(item.coefficient) || 1,
-            description: item.productCharacteristic,
-            images: []
-          };
-
-          const { id, presentation } = await createProduct(createProductData);
-          const newProduct = {
-            id,
-            name: presentation,
-            code: item.productCode,
-            price: adjustedPrice,
-            riCoefficient: Number(item.coefficient) || 1
-          };
-          setProducts(prev => [...prev, newProduct]);
-          return { ...item, id, name: presentation, price: adjustedPrice.toString() };
-        });
-
-        processedNotExist = await Promise.all(createPromises);
-      } catch (error) {
-        toast.error('Không thể tạo sản phẩm mới');
-        console.error('Error creating products:', error);
-        setIsSavingFromPopup(false);
-        return;
-      }
-    }
-
-    const combinedProducts = [
-      ...updatedExisted.map(item => {
-        const adjustedPrice = Number(item.price);
-        return {
-          productId: item.id || '',
-          productName: item.name || item.productDescription,
-          unitId: '5736c39c-5b28-11ef-a699-00155d058802',
-          unitName: 'c',
-          quantity: Number(item.quantity) || 1,
-          price: adjustedPrice,
-          coefficient: Number(item.coefficient) || 1,
-          total: Number(item.total) || (Number(item.quantity) * adjustedPrice)
-        };
-      }),
-      ...processedNotExist.map(item => {
-        const adjustedPrice = Number(item.price);
-        return {
-          productId: item.id || '',
-          productName: item.name || item.productDescription,
-          unitId: '5736c39c-5b28-11ef-a699-00155d058802',
-          unitName: 'c',
-          quantity: Number(item.quantity) || 1,
-          price: adjustedPrice,
-          coefficient: Number(item.coefficient) || 1,
-          total: Number(item.total) || (Number(item.quantity) * adjustedPrice)
-        };
-      })
-    ];
-
-    setFormData(prev => ({
-      ...prev,
-      date: updatedGeneralInfo?.date || prev.date,
-      customerId: customerId,
-      customerName: customerName,
-      comment: updatedGeneralInfo?.comment || prev.comment,
-      amount: Number(updatedGeneralInfo?.documentAmount) || prev.amount,
-      products: combinedProducts.map(item => ({
-        productId: item.productId,
-        productName: item.productName,
-        unitId: item.unitId,
-        unitName: item.unitName,
-        quantity: item.quantity,
-        price: item.price,
-        coefficient: item.coefficient,
-        total: item.total
-      }))
-    }));
-
-    setShowPopup(false);
-    setIsSavingFromPopup(false);
-  };
-
   const validateForm = (): boolean => {
-    if (!formData.customerId) {
+    if (!formData.counterpartyId) {
       toast.error('Vui lòng chọn nhà cung cấp');
       return false;
     }
@@ -418,8 +280,8 @@ export default function SupplierInvoiceUpdate() {
     }
 
     for (const product of formData.products) {
-      if (!product.productId && !product.productName) {
-        toast.error('Vui lòng chọn hoặc nhập tên sản phẩm');
+      if (!product.product.id) {
+        toast.error('Vui lòng chọn sản phẩm');
         return false;
       }
 
@@ -446,35 +308,41 @@ export default function SupplierInvoiceUpdate() {
     try {
       setIsSaving(true);
 
+      let formattedDate = formData.date;
+      if (formattedDate.length === 16) { // Kiểm tra nếu chỉ có YYYY-MM-DDTHH:mm
+        formattedDate += ':00'; // Thêm :ss (giây mặc định là 00)
+      }
+
       const invoiceData: UpdateSupplierInvoiceData = {
         id: formData.id,
         number: formData.number,
         title: formData.title,
-        date: formData.date,
-        customerId: formData.customerId,
-        customerName: formData.customerName,
+        date: formattedDate,
+        posted: false,
+        operationKindId: 'ReceiptFromSupplier',
+        operationKindPresentation: 'Mua hàng từ nhà cung cấp',
+        companyId: defaultValues.company.id,
+        companyName: defaultValues.company.presentation,
+        counterpartyId: formData.counterpartyId,
+        counterpartyName: formData.counterpartyName,
         contractId: '',
         contractName: '',
         currencyId: formData.currencyId,
         currencyName: formData.currencyName,
+        amount: calculateTotal(),
+        vatTaxationId: defaultValues.vatTaxation?.id || 'NotTaxableByVAT',
+        vatTaxationName: defaultValues.vatTaxation?.presentation || 'Không chịu thuế (không thuế GTGT)',
         rate: 1,
+        multiplicity: 1,
         comment: formData.comment,
         employeeId: formData.employeeId,
         employeeName: formData.employeeName,
-        externalAccountId: formData.externalAccountId,
-        externalAccountName: formData.externalAccountName,
-        amount: calculateTotal(),
-        products: formData.products.map(product => ({
-          productId: product.productId,
-          productName: product.productName,
-          unitId: product.unitId,
-          unitName: product.unitName,
-          quantity: product.quantity,
-          price: product.price,
-          coefficient: product.coefficient
-        })),
-        posted: false
+        structuralUnitId: formData.structuralUnitId,
+        structuralUnitName: formData.structuralUnitName,
+        products: formData.products,
       };
+
+      console.log('Request data:', invoiceData);
 
       await updateSupplierInvoice(invoiceData);
       toast.success('Cập nhật đơn nhận hàng thành công');
@@ -489,28 +357,23 @@ export default function SupplierInvoiceUpdate() {
 
   const supplierOptions = [
     { value: 'create-supplier', label: 'Tạo nhà cung cấp', isCreateOption: true },
-    ...suppliers.map(supplier => ({
+    ...suppliers.map((supplier) => ({
       value: supplier.id,
-      label: supplier.name
-    }))
+      label: supplier.name,
+    })),
   ];
 
-  const currencyOptions = currencies.map(currency => ({
-    value: currency.id,
-    label: currency.name
-  }));
-
   const productOptions = [
-    ...products.map(product => ({
+    ...products.map((product) => ({
       value: product.id,
-      label: product.name
+      label: product.name,
     })),
     ...formData.products
-      .filter(p => p.productId && !products.some(mp => mp.id === p.productId))
-      .map(p => ({
-        value: p.productId,
-        label: p.productName
-      }))
+      .filter((p) => p.product.id && !products.some((mp) => mp.id === p.product.id))
+      .map((p) => ({
+        value: p.product.id,
+        label: p.product.presentation,
+      })),
   ];
 
   const CustomOption = (props: any) => {
@@ -539,11 +402,11 @@ export default function SupplierInvoiceUpdate() {
       return;
     }
 
-    const selectedSupplier = suppliers.find(s => s.id === selectedOption?.value);
-    setFormData(prev => ({
+    const selectedSupplier = suppliers.find((s) => s.id === selectedOption?.value);
+    setFormData((prev) => ({
       ...prev,
-      customerId: selectedOption ? selectedOption.value : '',
-      customerName: selectedSupplier ? selectedSupplier.name : ''
+      counterpartyId: selectedOption ? selectedOption.value : '',
+      counterpartyName: selectedSupplier ? selectedSupplier.name : '',
     }));
   };
 
@@ -583,16 +446,16 @@ export default function SupplierInvoiceUpdate() {
         margin: 0,
         doOperationsByContracts: false,
         doOperationsByOrders: false,
-        doOperationsByDocuments: false
+        doOperationsByDocuments: false,
       });
 
       const updatedSuppliers = [...suppliers, { id: newSupplier.id, name: supplierName }];
       setSuppliers(updatedSuppliers);
 
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        customerId: newSupplier.id,
-        customerName: supplierName
+        counterpartyId: newSupplier.id,
+        counterpartyName: supplierName,
       }));
 
       toast.success('Tạo nhà cung cấp thành công');
@@ -631,125 +494,45 @@ export default function SupplierInvoiceUpdate() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
-        <div className="px-4 py-3">
-          <h1 className="text-lg font-semibold text-gray-900">Cập nhật đơn nhận hàng</h1>
-          <p className="text-sm text-gray-500">#{formData.number}</p>
-        </div>
-      </div>
-
-      <div className="pt-4 px-4">
+      <div className="px-4">
         <div className="space-y-4 mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Hình ảnh
-            </label>
-            <div className="flex items-center gap-2">
-              <label className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white hover:bg-gray-50 cursor-pointer">
-                <Upload className="h-4 w-4 mr-2" />
-                Tải ảnh
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleImageUpload}
-                  disabled={uploadedImages.length === 5 || isProcessingImages}
-                />
-              </label>
-              {uploadedImages.length > 0 && (
-                <button
-                  onClick={handleProcessImagesClick}
-                  className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
-                  disabled={isProcessingImages}
-                >
-                  Xử lý ảnh
-                </button>
-              )}
-            </div>
-            {uploadedImages.length > 0 && (
-              <div className="mt-2 overflow-x-auto flex gap-2">
-                {uploadedImages.map((image, index) => (
-                  <div key={index} className="relative flex-shrink-0">
-                    <img
-                      src={URL.createObjectURL(image)}
-                      alt={`Uploaded ${index}`}
-                      className="w-20 h-20 object-cover rounded-lg"
-                    />
-                    <button
-                      onClick={() => handleRemoveImage(index)}
-                      className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full hover:bg-red-700"
-                      disabled={isProcessingImages}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            <p className="text-sm font-medium text-gray-700">Đơn hàng: {formData.number}</p>
+            <span className="text-sm font-medium text-gray-700">
+              Ngày tạo: <span className="text-gray-900">{new Date(formData.date).toLocaleString()}</span>
+            </span>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Ngày tạo *
-            </label>
-            <input
-              type="datetime-local"
-              value={formData.date}
-              onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
-              disabled={isProcessingImages}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nhà cung cấp *
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nhà cung cấp *</label>
             <Select
               options={supplierOptions}
-              value={supplierOptions.find(option => option.value === formData.customerId) || null}
+              value={supplierOptions.find((option) => option.value === formData.counterpartyId) || null}
               onChange={handleSupplierChange}
               placeholder="Chọn nhà cung cấp"
               isClearable
               isSearchable
               className="text-sm"
               classNamePrefix="select"
-              isDisabled={isFetchingSuppliers || isProcessingImages}
+              isDisabled={isFetchingSuppliers}
               components={{ Option: CustomOption }}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Loại tiền tệ
-            </label>
-            <Select
-              options={currencyOptions}
-              value={currencyOptions.find(option => option.value === formData.currencyId) || null}
-              onChange={(selectedOption) => setFormData(prev => ({
-                ...prev,
-                currencyId: selectedOption?.value || '',
-                currencyName: selectedOption?.label || ''
-              }))}
-              placeholder="Chọn loại tiền tệ"
-              className="text-sm"
-              classNamePrefix="select"
-              isDisabled={isFetchingCurrencies || isProcessingImages}
-            />
+            <span className="text-sm font-medium text-gray-700">
+              Loại tiền tệ: <span className="text-gray-900">{formData.currencyName}</span>
+            </span>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Ghi chú
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Ghi chú</label>
             <textarea
               value={formData.comment}
-              onChange={(e) => setFormData(prev => ({ ...prev, comment: e.target.value }))}
+              onChange={(e) => setFormData((prev) => ({ ...prev, comment: e.target.value }))}
               rows={3}
               className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
               placeholder="Nhập ghi chú..."
-              disabled={isProcessingImages}
             />
           </div>
         </div>
@@ -760,7 +543,6 @@ export default function SupplierInvoiceUpdate() {
             <button
               onClick={handleAddProduct}
               className="text-sm text-blue-600 hover:text-blue-700"
-              disabled={isProcessingImages}
             >
               Thêm sản phẩm
             </button>
@@ -768,29 +550,41 @@ export default function SupplierInvoiceUpdate() {
 
           <div className="space-y-4">
             {formData.products.map((product, index) => {
-              const selectedProduct = products.find(p => p.id === product.productId);
-              const code = selectedProduct?.code || 'N/A';
+              const selectedProduct = products.find((p) => p.id === product.product.id);
+              const code = selectedProduct?.code || product.sku || 'N/A';
               const riCoefficient = selectedProduct?.riCoefficient || product.coefficient || 1;
 
               return (
                 <div key={index} className="bg-white rounded-lg shadow-sm p-4">
                   <div className="flex gap-3 mb-3">
                     <div className="h-16 w-16 bg-gray-100 rounded-lg flex items-center justify-center">
-                      <Package className="h-8 w-8 text-gray-400" />
+                      {product.picture?.id ? (
+                        <img
+                          src={`${import.meta.env.VITE_FILE_BASE_URL}/${product.picture.id}`}
+                          alt={product.product.presentation}
+                          className="h-full w-full object-cover rounded-lg"
+                          onError={(e) => {
+                            e.currentTarget.src = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc';
+                            e.currentTarget.alt = 'Hình ảnh mặc định';
+                          }}
+                        />
+                      ) : (
+                        <Package className="h-8 w-8 text-gray-400" />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <Select
                         options={productOptions}
-                        value={productOptions.find(option => option.value === product.productId) || null}
+                        value={productOptions.find((option) => option.value === product.product.id) || null}
                         onChange={(selectedOption) => {
-                          handleProductChange(index, 'productId', selectedOption ? selectedOption.value : '');
+                          handleProductChange(index, 'product', selectedOption ? selectedOption.value : '');
                         }}
                         placeholder="Chọn sản phẩm"
                         isClearable
                         isSearchable
                         className="text-sm"
                         classNamePrefix="select"
-                        isDisabled={isFetchingProducts || isProcessingImages}
+                        isDisabled={isFetchingProducts}
                       />
                       <div className="mt-2 flex items-center gap-2">
                         <span className="text-sm text-gray-500">Mã sản phẩm:</span>
@@ -804,7 +598,6 @@ export default function SupplierInvoiceUpdate() {
                     <button
                       onClick={() => handleRemoveProduct(index)}
                       className="text-red-600"
-                      disabled={isProcessingImages}
                     >
                       <Trash2 className="h-5 w-5" />
                     </button>
@@ -812,9 +605,7 @@ export default function SupplierInvoiceUpdate() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">
-                        Số lượng
-                      </label>
+                      <label className="block text-xs text-gray-500 mb-1">Số lượng</label>
                       <input
                         type="number"
                         value={product.quantity}
@@ -822,13 +613,10 @@ export default function SupplierInvoiceUpdate() {
                         min="1"
                         className="w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         inputMode="numeric"
-                        disabled={isProcessingImages}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">
-                        Đơn giá
-                      </label>
+                      <label className="block text-xs text-gray-500 mb-1">Đơn giá</label>
                       <input
                         type="number"
                         value={product.price}
@@ -837,7 +625,6 @@ export default function SupplierInvoiceUpdate() {
                         step="1000"
                         className="w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         inputMode="numeric"
-                        disabled={isProcessingImages}
                       />
                     </div>
                   </div>
@@ -870,15 +657,14 @@ export default function SupplierInvoiceUpdate() {
         <button
           onClick={() => navigate(`/supplier-invoices/${id}`)}
           className="p-2 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50"
-          disabled={isProcessingImages || isSavingFromPopup}
           title="Quay lại chi tiết"
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        
+
         <button
           onClick={handleSubmit}
-          disabled={isSaving || isProcessingImages || isSavingFromPopup}
+          disabled={isSaving}
           className="p-2 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
           title="Lưu thay đổi"
         >
@@ -889,12 +675,8 @@ export default function SupplierInvoiceUpdate() {
       {showConfirmation && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-lg p-4 w-full max-w-sm">
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Xác nhận cập nhật đơn nhận hàng
-            </h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Bạn có chắc chắn muốn cập nhật đơn nhận hàng này không?
-            </p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Xác nhận cập nhật đơn nhận hàng</h3>
+            <p className="text-sm text-gray-500 mb-4">Bạn có chắc chắn muốn cập nhật đơn nhận hàng này không?</p>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowConfirmation(false)}
@@ -917,14 +699,10 @@ export default function SupplierInvoiceUpdate() {
       {showCreateSupplierPopup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-lg p-4 w-full max-w-sm">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
-              Tạo nhà cung cấp mới
-            </h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Tạo nhà cung cấp mới</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tên Nhà cung cấp *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tên Nhà cung cấp *</label>
                 <input
                   type="text"
                   value={supplierName}
@@ -934,9 +712,7 @@ export default function SupplierInvoiceUpdate() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Số điện thoại
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
                 <input
                   type="text"
                   value={supplierPhone}
@@ -946,9 +722,7 @@ export default function SupplierInvoiceUpdate() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Địa chỉ
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ</label>
                 <input
                   type="text"
                   value={supplierAddress}
@@ -972,73 +746,6 @@ export default function SupplierInvoiceUpdate() {
                 Xác nhận
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {showPopup && previewData && (
-        <ProductPreviewPopup
-          generalInfo={previewData.generalInfo}
-          notExist={previewData.notExist}
-          existed={previewData.existed}
-          suppliers={suppliers}
-          onClose={handlePopupClose}
-          onSave={handleSaveFromPopup}
-        />
-      )}
-
-      {isProcessingImages && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
-          <div className="flex flex-col items-center">
-            <svg
-              className="animate-spin h-10 w-10 text-white mb-2"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
-            <span className="text-white text-sm">Đang xử lý ảnh...</span>
-          </div>
-        </div>
-      )}
-
-      {isSavingFromPopup && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
-          <div className="flex flex-col items-center">
-            <svg
-              className="animate-spin h-10 w-10 text-white mb-2"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
-            <span className="text-white text-sm">Đang lưu dữ liệu...</span>
           </div>
         </div>
       )}

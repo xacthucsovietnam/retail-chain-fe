@@ -21,6 +21,7 @@ import {
 import toast from 'react-hot-toast';
 import { getPartnerDetail } from '../../services/partner';
 import type { PartnerDetail } from '../../services/partner';
+import { deleteObjects } from '../../services/deleteObjects';
 
 export default function PartnerDetail() {
   const { id } = useParams<{ id: string }>();
@@ -60,9 +61,31 @@ export default function PartnerDetail() {
     }
   };
 
-  const handleDelete = () => {
-    toast.error('Chức năng xóa chưa được triển khai');
-  };
+  const handleDelete = async () => {
+  if (!id || !partner) return;
+
+  const confirmDelete = window.confirm('Bạn có chắc chắn muốn xóa khách hàng này không?');
+  if (!confirmDelete) return;
+
+  try {
+    const objectToDelete = {
+      id: id,
+      dataType: 'XTSCounterparty', // Giả định dataType là 'Partner', cần xác nhận với API thực tế
+      presentation: partner.name
+    };
+
+    const deletedIds = await deleteObjects([objectToDelete]);
+    if (deletedIds.length > 0) {
+      toast.success('Xóa khách hàng thành công');
+      navigate('/partners');
+    } else {
+      toast.error('Không thể xóa khách hàng');
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Không thể xóa khách hàng';
+    toast.error(errorMessage);
+  }
+};
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'Chưa cập nhật';
@@ -206,33 +229,6 @@ export default function PartnerDetail() {
           </div>
         </div>
 
-        {/* Financial Information */}
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-          <h3 className="text-base font-medium text-gray-900 mb-4">Thông tin tài chính</h3>
-          
-          <div className="space-y-3">
-            <div className="flex items-center">
-              <DollarSign className="w-5 h-5 text-gray-400 mr-3" />
-              <div>
-                <p className="text-sm text-gray-500">Tổng doanh thu</p>
-                <p className="text-base font-medium text-blue-600">
-                  {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(15000000)}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center">
-              <CreditCard className="w-5 h-5 text-gray-400 mr-3" />
-              <div>
-                <p className="text-sm text-gray-500">Tổng công nợ</p>
-                <p className="text-base font-medium text-red-600">
-                  {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(5000000)}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Operation Settings */}
         <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
           <h3 className="text-base font-medium text-gray-900 mb-4">Thiết lập giao dịch</h3>
@@ -298,28 +294,30 @@ export default function PartnerDetail() {
       </div>
 
       {/* Floating Action Buttons */}
-      <div className="fixed bottom-4 right-4 flex flex-col gap-2">
-        <button
-          onClick={() => navigate('/partners')}
-          className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-        >
-          <ArrowLeft className="h-6 w-6" />
-        </button>
-        
-        <button
-          onClick={handleEdit}
-          className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-          <Pencil className="h-6 w-6" />
-        </button>
-
-        <button
-          onClick={handleDelete}
-          className="p-3 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-        >
-          <Trash2 className="h-6 w-6" />
-        </button>
-      </div>
+      <div className="fixed bottom-4 left-0 right-0 z-50 px-4">
+  <div className="flex justify-between items-center max-w-7xl mx-auto">
+    <div className="flex gap-2">
+      <button
+        onClick={() => navigate('/partners')}
+        className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+      >
+        <ArrowLeft className="h-6 w-6" />
+      </button>
+      <button
+        onClick={handleDelete}
+        className="p-3 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+      >
+        <Trash2 className="h-6 w-6" />
+      </button>
+    </div>
+    <button
+      onClick={handleEdit}
+      className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+    >
+      <Pencil className="h-6 w-6" />
+    </button>
+  </div>
+</div>
     </div>
   );
 }
