@@ -20,7 +20,8 @@ import {
   ArrowUpToLine,
   ArrowDownToLine,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Wallet,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getOrderDetail, updateOrder, getRelatedDocuments, type RelatedDocument } from '../../services/order';
@@ -57,6 +58,7 @@ export default function OrderDetail() {
   const [relatedDocs, setRelatedDocs] = useState<RelatedDocument[]>([]);
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
   const [showPdfViewer, setShowPdfViewer] = useState(false);
+  const [showDebtCollectionModal, setShowDebtCollectionModal] = useState(false); // Thêm state cho popup Thu công nợ
   const { t } = useLanguage();
   const [isOrderInfoExpanded, setIsOrderInfoExpanded] = useState(true);
   const [isPaymentExpanded, setIsPaymentExpanded] = useState(true);
@@ -203,7 +205,7 @@ export default function OrderDetail() {
         comment: order.comment,
         companyId: defaultValues.company?.id || '',
         company: order.company,
-        contractId: order.contract ? order.contract.split(': ')[1] : null, // Giả sử contract có dạng "ID: Name"
+        contractId: order.contract ? order.contract.split(': ')[1] : null,
         contractName: order.contract,
         customerId: order.customerId,
         customerName: order.customerName,
@@ -249,8 +251,8 @@ export default function OrderDetail() {
           productId: p.productId,
           productName: p.productName,
           characteristic: p.characteristic,
-          unitId: p.unitId, // Changed from uomId
-          unitName: p.unitName, // Changed from uomName
+          unitId: p.unitId,
+          unitName: p.unitName,
           quantity: p.quantity,
           price: p.price,
           amount: p.amount,
@@ -344,8 +346,8 @@ export default function OrderDetail() {
           productId: p.productId,
           productName: p.productName,
           characteristic: p.characteristic,
-          unitId: p.unitId, // Changed from uomId
-          unitName: p.unitName, // Changed from uomName
+          unitId: p.unitId,
+          unitName: p.unitName,
           quantity: p.quantity,
           price: p.price,
           amount: p.amount,
@@ -496,8 +498,8 @@ export default function OrderDetail() {
         productId: p.productId,
         productName: p.productName,
         characteristic: p.characteristic,
-        unitId: p.unitId, // Changed from uomId
-        unitName: p.unitName, // Changed from uomName
+        unitId: p.unitId,
+        unitName: p.unitName,
         quantity: p.quantity,
         price: p.price,
         amount: p.amount,
@@ -514,6 +516,57 @@ export default function OrderDetail() {
     };
 
     navigate(`/orders/edit/${id}`, { state: { orderData: updateData } });
+  };
+
+  const handleViewProductDetail = (productId: string) => {
+    navigate(`/products/${productId}`);
+  };
+
+  const handleViewRelatedDocDetail = (doc: RelatedDocument) => {
+    const dataType = doc.dataType;
+    const docId = doc.id;
+
+    switch (dataType) {
+      case 'XTSOrder':
+        navigate(`/orders/${docId}`);
+        break;
+      case 'XTSSupplierInvoice':
+        navigate(`/supplier-invoices/${docId}`);
+        break;
+      case 'XTSCashReceipt':
+        navigate(`/cash-receipts/${docId}`);
+        break;
+      case 'XTSTransferReceipt':
+        navigate(`/transfer-receipts/${docId}`);
+        break;
+      default:
+        toast.error('Không hỗ trợ xem chi tiết loại chứng từ này');
+        break;
+    }
+  };
+
+  const handleCollectDebt = (type: 'cash' | 'transfer') => {
+    if (!order) return;
+
+    const orderData = {
+      orderId: order.id,
+      orderNumber: order.number,
+      customerId: order.customerId,
+      customerName: order.customerName,
+      documentAmount: order.documentAmount,
+      cash: order.cash || 0,
+      bankTransfer: order.bankTransfer || 0,
+      postPayment: order.postPayment || 0,
+      documentCurrency: order.documentCurrency,
+    };
+
+    if (type === 'cash') {
+      navigate('/cash-receipts/add', { state: { orderData } });
+    } else if (type === 'transfer') {
+      navigate('/transfer-receipts/add', { state: { orderData } });
+    }
+
+    setShowDebtCollectionModal(false);
   };
 
   const getStatusColor = (status: string) => {
@@ -649,6 +702,20 @@ export default function OrderDetail() {
           title="In"
         >
           <Printer className="h-6 w-6" />
+        </button>
+      );
+    }
+
+    // Thêm nút Thu công nợ nếu có công nợ
+    if (order.postPayment && order.postPayment > 0) {
+      rightButtons.push(
+        <button
+          key="collect-debt"
+          onClick={() => setShowDebtCollectionModal(true)}
+          className="p-3 bg-teal-600 text-white rounded-full shadow-lg hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
+          title="Thu công nợ"
+        >
+          <Wallet className="h-6 w-6" />
         </button>
       );
     }
@@ -820,7 +887,11 @@ export default function OrderDetail() {
           {isProductListExpanded && (
             <div className="px-4 pb-4 space-y-2">
               {order.products.map((product, index) => (
-                <div key={product.lineNumber} className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                <div 
+                  key={product.lineNumber} 
+                  className="flex items-center justify-between bg-gray-50 rounded-lg p-3 cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => handleViewProductDetail(product.productId)}
+                >
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
                       {product.picture ? (
@@ -991,7 +1062,11 @@ export default function OrderDetail() {
             ) : (
               <div className="space-y-4 mb-4">
                 {relatedDocs.map((doc) => (
-                  <div key={doc.id} className="bg-gray-50 rounded-lg p-4">
+                  <div 
+                    key={doc.id} 
+                    className="bg-gray-50 rounded-lg p-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                    onClick={() => handleViewRelatedDocDetail(doc)}
+                  >
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <h4 className="text-sm font-medium text-gray-900">#{doc.number}</h4>
@@ -1074,6 +1149,38 @@ export default function OrderDetail() {
                     Xác nhận
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDebtCollectionModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium">Thu công nợ</h3>
+              <button onClick={() => setShowDebtCollectionModal(false)}>
+                <X className="h-6 w-6 text-gray-500" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mb-6">
+              Chọn phương thức thu công nợ cho đơn hàng #{order.number}:
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => handleCollectDebt('cash')}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 flex items-center justify-center gap-2"
+              >
+                <DollarSign className="w-4 h-4" />
+                Thu tiền mặt
+              </button>
+              <button
+                onClick={() => handleCollectDebt('transfer')}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 flex items-center justify-center gap-2"
+              >
+                <CreditCard className="w-4 h-4" />
+                Thu chuyển khoản
               </button>
             </div>
           </div>

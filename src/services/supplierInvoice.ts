@@ -278,8 +278,8 @@ export const getProductDropdownData = async (): Promise<ProductDropdownItem[]> =
     columnSet: ['objectId', 'sku'],
     sortBy: [],
     positionFrom: 1,
-    positionTo: 10000,
-    limit: 10000,
+    positionTo: 10,
+    limit: 10,
     conditions: [],
   };
 
@@ -290,7 +290,7 @@ export const getProductDropdownData = async (): Promise<ProductDropdownItem[]> =
     
     return items.map(item => ({
       id: item.object.objectId.id,
-      name: item.object.description,
+      name: item.object.objectId.presentation,
       code: item.object.sku || '',
     }));
   } catch (error) {

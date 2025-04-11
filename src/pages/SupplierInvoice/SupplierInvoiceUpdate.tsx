@@ -11,8 +11,13 @@ import {
 } from 'lucide-react';
 import Select from 'react-select';
 import toast from 'react-hot-toast';
-import { getSupplierInvoiceDetail, updateSupplierInvoice, getSupplierDropdownData } from '../../services/supplierInvoice';
-import { getProducts, createProduct, type Product } from '../../services/product';
+import { 
+  getSupplierInvoiceDetail, 
+  updateSupplierInvoice, 
+  getSupplierDropdownData,
+  getProductDropdownData 
+} from '../../services/supplierInvoice';
+import { getProductDetail } from '../../services/product';
 import type { SupplierInvoiceDetail, SupplierProduct, UpdateSupplierInvoiceData } from '../../services/supplierInvoice';
 import { getSession } from '../../utils/storage';
 import { getCurrencies } from '../../services/currency';
@@ -107,7 +112,40 @@ export default function SupplierInvoiceUpdate() {
       setIsLoading(true);
       setError(null);
       const data = await getSupplierInvoiceDetail(id);
-      console.log('Dữ liệu nhận được khi vào màn hình SupplierInvoiceUpdate:', data);
+
+      // Check and update products with null uom
+      const updatedProducts = await Promise.all(
+        data.inventory.map(async (product, index) => {
+          let updatedProduct = { ...product };
+          if (!product.uom?.id) {
+            try {
+              const productDetail = await getProductDetail(product.product.id);
+              updatedProduct = {
+                ...product,
+                uom: productDetail.uoms[0] ? {
+                  _type: 'XTSObjectId',
+                  dataType: 'XTSUOMClassifier',
+                  id: productDetail.uoms[0].id,
+                  presentation: productDetail.uoms[0].presentation
+                } : null,
+                coefficient: productDetail.riCoefficient || 1,
+              };
+            } catch (error) {
+              console.error(`Failed to fetch details for product ${product.product.id}:`, error);
+            }
+          }
+          return {
+            ...updatedProduct,
+            lineNumber: product.lineNumber || index + 1,
+            product: {
+              _type: 'XTSObjectId',
+              dataType: 'XTSProduct',
+              id: product.product.id,
+              presentation: product.product.presentation
+            },
+          };
+        })
+      );
 
       setFormData({
         id: data.id,
@@ -124,25 +162,7 @@ export default function SupplierInvoiceUpdate() {
         structuralUnitId: data.structuralUnit.id || defaultValues.externalAccount?.id || '',
         structuralUnitName: data.structuralUnit.presentation || defaultValues.externalAccount?.presentation || '',
         amount: data.documentAmount,
-        products: data.inventory.map((product, index) => ({
-          lineNumber: product.lineNumber || index + 1,
-          product: { _type: 'XTSObjectId', dataType: 'XTSProduct', id: product.product.id, presentation: product.product.presentation },
-          characteristic: product.characteristic,
-          uom: product.uom,
-          quantity: product.quantity,
-          price: product.price,
-          amount: product.amount,
-          discountsMarkupsAmount: product.discountsMarkupsAmount,
-          vatAmount: product.vatAmount,
-          vatRate: product.vatRate,
-          total: product.total,
-          sku: product.sku,
-          coefficient: product.coefficient,
-          priceOriginal: product.priceOriginal,
-          vatRateRate: product.vatRateRate,
-          picture: product.picture,
-          comment: product.comment,
-        })),
+        products: updatedProducts,
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Không thể tải thông tin đơn nhận hàng';
@@ -179,11 +199,16 @@ export default function SupplierInvoiceUpdate() {
     }
   };
 
-  const fetchProductsOnce = async () => {
+  const fetchProducts = async () => {
     setIsFetchingProducts(true);
     try {
-      const response = await getProducts('', '', 1, 10000);
-      setProducts(response.items || []);
+      const response = await getProductDropdownData();
+      setProducts(response.map(item => ({
+        id: item.id,
+        name: item.name,
+        code: item.code,
+        price: 0,
+      })));
     } catch (error) {
       toast.error('Không thể tải danh sách sản phẩm');
       console.error('Error fetching products:', error);
@@ -196,7 +221,7 @@ export default function SupplierInvoiceUpdate() {
     fetchInvoiceDetail();
     fetchSuppliers();
     fetchCurrencies();
-    fetchProductsOnce();
+    fetchProducts();
   }, [id]);
 
   const calculateTotal = () => {
@@ -237,7 +262,7 @@ export default function SupplierInvoiceUpdate() {
     }));
   };
 
-  const handleProductChange = (index: number, field: string, value: any) => {
+  const handleProductChange = async (index: number, field: string, value: any) => {
     setFormData((prev) => {
       const newProducts = [...prev.products];
       newProducts[index] = {
@@ -250,22 +275,47 @@ export default function SupplierInvoiceUpdate() {
         newProducts[index].amount = newProducts[index].quantity * newProducts[index].price;
       }
 
-      if (field === 'product') {
-        const selected = products.find((p) => p.id === value);
-        if (selected) {
-          newProducts[index].product = { _type: 'XTSObjectId', dataType: 'XTSProduct', id: selected.id, presentation: selected.name };
-          newProducts[index].sku = selected.code || '';
-          newProducts[index].price = selected.price;
-          newProducts[index].coefficient = selected.riCoefficient || 1;
-          newProducts[index].uom = selected.baseUnitId ? { _type: 'XTSObjectId', dataType: 'XTSMeasurementUnit', id: selected.baseUnitId, presentation: selected.baseUnit || '' } : null;
-          newProducts[index].total = selected.price * newProducts[index].quantity;
-          newProducts[index].amount = selected.price * newProducts[index].quantity;
-          newProducts[index].priceOriginal = selected.price;
-        }
-      }
-
       return { ...prev, products: newProducts, amount: calculateTotal() };
     });
+
+    if (field === 'product' && value) {
+      try {
+        const productDetail = await getProductDetail(value);
+        setFormData((prev) => {
+          const newProducts = [...prev.products];
+          newProducts[index] = {
+            ...newProducts[index],
+            product: { 
+              _type: 'XTSObjectId', 
+              dataType: 'XTSProduct', 
+              id: value, 
+              presentation: productDetail.name 
+            },
+            sku: productDetail.code || '',
+            price: productDetail.price,
+            priceOriginal: productDetail.price,
+            coefficient: productDetail.riCoefficient || 1,
+            uom: productDetail.uoms[0] ? { 
+              _type: 'XTSObjectId', 
+              dataType: 'XTSUOMClassifier', 
+              id: productDetail.uoms[0].id, 
+              presentation: productDetail.uoms[0].presentation 
+            } : {
+              _type: 'XTSObjectId',
+              dataType: 'XTSUOMClassifier',
+              id: '',
+              presentation: ''
+            },
+            total: productDetail.price * newProducts[index].quantity,
+            amount: productDetail.price * newProducts[index].quantity,
+          };
+          return { ...prev, products: newProducts, amount: calculateTotal() };
+        });
+      } catch (error) {
+        console.error('Failed to fetch product details:', error);
+        toast.error('Không thể tải thông tin sản phẩm');
+      }
+    }
   };
 
   const validateForm = (): boolean => {
@@ -294,6 +344,11 @@ export default function SupplierInvoiceUpdate() {
         toast.error('Đơn giá không được âm');
         return false;
       }
+
+      if (!product.uom?.id) {
+        toast.error('Sản phẩm chưa có đơn vị tính');
+        return false;
+      }
     }
 
     return true;
@@ -309,9 +364,38 @@ export default function SupplierInvoiceUpdate() {
       setIsSaving(true);
 
       let formattedDate = formData.date;
-      if (formattedDate.length === 16) { // Kiểm tra nếu chỉ có YYYY-MM-DDTHH:mm
-        formattedDate += ':00'; // Thêm :ss (giây mặc định là 00)
+      if (formattedDate.length === 16) {
+        formattedDate += ':00';
       }
+
+      // Ensure all products have valid uom before sending
+      const validatedProducts = await Promise.all(
+        formData.products.map(async (product) => {
+          if (!product.uom?.id && product.product.id) {
+            try {
+              const productDetail = await getProductDetail(product.product.id);
+              return {
+                ...product,
+                uom: productDetail.uoms[0] ? {
+                  _type: 'XTSObjectId',
+                  dataType: 'XTSUOMClassifier',
+                  id: productDetail.uoms[0].id,
+                  presentation: productDetail.uoms[0].presentation
+                } : {
+                  _type: 'XTSObjectId',
+                  dataType: 'XTSUOMClassifier',
+                  id: '',
+                  presentation: ''
+                },
+              };
+            } catch (error) {
+              console.error(`Failed to fetch UOM for product ${product.product.id}:`, error);
+              return product;
+            }
+          }
+          return product;
+        })
+      );
 
       const invoiceData: UpdateSupplierInvoiceData = {
         id: formData.id,
@@ -319,14 +403,14 @@ export default function SupplierInvoiceUpdate() {
         title: formData.title,
         date: formattedDate,
         posted: false,
-        operationKindId: 'ReceiptFromSupplier',
-        operationKindPresentation: 'Mua hàng từ nhà cung cấp',
+        operationKindId: defaultValues.operationKind?.id || 'ReceiptFromSupplier',
+        operationKindPresentation: defaultValues.operationKind?.presentation || 'Mua hàng từ nhà cung cấp',
         companyId: defaultValues.company.id,
         companyName: defaultValues.company.presentation,
         counterpartyId: formData.counterpartyId,
         counterpartyName: formData.counterpartyName,
-        contractId: '',
-        contractName: '',
+        contractId: defaultValues.contract?.id || '',
+        contractName: defaultValues.contract?.presentation || '',
         currencyId: formData.currencyId,
         currencyName: formData.currencyName,
         amount: calculateTotal(),
@@ -339,10 +423,8 @@ export default function SupplierInvoiceUpdate() {
         employeeName: formData.employeeName,
         structuralUnitId: formData.structuralUnitId,
         structuralUnitName: formData.structuralUnitName,
-        products: formData.products,
+        products: validatedProducts,
       };
-
-      console.log('Request data:', invoiceData);
 
       await updateSupplierInvoice(invoiceData);
       toast.success('Cập nhật đơn nhận hàng thành công');
@@ -552,7 +634,8 @@ export default function SupplierInvoiceUpdate() {
             {formData.products.map((product, index) => {
               const selectedProduct = products.find((p) => p.id === product.product.id);
               const code = selectedProduct?.code || product.sku || 'N/A';
-              const riCoefficient = selectedProduct?.riCoefficient || product.coefficient || 1;
+              const riCoefficient = product.coefficient || 1;
+              const unitName = product.uom?.presentation || 'N/A';
 
               return (
                 <div key={index} className="bg-white rounded-lg shadow-sm p-4">
@@ -593,6 +676,14 @@ export default function SupplierInvoiceUpdate() {
                       <div className="mt-2 flex items-center gap-2">
                         <span className="text-sm text-gray-500">Hệ số ri:</span>
                         <span className="text-sm text-gray-900">{riCoefficient}</span>
+                      </div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-sm text-gray-500">Đơn vị tính:</span>
+                        <span className="text-sm text-gray-900">{unitName}</span>
+                      </div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-sm text-gray-500">Đơn giá bán:</span>
+                        <span className="text-sm text-gray-900">{product.priceOriginal.toLocaleString()}</span>
                       </div>
                     </div>
                     <button

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   Save,
@@ -8,12 +8,14 @@ import {
   FileText,
   DollarSign,
   Tag,
-  Wallet,
   Receipt
 } from 'lucide-react';
+import Select from 'react-select';
 import toast from 'react-hot-toast';
 import { createCashReceipt } from '../../services/cashReceipt';
+import { getCustomerDropdownData, getOrders } from '../../services/order';
 import type { CreateCashReceiptData } from '../../services/cashReceipt';
+import type { CustomerDropdownItem, Order } from '../../services/order';
 
 interface FormData {
   date: string;
@@ -25,37 +27,66 @@ interface FormData {
   comment: string;
   employeeId: string;
   employeeName: string;
-  cashAccountId: string;
-  cashAccountName: string;
   cashFlowItemId: string;
   cashFlowItemName: string;
   documentBasisId: string;
   documentBasisName: string;
 }
 
-const initialFormData: FormData = {
-  date: new Date().toISOString().split('T')[0] + 'T00:00:00',
-  operationKindId: 'FromSupplier',
-  operationKindName: 'Từ người bán',
-  customerId: '',
-  customerName: '',
-  amount: 0,
-  comment: '',
-  employeeId: '0a1ae9b8-5b28-11ef-a699-00155d058802',
-  employeeName: 'Test',
-  cashAccountId: 'c5bb0ec3-a7db-44fe-9a44-23a5a69df5ca',
-  cashAccountName: 'Quỹ tiền mặt chính',
-  cashFlowItemId: '6ceda0e4-5b28-11ef-a699-00155d058802',
-  cashFlowItemName: 'Nhận tiền từ người mua',
-  documentBasisId: '',
-  documentBasisName: ''
-};
-
 export default function CashReceiptAdd() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const orderData = (location.state as any)?.orderData;
+
+  const initialFormData: FormData = {
+    date: new Date().toISOString(),
+    operationKindId: 'FromCustomer',
+    operationKindName: 'Từ khách hàng',
+    customerId: orderData?.customerId || '',
+    customerName: orderData?.customerName || '',
+    amount: orderData?.postPayment || 0,
+    comment: '',
+    employeeId: '0a1ae9b8-5b28-11ef-a699-00155d058802',
+    employeeName: 'Test',
+    cashFlowItemId: '6ceda0e4-5b28-11ef-a699-00155d058802',
+    cashFlowItemName: 'Nhận tiền từ người mua',
+    documentBasisId: orderData?.orderId || '',
+    documentBasisName: orderData?.orderNumber ? `Đơn hàng #${orderData.orderNumber}` : ''
+  };
+
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [isLoading, setIsLoading] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [customers, setCustomers] = useState<CustomerDropdownItem[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isFetchingCustomers, setIsFetchingCustomers] = useState(false);
+  const [isFetchingOrders, setIsFetchingOrders] = useState(false);
+
+  useEffect(() => {
+    const fetchDropdownData = async () => {
+      try {
+        setIsFetchingCustomers(true);
+        const customerData = await getCustomerDropdownData();
+        setCustomers(customerData);
+      } catch (error) {
+        toast.error('Không thể tải danh sách khách hàng');
+      } finally {
+        setIsFetchingCustomers(false);
+      }
+
+      try {
+        setIsFetchingOrders(true);
+        const orderDataResponse = await getOrders(1, 1000); // Lấy tối đa 1000 đơn hàng
+        setOrders(orderDataResponse.items);
+      } catch (error) {
+        toast.error('Không thể tải danh sách đơn hàng');
+      } finally {
+        setIsFetchingOrders(false);
+      }
+    };
+
+    fetchDropdownData();
+  }, []);
 
   const validateForm = (): boolean => {
     if (!formData.customerId) {
@@ -95,8 +126,6 @@ export default function CashReceiptAdd() {
         comment: formData.comment,
         employeeId: formData.employeeId,
         employeeName: formData.employeeName,
-        cashAccountId: formData.cashAccountId,
-        cashAccountName: formData.cashAccountName,
         cashFlowItemId: formData.cashFlowItemId,
         cashFlowItemName: formData.cashFlowItemName,
         documentBasisId: formData.documentBasisId,
@@ -113,6 +142,19 @@ export default function CashReceiptAdd() {
       setShowConfirmation(false);
     }
   };
+
+  const customerOptions = customers.map(customer => ({
+    value: customer.id,
+    label: `${customer.code ? `${customer.code} - ` : ''}${customer.name}`
+  }));
+
+  const orderOptions = orders.map(order => ({
+    value: order.id,
+    label: `Đơn hàng #${order.number}`
+  }));
+
+  const selectedCustomer = customerOptions.find(option => option.value === formData.customerId);
+  const selectedOrder = orderOptions.find(option => option.value === formData.documentBasisId);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -136,8 +178,8 @@ export default function CashReceiptAdd() {
               <input
                 type="datetime-local"
                 value={formData.date.slice(0, 16)}
-                onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                readOnly
+                className="block w-full pl-10 pr-3 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm"
               />
               <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
@@ -149,18 +191,24 @@ export default function CashReceiptAdd() {
               Khách hàng *
             </label>
             <div className="relative">
-              <input
-                type="text"
-                value={formData.customerName}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
-                  customerName: e.target.value,
-                  customerId: '12e8c6f0-d253-11ef-9602-f2202b293748' // Mock ID for demo
-                }))}
+              <Select
+                options={customerOptions}
+                value={selectedCustomer}
+                onChange={(option) => {
+                  if (!orderData && option) {
+                    setFormData(prev => ({
+                      ...prev,
+                      customerId: option.value,
+                      customerName: option.label
+                    }));
+                  }
+                }}
                 placeholder="Chọn khách hàng..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                isLoading={isFetchingCustomers}
+                isDisabled={!!orderData}
+                className="text-sm"
+                classNamePrefix="react-select"
               />
-              <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
           </div>
 
@@ -172,15 +220,15 @@ export default function CashReceiptAdd() {
             <div className="relative">
               <select
                 value={formData.operationKindId}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
+                onChange={(e) => setFormData(prev => ({
+                  ...prev,
                   operationKindId: e.target.value,
-                  operationKindName: e.target.options[e.target.selectedIndex].text 
+                  operationKindName: e.target.options[e.target.selectedIndex].text
                 }))}
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="FromSupplier">Từ người bán</option>
                 <option value="FromCustomer">Từ khách hàng</option>
+                <option value="FromSupplier">Từ người bán</option>
               </select>
               <Tag className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
@@ -195,33 +243,17 @@ export default function CashReceiptAdd() {
               <input
                 type="number"
                 value={formData.amount}
-                onChange={(e) => setFormData(prev => ({ ...prev, amount: Number(e.target.value) }))}
+                onChange={(e) => {
+                  if (!orderData) {
+                    setFormData(prev => ({ ...prev, amount: Number(e.target.value) }));
+                  }
+                }}
                 min="0"
                 step="1000"
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                readOnly={!!orderData}
+                className={`block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm ${orderData ? 'bg-gray-50' : 'focus:ring-blue-500 focus:border-blue-500'}`}
               />
               <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            </div>
-          </div>
-
-          {/* Cash Account */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Quỹ tiền
-            </label>
-            <div className="relative">
-              <select
-                value={formData.cashAccountId}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
-                  cashAccountId: e.target.value,
-                  cashAccountName: e.target.options[e.target.selectedIndex].text 
-                }))}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="c5bb0ec3-a7db-44fe-9a44-23a5a69df5ca">Quỹ tiền mặt chính</option>
-              </select>
-              <Wallet className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
           </div>
 
@@ -231,18 +263,24 @@ export default function CashReceiptAdd() {
               Chứng từ gốc
             </label>
             <div className="relative">
-              <input
-                type="text"
-                value={formData.documentBasisName}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
-                  documentBasisName: e.target.value,
-                  documentBasisId: e.target.value ? '88956252-f459-11ef-9602-f2202b293748' : '' // Mock ID for demo
-                }))}
+              <Select
+                options={orderOptions}
+                value={selectedOrder}
+                onChange={(option) => {
+                  if (!orderData && option) {
+                    setFormData(prev => ({
+                      ...prev,
+                      documentBasisId: option.value,
+                      documentBasisName: option.label
+                    }));
+                  }
+                }}
                 placeholder="Chọn chứng từ..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                isLoading={isFetchingOrders}
+                isDisabled={!!orderData}
+                className="text-sm"
+                classNamePrefix="react-select"
               />
-              <Receipt className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
           </div>
 

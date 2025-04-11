@@ -84,12 +84,12 @@ export default function SupplierInvoiceDetail() {
         setError(null);
 
         const invoiceData = await getSupplierInvoiceDetail(id);
-        console.log('Dữ liệu nhận được khi vào màn hình SupplierInvoiceDetail:', invoiceData);
+        // console.log('Dữ liệu nhận được khi vào màn hình SupplierInvoiceDetail:', invoiceData);
         setInvoice(invoiceData);
 
         const productIds = invoiceData.inventory.map((product) => product.product.id);
         const pricesMap = await getProductPrices(productIds);
-        console.log('Product prices response:', Array.from(pricesMap.entries()));
+        // console.log('Product prices response:', Array.from(pricesMap.entries()));
         setProductPrices(pricesMap);
         setOriginalProductPrices(new Map(pricesMap));
       } catch (error) {
@@ -121,7 +121,7 @@ export default function SupplierInvoiceDetail() {
 
   const handleEdit = () => {
     if (id) {
-      console.log('Dữ liệu truyền sang SupplierInvoiceUpdate:', invoice);
+      // console.log('Dữ liệu truyền sang SupplierInvoiceUpdate:', invoice);
       navigate(`/supplier-invoices/edit/${id}`);
     }
   };

@@ -30,6 +30,7 @@ export interface ProductDetail {
   category: string;
   price: number;
   imageUrl: string | null;
+  baseUnitId: string;
   baseUnit: string;
   riCoefficient: number;
   description: string;
@@ -270,6 +271,7 @@ export const getProductDetail = async (id: string): Promise<ProductDetail> => {
       category: product.productCategory?.presentation || '',
       price: product._price || 0,
       imageUrl: images[0]?.url || null,
+      baseUnitId: product.measurementUnit?.id || '',
       baseUnit: product.measurementUnit?.presentation || '',
       riCoefficient: product._uomCoefficient || 1,
       description: product.descriptionFull || '',
