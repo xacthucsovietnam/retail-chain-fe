@@ -37,25 +37,25 @@ interface FormData {
   orderState: string;
   deliveryAddress: string;
   comment: string;
-  documentAmount: number; // Added to match CreateOrderData
+  documentAmount: number;
   products: Array<{
     productId: string;
     productName: string;
-    code: string; // Changed from sku
+    code: string;
     unitId: string;
     unitName: string;
     quantity: number;
     price: number;
     coefficient: number;
-    amount: number; // Added to match CreateOrderProduct
-    automaticDiscountAmount: number; // Added to match CreateOrderProduct
-    discountsMarkupsAmount: number; // Added to match CreateOrderProduct
-    vatAmount: number; // Added to match CreateOrderProduct
-    vatRateId: string; // Added to match CreateOrderProduct
-    vatRateName: string; // Added to match CreateOrderProduct
-    total: number; // Added to match CreateOrderProduct
-    availableUnits?: Array<{ id: string; presentation: string; coefficient: number }>; // Optional for UI
-    imageUrl?: string; // Optional for UI
+    amount: number;
+    automaticDiscountAmount: number;
+    discountsMarkupsAmount: number;
+    vatAmount: number;
+    vatRateId: string;
+    vatRateName: string;
+    total: number;
+    availableUnits?: Array<{ id: string; presentation: string; coefficient: number }>;
+    imageUrl?: string;
   }>;
 }
 
@@ -69,7 +69,7 @@ interface OrderPreloadData {
   originalProducts?: Array<{
     productId: string;
     productName: string;
-    code: string; // Changed from sku
+    code: string;
     unit: string;
     quantity: number;
     price: number;
@@ -117,6 +117,7 @@ export default function OrderAdd() {
   const [isOrderInfoExpanded, setIsOrderInfoExpanded] = useState(true);
   const [isProductListExpanded, setIsProductListExpanded] = useState(true);
   const [newProduct, setNewProduct] = useState<FormData['products'][0] | null>(null);
+  const [showCreateProductPopup, setShowCreateProductPopup] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -213,16 +214,40 @@ export default function OrderAdd() {
   };
 
   const handleProductChange = async (selectedOption: any) => {
-    if (!selectedOption) return;
-  
-    if (selectedOption.value === 'create-product') {
-      setShowProductAddPopup(false);
-      setCurrentProductIndex(0);
-      setShowProductAddPopup(true);
+    console.log('handleProductChange called with:', selectedOption);
+
+    if (!selectedOption) {
+      console.log('No option selected, resetting newProduct');
+      setNewProduct({
+        productId: '',
+        productName: '',
+        code: '',
+        unitId: '',
+        unitName: '',
+        quantity: 1,
+        price: 0,
+        coefficient: 1,
+        amount: 0,
+        automaticDiscountAmount: 0,
+        discountsMarkupsAmount: 0,
+        vatAmount: 0,
+        vatRateId: '',
+        vatRateName: '',
+        total: 0,
+        availableUnits: []
+      });
       return;
     }
-  
+
+    if (selectedOption.value === 'create-product') {
+      console.log('Selected create-product, opening ProductAddPopup');
+      setShowProductAddPopup(false);
+      setShowCreateProductPopup(true);
+      return;
+    }
+
     try {
+      console.log('Fetching product detail for:', selectedOption.value);
       const productDetail = await getProductDetail(selectedOption.value);
       const availableUnits = productDetail.uoms || [];
       const defaultUnit = availableUnits.length === 2 ? availableUnits[1] : availableUnits[0] || { id: '', presentation: '', coefficient: 1 };
@@ -230,7 +255,7 @@ export default function OrderAdd() {
       const imageUrl = productDetail.imageUrl && productDetail.images.length > 0 
         ? `${fileStorageURL}${productDetail.images[0].id}`
         : undefined;
-  
+
       setNewProduct({
         productId: productDetail.id,
         productName: productDetail.name,
@@ -255,8 +280,8 @@ export default function OrderAdd() {
         imageUrl
       });
     } catch (error) {
-      toast.error('Không thể tải chi tiết sản phẩm');
       console.error('Error fetching product detail:', error);
+      toast.error('Không thể tải chi tiết sản phẩm');
     }
   };
 
@@ -322,6 +347,7 @@ export default function OrderAdd() {
 
   const handleProductAdded = async (newProductData: { id: string; presentation: string }) => {
     try {
+      console.log('handleProductAdded called with:', newProductData);
       const productDetail = await getProductDetail(newProductData.id);
       const availableUnits = productDetail.uoms || [];
       const defaultUnit = availableUnits.length === 2 ? availableUnits[1] : availableUnits[0] || { id: '', presentation: '', coefficient: 1 };
@@ -329,7 +355,7 @@ export default function OrderAdd() {
       const imageUrl = productDetail.imageUrl && productDetail.images.length > 0 
         ? `${fileStorageURL}${productDetail.images[0].id}`
         : undefined;
-  
+
       const newProductOption: ProductDropdownItem = {
         id: productDetail.id,
         name: productDetail.name
@@ -338,7 +364,7 @@ export default function OrderAdd() {
       if (isReturnOrder) {
         setAvailableProducts(prev => [...prev, newProductOption]);
       }
-  
+
       setNewProduct({
         productId: productDetail.id,
         productName: productDetail.name,
@@ -362,13 +388,13 @@ export default function OrderAdd() {
         availableUnits,
         imageUrl
       });
-  
+
+      setShowCreateProductPopup(false);
       setShowProductAddPopup(true);
-      setCurrentProductIndex(null);
       toast.success('Sản phẩm đã được thêm');
     } catch (error) {
-      toast.error('Không thể tải chi tiết sản phẩm vừa thêm');
       console.error('Error fetching new product detail:', error);
+      toast.error('Không thể tải chi tiết sản phẩm vừa thêm');
     }
   };
 
@@ -398,7 +424,7 @@ export default function OrderAdd() {
       const orderProducts: CreateOrderProduct[] = formData.products.map(product => ({
         productId: product.productId,
         productName: product.productName,
-        characteristic: null, // Assuming no characteristic in this context
+        characteristic: null,
         unitId: product.unitId,
         unitName: product.unitName,
         quantity: product.quantity,
@@ -898,163 +924,168 @@ export default function OrderAdd() {
       )}
 
       {showProductAddPopup && newProduct && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
-    <div className="bg-white rounded-lg p-6 w-full max-w-md">
-      {/* Tiêu đề */}
-      <h3 className="text-lg font-semibold text-gray-900 mb-5">
-        Thêm sản phẩm
-      </h3>
-
-      <div className="space-y-5">
-        {/* Chọn sản phẩm (1 dòng) */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Sản phẩm <span className="text-red-500">*</span>
-          </label>
-          <Select
-            options={productOptions}
-            value={productOptions.find(option => option.value === newProduct.productId) || null}
-            onChange={handleProductChange}
-            placeholder="Chọn sản phẩm..."
-            isSearchable
-            className="text-sm"
-            classNamePrefix="select"
-            components={{ Option: CustomOption }}
-          />
-        </div>
-
-        {/* Mã sản phẩm và đơn vị tính (1 dòng) */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="col-span-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Mã sản phẩm
-            </label>
-            <input
-              type="text"
-              value={newProduct.code || ''}
-              readOnly
-              className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-3 py-2 bg-gray-50"
-              placeholder="Mã sản phẩm"
-            />
-          </div>
-          <div className="col-span-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Đơn vị tính
-            </label>
-            <Select
-              options={newProduct.availableUnits?.map(unit => ({
-                value: unit.id,
-                label: unit.presentation
-              }))}
-              value={newProduct.availableUnits
-                ?.map(unit => ({ value: unit.id, label: unit.presentation }))
-                .find(option => option.value === newProduct.unitId) || null}
-              onChange={handleUnitChange}
-              placeholder="Chọn đơn vị"
-              className="text-sm"
-              classNamePrefix="select"
-              styles={{
-                control: (provided) => ({
-                  ...provided,
-                  minHeight: 'auto',
-                  height: '38px',
-                  fontSize: '14px',
-                }),
-                valueContainer: (provided) => ({
-                  ...provided,
-                  padding: '2px 8px',
-                }),
-                indicatorsContainer: (provided) => ({
-                  ...provided,
-                  height: '38px',
-                }),
-                menu: (provided) => ({
-                  ...provided,
-                  zIndex: 9999,
-                }),
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Đơn giá và số lượng (1 dòng) */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="col-span-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Đơn giá
-            </label>
-            <input
-              type="number"
-              value={newProduct.price === 0 ? '' : newProduct.price}
-              onChange={(e) => handleFieldChange('price', e.target.value)}
-              min="0"
-              step="1000"
-              className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-              inputMode="numeric"
-              placeholder="Nhập đơn giá"
-            />
-          </div>
-          <div className="col-span-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Số lượng
-            </label>
-            <div className="relative flex items-center">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-900 mb-5">
+              Thêm sản phẩm
+            </h3>
+            <div className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Sản phẩm <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  options={productOptions}
+                  value={productOptions.find(option => option.value === newProduct.productId) || null}
+                  onChange={handleProductChange}
+                  placeholder="Chọn sản phẩm..."
+                  isSearchable
+                  className="text-sm"
+                  classNamePrefix="select"
+                  components={{ Option: CustomOption }}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Mã sản phẩm
+                  </label>
+                  <input
+                    type="text"
+                    value={newProduct.code || ''}
+                    readOnly
+                    className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-3 py-2 bg-gray-50"
+                    placeholder="Mã sản phẩm"
+                  />
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Đơn vị tính
+                  </label>
+                  <Select
+                    options={newProduct.availableUnits?.map(unit => ({
+                      value: unit.id,
+                      label: unit.presentation
+                    }))}
+                    value={newProduct.availableUnits
+                      ?.map(unit => ({ value: unit.id, label: unit.presentation }))
+                      .find(option => option.value === newProduct.unitId) || null}
+                    onChange={handleUnitChange}
+                    placeholder="Chọn đơn vị"
+                    className="text-sm"
+                    classNamePrefix="select"
+                    styles={{
+                      control: (provided) => ({
+                        ...provided,
+                        minHeight: 'auto',
+                        height: '38px',
+                        fontSize: '14px',
+                      }),
+                      valueContainer: (provided) => ({
+                        ...provided,
+                        padding: '2px 8px',
+                      }),
+                      indicatorsContainer: (provided) => ({
+                        ...provided,
+                        height: '38px',
+                      }),
+                      menu: (provided) => ({
+                        ...provided,
+                        zIndex: 9999,
+                      }),
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Đơn giá
+                  </label>
+                  <input
+                    type="number"
+                    value={newProduct.price === 0 ? '' : newProduct.price}
+                    onChange={(e) => handleFieldChange('price', e.target.value)}
+                    min="0"
+                    step="1000"
+                    className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+                    inputMode="numeric"
+                    placeholder="Nhập đơn giá"
+                  />
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Số lượng
+                  </label>
+                  <div className="relative flex items-center">
+                    <button
+                      onClick={() =>
+                        handleFieldChange('quantity', Math.max(1, newProduct.quantity - 1))
+                      }
+                      className="absolute left-0 h-9 w-9 flex items-center justify-center bg-gray-100 text-gray-600 rounded-l-md hover:bg-gray-200 focus:outline-none"
+                    >
+                      <span className="text-lg">-</span>
+                    </button>
+                    <input
+                      type="number"
+                      value={newProduct.quantity === 0 ? '' : newProduct.quantity}
+                      onChange={(e) => handleFieldChange('quantity', e.target.value)}
+                      min="1"
+                      className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-12 py-2 text-center focus:ring-blue-500 focus:border-blue-500"
+                      inputMode="numeric"
+                    />
+                    <button
+                      onClick={() => handleFieldChange('quantity', newProduct.quantity + 1)}
+                      className="absolute right-0 h-9 w-9 flex items-center justify-center bg-gray-100 text-gray-600 rounded-r-md hover:bg-gray-200 focus:outline-none"
+                    >
+                      <span className="text-lg">+</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-between items-center pt-4 border-t border-gray-200">
+                <span className="text-sm font-medium text-gray-700">Thành tiền</span>
+                <span className="text-base font-semibold text-blue-600">
+                  {newProduct.total.toLocaleString()} đ
+                </span>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
               <button
-                onClick={() =>
-                  handleFieldChange('quantity', Math.max(1, newProduct.quantity - 1))
-                }
-                className="absolute left-0 h-9 w-9 flex items-center justify-center bg-gray-100 text-gray-600 rounded-l-md hover:bg-gray-200 focus:outline-none"
+                onClick={() => {
+                  setShowProductAddPopup(false);
+                  setNewProduct(null);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 rounded-md"
               >
-                <span className="text-lg">-</span>
+                Đóng
               </button>
-              <input
-                type="number"
-                value={newProduct.quantity === 0 ? '' : newProduct.quantity}
-                onChange={(e) => handleFieldChange('quantity', e.target.value)}
-                min="1"
-                className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-12 py-2 text-center focus:ring-blue-500 focus:border-blue-500"
-                inputMode="numeric"
-              />
               <button
-                onClick={() => handleFieldChange('quantity', newProduct.quantity + 1)}
-                className="absolute right-0 h-9 w-9 flex items-center justify-center bg-gray-100 text-gray-600 rounded-r-md hover:bg-gray-200 focus:outline-none"
+                onClick={handleAddToOrder}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
               >
-                <span className="text-lg">+</span>
+                Thêm vào đơn
               </button>
             </div>
           </div>
         </div>
+      )}
 
-        {/* Thành tiền */}
-        <div className="flex justify-between items-center pt-4 border-t border-gray-200">
-          <span className="text-sm font-medium text-gray-700">Thành tiền</span>
-          <span className="text-base font-semibold text-blue-600">
-            {newProduct.total.toLocaleString()} đ
-          </span>
+      {showCreateProductPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 px-4">
+          <ProductAddPopup
+            onClose={() => {
+              console.log('Closing ProductAddPopup');
+              setShowCreateProductPopup(false);
+              setShowProductAddPopup(true);
+            }}
+            onProductAdded={(newProductData) => {
+              console.log('Product added:', newProductData);
+              handleProductAdded(newProductData);
+            }}
+          />
         </div>
-      </div>
-
-      {/* Nút hành động */}
-      <div className="flex justify-end gap-3 mt-6">
-        <button
-          onClick={() => {
-            setShowProductAddPopup(false);
-            setNewProduct(null);
-          }}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 rounded-md"
-        >
-          Đóng
-        </button>
-        <button
-          onClick={handleAddToOrder}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
-        >
-          Thêm vào đơn
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+      )}
     </div>
   );
 }
