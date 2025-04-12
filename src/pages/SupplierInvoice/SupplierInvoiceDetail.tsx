@@ -532,10 +532,6 @@ export default function SupplierInvoiceDetail() {
                           <span>Số lượng:</span>
                           <span>{product.quantity} {product.uom?.presentation || ''}</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span>Hệ số:</span>
-                          <span>{product.coefficient}</span>
-                        </div>
                         {!isReturnFromCustomer && (
                           <div className="flex justify-between">
                             <span>Đơn giá nhập/chiếc:</span>
@@ -559,7 +555,7 @@ export default function SupplierInvoiceDetail() {
                           ) : (
                             <span className={sellingPrice === undefined || sellingPrice === null ? 'text-red-500' : ''}>
                               {sellingPrice !== undefined && sellingPrice !== null
-                                ? formatCurrency(sellingPrice, invoice.documentCurrency)
+                                ? formatCurrency(sellingPrice, 'đ')
                                 : 'Chưa có giá bán'}
                             </span>
                           )}

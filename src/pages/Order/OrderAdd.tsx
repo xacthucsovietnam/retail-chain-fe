@@ -898,124 +898,163 @@ export default function OrderAdd() {
       )}
 
       {showProductAddPopup && newProduct && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-lg p-4 w-full max-w-md">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
-              Thêm sản phẩm
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Sản phẩm *
-                </label>
-                <Select
-                  options={productOptions}
-                  value={productOptions.find(option => option.value === newProduct.productId) || null}
-                  onChange={handleProductChange}
-                  placeholder="Chọn sản phẩm..."
-                  isSearchable
-                  className="text-sm"
-                  classNamePrefix="select"
-                  components={{ Option: CustomOption }}
-                />
-                <p className="text-xs text-gray-500 mt-1">{newProduct.code || 'Code'}</p>
-              </div>
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+    <div className="bg-white rounded-lg p-6 w-full max-w-md">
+      {/* Tiêu đề */}
+      <h3 className="text-lg font-semibold text-gray-900 mb-5">
+        Thêm sản phẩm
+      </h3>
 
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Đơn giá chiếc
-                  </label>
-                  <input
-                    type="number"
-                    value={newProduct.price === 0 ? '' : newProduct.price}
-                    onChange={(e) => handleFieldChange('price', e.target.value)}
-                    min="0"
-                    step="1000"
-                    className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1 focus:ring-blue-500 focus:border-blue-500"
-                    inputMode="numeric"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Đơn vị tính
-                  </label>
-                  <Select
-                    options={newProduct.availableUnits?.map(unit => ({
-                      value: unit.id,
-                      label: unit.presentation
-                    }))}
-                    value={newProduct.availableUnits
-                      ?.map(unit => ({ value: unit.id, label: unit.presentation }))
-                      .find(option => option.value === newProduct.unitId) || null}
-                    onChange={handleUnitChange}
-                    placeholder="Chọn ..."
-                    className="text-sm"
-                    classNamePrefix="select"
-                    styles={{
-                      control: (provided) => ({
-                        ...provided,
-                        minHeight: 'auto',
-                        height: '30px',
-                        fontSize: '14px',
-                      }),
-                      valueContainer: (provided) => ({
-                        ...provided,
-                        padding: '2px 8px',
-                      }),
-                      indicatorsContainer: (provided) => ({
-                        ...provided,
-                        height: '30px',
-                      }),
-                      menu: (provided) => ({
-                        ...provided,
-                        zIndex: 9999,
-                      }),
-                    }}
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Số lượng
-                  </label>
-                  <input
-                    type="number"
-                    value={newProduct.quantity === 0 ? '' : newProduct.quantity}
-                    onChange={(e) => handleFieldChange('quantity', e.target.value)}
-                    min="1"
-                    className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1 focus:ring-blue-500 focus:border-blue-500"
-                    inputMode="numeric"
-                  />
-                </div>
-              </div>
+      <div className="space-y-5">
+        {/* Chọn sản phẩm (1 dòng) */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            Sản phẩm <span className="text-red-500">*</span>
+          </label>
+          <Select
+            options={productOptions}
+            value={productOptions.find(option => option.value === newProduct.productId) || null}
+            onChange={handleProductChange}
+            placeholder="Chọn sản phẩm..."
+            isSearchable
+            className="text-sm"
+            classNamePrefix="select"
+            components={{ Option: CustomOption }}
+          />
+        </div>
 
-              <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
-                <span className="text-xs text-gray-500">Thành tiền</span>
-                <span className="text-sm font-medium text-blue-600">
-                  {newProduct.total.toLocaleString()} đ
-                </span>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 mt-4">
+        {/* Mã sản phẩm và đơn vị tính (1 dòng) */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="col-span-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Mã sản phẩm
+            </label>
+            <input
+              type="text"
+              value={newProduct.code || ''}
+              readOnly
+              className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-3 py-2 bg-gray-50"
+              placeholder="Mã sản phẩm"
+            />
+          </div>
+          <div className="col-span-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Đơn vị tính
+            </label>
+            <Select
+              options={newProduct.availableUnits?.map(unit => ({
+                value: unit.id,
+                label: unit.presentation
+              }))}
+              value={newProduct.availableUnits
+                ?.map(unit => ({ value: unit.id, label: unit.presentation }))
+                .find(option => option.value === newProduct.unitId) || null}
+              onChange={handleUnitChange}
+              placeholder="Chọn đơn vị"
+              className="text-sm"
+              classNamePrefix="select"
+              styles={{
+                control: (provided) => ({
+                  ...provided,
+                  minHeight: 'auto',
+                  height: '38px',
+                  fontSize: '14px',
+                }),
+                valueContainer: (provided) => ({
+                  ...provided,
+                  padding: '2px 8px',
+                }),
+                indicatorsContainer: (provided) => ({
+                  ...provided,
+                  height: '38px',
+                }),
+                menu: (provided) => ({
+                  ...provided,
+                  zIndex: 9999,
+                }),
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Đơn giá và số lượng (1 dòng) */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="col-span-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Đơn giá
+            </label>
+            <input
+              type="number"
+              value={newProduct.price === 0 ? '' : newProduct.price}
+              onChange={(e) => handleFieldChange('price', e.target.value)}
+              min="0"
+              step="1000"
+              className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+              inputMode="numeric"
+              placeholder="Nhập đơn giá"
+            />
+          </div>
+          <div className="col-span-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Số lượng
+            </label>
+            <div className="relative flex items-center">
               <button
-                onClick={() => {
-                  setShowProductAddPopup(false);
-                  setNewProduct(null);
-                }}
-                className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+                onClick={() =>
+                  handleFieldChange('quantity', Math.max(1, newProduct.quantity - 1))
+                }
+                className="absolute left-0 h-9 w-9 flex items-center justify-center bg-gray-100 text-gray-600 rounded-l-md hover:bg-gray-200 focus:outline-none"
               >
-                Đóng
+                <span className="text-lg">-</span>
               </button>
+              <input
+                type="number"
+                value={newProduct.quantity === 0 ? '' : newProduct.quantity}
+                onChange={(e) => handleFieldChange('quantity', e.target.value)}
+                min="1"
+                className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-12 py-2 text-center focus:ring-blue-500 focus:border-blue-500"
+                inputMode="numeric"
+              />
               <button
-                onClick={handleAddToOrder}
-                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+                onClick={() => handleFieldChange('quantity', newProduct.quantity + 1)}
+                className="absolute right-0 h-9 w-9 flex items-center justify-center bg-gray-100 text-gray-600 rounded-r-md hover:bg-gray-200 focus:outline-none"
               >
-                Thêm vào đơn
+                <span className="text-lg">+</span>
               </button>
             </div>
           </div>
         </div>
-      )}
+
+        {/* Thành tiền */}
+        <div className="flex justify-between items-center pt-4 border-t border-gray-200">
+          <span className="text-sm font-medium text-gray-700">Thành tiền</span>
+          <span className="text-base font-semibold text-blue-600">
+            {newProduct.total.toLocaleString()} đ
+          </span>
+        </div>
+      </div>
+
+      {/* Nút hành động */}
+      <div className="flex justify-end gap-3 mt-6">
+        <button
+          onClick={() => {
+            setShowProductAddPopup(false);
+            setNewProduct(null);
+          }}
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 rounded-md"
+        >
+          Đóng
+        </button>
+        <button
+          onClick={handleAddToOrder}
+          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+        >
+          Thêm vào đơn
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }

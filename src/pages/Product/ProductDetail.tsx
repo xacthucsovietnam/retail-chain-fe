@@ -18,14 +18,14 @@ import type { ProductDetail, ProductImage } from '../../services/product';
 import { formatCurrency } from '../../utils/currency';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { DEFAULT_IMAGE_URL } from '../../services/file';
-import { deleteSingleObject } from '../../services/deleteObjects'; // Import hàm xóa từ deleteObjects.ts
+import { deleteSingleObject } from '../../services/deleteObjects';
 
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isDeleting, setIsDeleting] = useState(false); // Thêm trạng thái để xử lý khi đang xóa
+  const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const { t } = useLanguage();
@@ -82,18 +82,33 @@ export default function ProductDetail() {
 
   const downloadImage = async (url: string, filename: string) => {
     try {
-      const response = await fetch(url);
+      // Fetch ảnh từ URL
+      const response = await fetch(url, { mode: 'cors' });
+      if (!response.ok) throw new Error('Không thể tải ảnh');
+
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+
+      // Kiểm tra nếu là iOS (Safari)
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      if (isIOS) {
+        // Trên iOS, mở ảnh trong tab mới để người dùng lưu thủ công
+        window.open(blobUrl, '_blank');
+      } else {
+        // Trên các thiết bị khác, sử dụng thẻ <a> để tải
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+
+      // Giải phóng blob URL
       window.URL.revokeObjectURL(blobUrl);
     } catch (error) {
       toast.error('Không thể tải ảnh');
+      console.error('Download error:', error);
     }
   };
 
@@ -110,6 +125,8 @@ export default function ProductDetail() {
     for (let i = 0; i < product.images.length; i++) {
       const filename = `product-${product.code}-${i + 1}.jpg`;
       await downloadImage(product.images[i].url, filename);
+      // Thêm delay nhỏ để tránh quá tải trên mobile
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
   };
 
@@ -123,12 +140,12 @@ export default function ProductDetail() {
       setIsDeleting(true);
       const objectToDelete = {
         id: id,
-        dataType: 'XTSProduct', // Giả định dataType là 'Product', cần điều chỉnh nếu khác
+        dataType: 'XTSProduct',
         presentation: product.name
       };
       await deleteSingleObject(objectToDelete);
       toast.success('Xóa sản phẩm thành công');
-      navigate('/products'); // Quay lại danh sách sản phẩm sau khi xóa thành công
+      navigate('/products');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Không thể xóa sản phẩm';
       toast.error(errorMessage);

@@ -16,6 +16,7 @@ import { createCashReceipt } from '../../services/cashReceipt';
 import { getCustomerDropdownData, getOrders } from '../../services/order';
 import type { CreateCashReceiptData } from '../../services/cashReceipt';
 import type { CustomerDropdownItem, Order } from '../../services/order';
+import { getSession } from '../../utils/storage';
 
 interface FormData {
   date: string;
@@ -25,12 +26,12 @@ interface FormData {
   customerName: string;
   amount: number;
   comment: string;
-  employeeId: string;
-  employeeName: string;
-  cashFlowItemId: string;
-  cashFlowItemName: string;
-  documentBasisId: string;
-  documentBasisName: string;
+  employeeId?: string;
+  employeeName?: string;
+  cashFlowItemId?: string;
+  cashFlowItemName?: string;
+  documentBasisId?: string;
+  documentBasisName?: string;
 }
 
 export default function CashReceiptAdd() {
@@ -38,23 +39,29 @@ export default function CashReceiptAdd() {
   const location = useLocation();
   const orderData = (location.state as any)?.orderData;
 
-  const initialFormData: FormData = {
-    date: new Date().toISOString(),
-    operationKindId: 'FromCustomer',
-    operationKindName: 'Từ khách hàng',
-    customerId: orderData?.customerId || '',
-    customerName: orderData?.customerName || '',
-    amount: orderData?.postPayment || 0,
-    comment: '',
-    employeeId: '0a1ae9b8-5b28-11ef-a699-00155d058802',
-    employeeName: 'Test',
-    cashFlowItemId: '6ceda0e4-5b28-11ef-a699-00155d058802',
-    cashFlowItemName: 'Nhận tiền từ người mua',
-    documentBasisId: orderData?.orderId || '',
-    documentBasisName: orderData?.orderNumber ? `Đơn hàng #${orderData.orderNumber}` : ''
+  // Lấy dữ liệu từ session
+  const getInitialFormData = (): FormData => {
+    const session = getSession();
+    const employeeResponsible = session?.defaultValues?.employeeResponsible;
+
+    return {
+      date: new Date().toISOString(),
+      operationKindId: 'FromCustomer',
+      operationKindName: 'Từ khách hàng',
+      customerId: orderData?.customerId || '',
+      customerName: orderData?.customerName || '',
+      amount: orderData?.postPayment || 0,
+      comment: '',
+      employeeId: employeeResponsible?.id || '',
+      employeeName: employeeResponsible?.presentation || '',
+      cashFlowItemId: '6ceda0e4-5b28-11ef-a699-00155d058802', // Giữ nguyên vì không có trong session
+      cashFlowItemName: 'Nhận tiền từ người mua', // Giữ nguyên vì không có trong session
+      documentBasisId: orderData?.orderId || '',
+      documentBasisName: orderData?.orderNumber ? `Đơn hàng #${orderData.orderNumber}` : ''
+    };
   };
 
-  const [formData, setFormData] = useState<FormData>(initialFormData);
+  const [formData, setFormData] = useState<FormData>(getInitialFormData());
   const [isLoading, setIsLoading] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [customers, setCustomers] = useState<CustomerDropdownItem[]>([]);
@@ -62,6 +69,16 @@ export default function CashReceiptAdd() {
   const [isFetchingCustomers, setIsFetchingCustomers] = useState(false);
   const [isFetchingOrders, setIsFetchingOrders] = useState(false);
 
+  // Log orderData khi mở từ OrderDetail.tsx
+  useEffect(() => {
+    if (orderData) {
+      console.log('Order data received from OrderDetail.tsx:', JSON.stringify(orderData, null, 2));
+    } else {
+      console.log('No order data received from OrderDetail.tsx');
+    }
+  }, [orderData]);
+
+  // Tải dữ liệu dropdown cho khách hàng và đơn hàng
   useEffect(() => {
     const fetchDropdownData = async () => {
       try {
@@ -311,7 +328,7 @@ export default function CashReceiptAdd() {
         >
           <ArrowLeft className="h-6 w-6" />
         </button>
-        
+
         <button
           onClick={handleSubmit}
           disabled={isLoading}

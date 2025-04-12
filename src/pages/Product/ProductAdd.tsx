@@ -19,7 +19,7 @@ interface FormData {
   description: string;
 }
 
-const MAX_IMAGES = 5;
+const MAX_IMAGES = 20;
 const MAX_DESCRIPTION_LENGTH = 500;
 
 export default function ProductAdd() {
@@ -34,8 +34,8 @@ export default function ProductAdd() {
     code: '',
     name: '',
     purchasePrice: 0,
-    sellingPrice: 0, // Giá trị mặc định là 0
-    riCoefficient: 1.1, // Giá trị mặc định là 1.1
+    sellingPrice: 0,
+    riCoefficient: 1.1,
     description: ''
   });
 
@@ -50,10 +50,6 @@ export default function ProductAdd() {
     const validFiles = files.filter(file => {
       if (!file.type.startsWith('image/')) {
         toast.error(`${file.name} không phải là file ảnh hợp lệ`);
-        return false;
-      }
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error(`${file.name} vượt quá kích thước cho phép (5MB)`);
         return false;
       }
       return true;
@@ -165,7 +161,7 @@ export default function ProductAdd() {
         {/* Image Upload */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Hình ảnh (Tải tối đa 5 ảnh)
+            Hình ảnh (Tải tối đa 20 ảnh)
           </label>
           <div className="grid grid-cols-3 gap-2">
             {previewUrls.map((url, index) => (
@@ -244,7 +240,7 @@ export default function ProductAdd() {
               onFocus={handleSellingPriceFocus}
               onBlur={handleSellingPriceBlur}
               min="0"
-              step="1" // Tăng/giảm 1 khi click nút lên/xuống
+              step="1"
               placeholder="Nhập giá bán"
               className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
             />
@@ -261,7 +257,7 @@ export default function ProductAdd() {
               onFocus={handleRiCoefficientFocus}
               onBlur={handleRiCoefficientBlur}
               min="0"
-              step="0.1" // Tăng/giảm 0.1 khi click nút lên/xuống
+              step="0.1"
               placeholder="Nhập hệ số ri"
               className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
             />

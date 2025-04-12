@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   Save,
@@ -8,12 +8,15 @@ import {
   FileText,
   DollarSign,
   Tag,
-  CreditCard,
   Receipt
 } from 'lucide-react';
+import Select from 'react-select';
 import toast from 'react-hot-toast';
 import { createTransferReceipt } from '../../services/transferReceipt';
+import { getCustomerDropdownData, getOrders } from '../../services/order';
 import type { CreateTransferReceiptData } from '../../services/transferReceipt';
+import type { CustomerDropdownItem, Order } from '../../services/order';
+import { getSession } from '../../utils/storage';
 
 interface FormData {
   date: string;
@@ -23,39 +26,84 @@ interface FormData {
   customerName: string;
   amount: number;
   comment: string;
-  employeeId: string;
-  employeeName: string;
-  bankAccountId: string;
-  bankAccountName: string;
-  cashFlowItemId: string;
-  cashFlowItemName: string;
-  documentBasisId: string;
-  documentBasisName: string;
+  employeeId?: string;
+  employeeName?: string;
+  cashFlowItemId?: string;
+  cashFlowItemName?: string;
+  documentBasisId?: string;
+  documentBasisName?: string;
 }
-
-const initialFormData: FormData = {
-  date: new Date().toISOString().split('T')[0] + 'T00:00:00',
-  operationKindId: 'FromSupplier',
-  operationKindName: 'Từ người bán',
-  customerId: '',
-  customerName: '',
-  amount: 0,
-  comment: '',
-  employeeId: '0a1ae9b8-5b28-11ef-a699-00155d058802',
-  employeeName: 'Test',
-  bankAccountId: '583efa7c-6237-11ef-a699-00155d058802',
-  bankAccountName: 'Tài khoản VND',
-  cashFlowItemId: '6ceda0e4-5b28-11ef-a699-00155d058802',
-  cashFlowItemName: 'Nhận tiền từ người mua',
-  documentBasisId: '',
-  documentBasisName: ''
-};
 
 export default function TransferReceiptAdd() {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState<FormData>(initialFormData);
+  const location = useLocation();
+  const orderData = (location.state as any)?.orderData;
+
+  // Lấy dữ liệu từ session
+  const getInitialFormData = (): FormData => {
+    const session = getSession();
+    const employeeResponsible = session?.defaultValues?.employeeResponsible;
+
+    return {
+      date: new Date().toISOString(),
+      operationKindId: 'FromCustomer',
+      operationKindName: 'Từ khách hàng',
+      customerId: orderData?.customerId || '',
+      customerName: orderData?.customerName || '',
+      amount: orderData?.postPayment || 0,
+      comment: '',
+      employeeId: employeeResponsible?.id || '',
+      employeeName: employeeResponsible?.presentation || '',
+      cashFlowItemId: '6ceda0e4-5b28-11ef-a699-00155d058802', // Giữ nguyên vì không có trong session
+      cashFlowItemName: 'Nhận tiền từ người mua', // Giữ nguyên vì không có trong session
+      documentBasisId: orderData?.orderId || '',
+      documentBasisName: orderData?.orderNumber ? `Đơn hàng #${orderData.orderNumber}` : ''
+    };
+  };
+
+  const [formData, setFormData] = useState<FormData>(getInitialFormData());
   const [isLoading, setIsLoading] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [customers, setCustomers] = useState<CustomerDropdownItem[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isFetchingCustomers, setIsFetchingCustomers] = useState(false);
+  const [isFetchingOrders, setIsFetchingOrders] = useState(false);
+
+  // Log orderData khi mở từ OrderDetail.tsx
+  useEffect(() => {
+    if (orderData) {
+      console.log('Order data received from OrderDetail.tsx:', JSON.stringify(orderData, null, 2));
+    } else {
+      console.log('No order data received from OrderDetail.tsx');
+    }
+  }, [orderData]);
+
+  // Tải dữ liệu dropdown cho khách hàng và đơn hàng
+  useEffect(() => {
+    const fetchDropdownData = async () => {
+      try {
+        setIsFetchingCustomers(true);
+        const customerData = await getCustomerDropdownData();
+        setCustomers(customerData);
+      } catch (error) {
+        toast.error('Không thể tải danh sách khách hàng');
+      } finally {
+        setIsFetchingCustomers(false);
+      }
+
+      try {
+        setIsFetchingOrders(true);
+        const orderDataResponse = await getOrders(1, 1000); // Lấy tối đa 1000 đơn hàng
+        setOrders(orderDataResponse.items);
+      } catch (error) {
+        toast.error('Không thể tải danh sách đơn hàng');
+      } finally {
+        setIsFetchingOrders(false);
+      }
+    };
+
+    fetchDropdownData();
+  }, []);
 
   const validateForm = (): boolean => {
     if (!formData.customerId) {
@@ -95,8 +143,6 @@ export default function TransferReceiptAdd() {
         comment: formData.comment,
         employeeId: formData.employeeId,
         employeeName: formData.employeeName,
-        bankAccountId: formData.bankAccountId,
-        bankAccountName: formData.bankAccountName,
         cashFlowItemId: formData.cashFlowItemId,
         cashFlowItemName: formData.cashFlowItemName,
         documentBasisId: formData.documentBasisId,
@@ -114,17 +160,31 @@ export default function TransferReceiptAdd() {
     }
   };
 
+  const customerOptions = customers.map(customer => ({
+    value: customer.id,
+    label: `${customer.code ? `${customer.code} - ` : ''}${customer.name}`
+  }));
+
+  const orderOptions = orders.map(order => ({
+    value: order.id,
+    label: `Đơn hàng #${order.number}`
+  }));
+
+  const selectedCustomer = customerOptions.find(option => option.value === formData.customerId);
+  const selectedOrder = orderOptions.find(option => option.value === formData.documentBasisId);
+
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* Fixed Header */}
       <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
         <div className="px-4 py-3">
-          <h1 className="text-lg font-semibold text-gray-900">Thêm mới</h1>
+          <h1 className="text-lg font-semibold text-gray-900">Thêm mới phiếu thu chuyển khoản</h1>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="pt-4 px-4">
+        {/* Form Fields */}
         <div className="space-y-4">
           {/* Date */}
           <div>
@@ -136,6 +196,7 @@ export default function TransferReceiptAdd() {
                 type="datetime-local"
                 value={formData.date.slice(0, 16)}
                 onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                readOnly
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               />
               <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
@@ -148,18 +209,24 @@ export default function TransferReceiptAdd() {
               Khách hàng *
             </label>
             <div className="relative">
-              <input
-                type="text"
-                value={formData.customerName}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
-                  customerName: e.target.value,
-                  customerId: '12e8c6f0-d253-11ef-9602-f2202b293748' // Mock ID for demo
-                }))}
+              <Select
+                options={customerOptions}
+                value={selectedCustomer}
+                onChange={(option) => {
+                  if (!orderData && option) {
+                    setFormData(prev => ({
+                      ...prev,
+                      customerId: option.value,
+                      customerName: option.label
+                    }));
+                  }
+                }}
                 placeholder="Chọn khách hàng..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                isLoading={isFetchingCustomers}
+                isDisabled={!!orderData}
+                className="text-sm"
+                classNamePrefix="react-select"
               />
-              <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
           </div>
 
@@ -171,15 +238,15 @@ export default function TransferReceiptAdd() {
             <div className="relative">
               <select
                 value={formData.operationKindId}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
+                onChange={(e) => setFormData(prev => ({
+                  ...prev,
                   operationKindId: e.target.value,
-                  operationKindName: e.target.options[e.target.selectedIndex].text 
+                  operationKindName: e.target.options[e.target.selectedIndex].text
                 }))}
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="FromSupplier">Từ người bán</option>
                 <option value="FromCustomer">Từ khách hàng</option>
+                <option value="FromSupplier">Từ người bán</option>
               </select>
               <Tag className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
@@ -194,33 +261,17 @@ export default function TransferReceiptAdd() {
               <input
                 type="number"
                 value={formData.amount}
-                onChange={(e) => setFormData(prev => ({ ...prev, amount: Number(e.target.value) }))}
+                onChange={(e) => {
+                  if (!orderData) {
+                    setFormData(prev => ({ ...prev, amount: Number(e.target.value) }));
+                  }
+                }}
                 min="0"
                 step="1000"
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                readOnly={!!orderData}
+                className={`block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm ${orderData ? 'bg-gray-50' : 'focus:ring-blue-500 focus:border-blue-500'}`}
               />
               <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            </div>
-          </div>
-
-          {/* Bank Account */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Tài khoản ngân hàng
-            </label>
-            <div className="relative">
-              <select
-                value={formData.bankAccountId}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
-                  bankAccountId: e.target.value,
-                  bankAccountName: e.target.options[e.target.selectedIndex].text 
-                }))}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="583efa7c-6237-11ef-a699-00155d058802">Tài khoản VND</option>
-              </select>
-              <CreditCard className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
           </div>
 
@@ -230,18 +281,24 @@ export default function TransferReceiptAdd() {
               Chứng từ gốc
             </label>
             <div className="relative">
-              <input
-                type="text"
-                value={formData.documentBasisName}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
-                  documentBasisName: e.target.value,
-                  documentBasisId: e.target.value ? '88956252-f459-11ef-9602-f2202b293748' : '' // Mock ID for demo
-                }))}
+              <Select
+                options={orderOptions}
+                value={selectedOrder}
+                onChange={(option) => {
+                  if (!orderData && option) {
+                    setFormData(prev => ({
+                      ...prev,
+                      documentBasisId: option.value,
+                      documentBasisName: option.label
+                    }));
+                  }
+                }}
                 placeholder="Chọn chứng từ..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                isLoading={isFetchingOrders}
+                isDisabled={!!orderData}
+                className="text-sm"
+                classNamePrefix="react-select"
               />
-              <Receipt className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
           </div>
 
@@ -272,7 +329,7 @@ export default function TransferReceiptAdd() {
         >
           <ArrowLeft className="h-6 w-6" />
         </button>
-        
+
         <button
           onClick={handleSubmit}
           disabled={isLoading}
@@ -287,7 +344,7 @@ export default function TransferReceiptAdd() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-lg p-4 w-full max-w-sm">
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Xác nhận tạo phiếu thu
+              Xác nhận tạo phiếu thu chuyển khoản
             </h3>
             <p className="text-sm text-gray-500 mb-4">
               Bạn có chắc chắn muốn tạo phiếu thu chuyển khoản này không?
