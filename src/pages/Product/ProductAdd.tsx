@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { createProduct } from '../../services/product';
+import { getSession } from '../../utils/storage';
 
 interface FormData {
   images: File[];
@@ -16,11 +17,14 @@ interface FormData {
   purchasePrice: number;
   sellingPrice: number;
   riCoefficient: number;
+  measurementUnit: string;
   description: string;
 }
 
 const MAX_IMAGES = 20;
 const MAX_DESCRIPTION_LENGTH = 500;
+const session = getSession();
+const defaultValues = session?.defaultValues || {};
 
 export default function ProductAdd() {
   const navigate = useNavigate();
@@ -36,6 +40,7 @@ export default function ProductAdd() {
     purchasePrice: 0,
     sellingPrice: 0,
     riCoefficient: 1.1,
+    measurementUnit: defaultValues.productsUOM.id,
     description: ''
   });
 

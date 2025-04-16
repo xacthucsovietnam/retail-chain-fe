@@ -372,50 +372,48 @@ export default function SupplierInvoiceAdd() {
   };
 
   const handleSaveProduct = () => {
-  if (!newProduct || !newProduct.product.id) {
-    toast.error('Vui lòng chọn sản phẩm');
-    return;
-  }
+    if (!newProduct || !newProduct.product.id) {
+      toast.error('Vui lòng chọn sản phẩm');
+      return;
+    }
 
-  if (newProduct.quantity <= 0) {
-    toast.error('Số lượng phải lớn hơn 0');
-    return;
-  }
+    if (newProduct.quantity <= 0) {
+      toast.error('Số lượng phải lớn hơn 0');
+      return;
+    }
 
-  if (newProduct.price < 0) {
-    toast.error('Đơn giá không được âm');
-    return;
-  }
+    if (newProduct.price < 0) {
+      toast.error('Đơn giá không được âm');
+      return;
+    }
 
-  setFormData(prev => ({
-    ...prev,
-    products: [...prev.products, newProduct],
-    amount: calculateTotal() + newProduct.total
-  }));
+    setFormData(prev => ({
+      ...prev,
+      products: [...prev.products, newProduct],
+      amount: calculateTotal() + newProduct.total
+    }));
 
-  // Reset newProduct thay vì đóng popup
-  setNewProduct({
-    lineNumber: formData.products.length + 2, // Tăng lineNumber cho sản phẩm tiếp theo
-    product: { _type: 'XTSObjectId', dataType: 'XTSProduct', id: '', presentation: '' },
-    characteristic: null,
-    uom: { _type: 'XTSObjectId', dataType: 'XTSUOMClassifier', id: '', presentation: '' },
-    quantity: 1,
-    price: 0,
-    amount: 0,
-    discountsMarkupsAmount: null,
-    vatAmount: null,
-    vatRate: null,
-    total: 0,
-    sku: '',
-    coefficient: 1,
-    priceOriginal: 0,
-    vatRateRate: null,
-    picture: null
-  });
+    setNewProduct({
+      lineNumber: formData.products.length + 2,
+      product: { _type: 'XTSObjectId', dataType: 'XTSProduct', id: '', presentation: '' },
+      characteristic: null,
+      uom: { _type: 'XTSObjectId', dataType: 'XTSUOMClassifier', id: '', presentation: '' },
+      quantity: 1,
+      price: 0,
+      amount: 0,
+      discountsMarkupsAmount: null,
+      vatAmount: null,
+      vatRate: null,
+      total: 0,
+      sku: '',
+      coefficient: 1,
+      priceOriginal: 0,
+      vatRateRate: null,
+      picture: null
+    });
 
-  toast.success('Đã thêm sản phẩm vào đơn hàng');
-  // Không đóng popup: setShowProductAddPopup(false) bị loại bỏ
-};
+    toast.success('Đã thêm sản phẩm vào đơn hàng');
+  };
 
   const handleProductAdded = async (newProductData: { id: string; presentation: string }) => {
     if (isReturnOrder) return;
@@ -539,7 +537,7 @@ export default function SupplierInvoiceAdd() {
             category: defaultValues.productCategory?.id || '',
             purchasePrice: adjustedPrice,
             sellingPrice: adjustedPrice,
-            measurementUnit: defaultMeasurementUnit.id,
+            measurementUnit: defaultValues.productsUOM.id,
             riCoefficient: adjustedCoefficient,
             description: item.productCharacteristic || '',
             images: []
@@ -580,13 +578,13 @@ export default function SupplierInvoiceAdd() {
     }
 
     const combinedProducts: SupplierProduct[] = [
-      ...updatedExisted.map((item, index) => {
+      ...updatedExisted.map(item => {
         const selectedObj = item.selectedObject;
         const adjustedPrice = Number(selectedObj.price || 0);
         const adjustedQuantity = Number(selectedObj.quantity) || 1;
         const adjustedCoefficient = Number(selectedObj.coefficient || selectedObj._uomCoefficient || 1);
         return {
-          lineNumber: index + 1,
+          lineNumber: item.lineNumber, // Giữ nguyên lineNumber từ OCR
           product: { _type: 'XTSObjectId', dataType: 'XTSProduct', id: selectedObj.objectId.id || '', presentation: selectedObj.objectId.presentation || '' },
           characteristic: null,
           uom: { _type: 'XTSObjectId', dataType: 'XTSUOMClassifier', id: selectedObj.uom?.id || '', presentation: selectedObj.uom?.presentation || '' },
@@ -604,12 +602,12 @@ export default function SupplierInvoiceAdd() {
           picture: null
         };
       }),
-      ...processedNotExist.map((item, index) => {
+      ...processedNotExist.map(item => {
         const adjustedPrice = Number(item.price);
         const adjustedQuantity = Number(item.quantity) || 1;
         const adjustedCoefficient = Number(item.coefficient) || 1;
         return {
-          lineNumber: updatedExisted.length + index + 1,
+          lineNumber: item.lineNumber, // Giữ nguyên lineNumber từ OCR
           product: { _type: 'XTSObjectId', dataType: 'XTSProduct', id: item.id || '', presentation: item.name || item.productDescription },
           characteristic: null,
           uom: {
@@ -633,6 +631,9 @@ export default function SupplierInvoiceAdd() {
         };
       })
     ];
+
+    // Sắp xếp combinedProducts theo lineNumber để đảm bảo thứ tự đúng như OCR
+    combinedProducts.sort((a, b) => a.lineNumber - b.lineNumber);
 
     setFormData(prev => ({
       ...prev,
@@ -1025,7 +1026,7 @@ export default function SupplierInvoiceAdd() {
                         isSearchable
                         className="text-sm"
                         classNamePrefix="select"
-                        isDisabled={true} // Disable editing existing products directly
+                        isDisabled={true}
                       />
                       {product.product.id && (
                         <>
@@ -1069,7 +1070,7 @@ export default function SupplierInvoiceAdd() {
                         type="number"
                         value={product.quantity}
                         className="w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled={true} // Disable direct editing
+                        disabled={true}
                       />
                     </div>
                     <div>
@@ -1078,7 +1079,7 @@ export default function SupplierInvoiceAdd() {
                         type="number"
                         value={product.price}
                         className="w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled={true} // Disable direct editing
+                        disabled={true}
                       />
                     </div>
                   </div>
@@ -1240,108 +1241,108 @@ export default function SupplierInvoiceAdd() {
       )}
 
       {showProductAddPopup && newProduct && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
-    <div className="bg-white rounded-lg p-4 w-full max-w-md">
-      <h3 className="text-lg font-medium text-gray-900 mb-4">
-        Thêm sản phẩm
-      </h3>
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Sản phẩm *
-          </label>
-          <Select
-            options={productOptions}
-            value={productOptions.find(option => option.value === newProduct.product.id) || null}
-            onChange={handleProductChange}
-            placeholder="Chọn sản phẩm..."
-            isSearchable
-            className="text-sm"
-            classNamePrefix="select"
-            components={{ Option: CustomOption }}
-          />
-          <p className="text-xs text-gray-500 mt-1">{newProduct.sku || 'Code'}</p>
-        </div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-lg p-4 w-full max-w-md">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Thêm sản phẩm
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Sản phẩm *
+                </label>
+                <Select
+                  options={productOptions}
+                  value={productOptions.find(option => option.value === newProduct.product.id) || null}
+                  onChange={handleProductChange}
+                  placeholder="Chọn sản phẩm..."
+                  isSearchable
+                  className="text-sm"
+                  classNamePrefix="select"
+                  components={{ Option: CustomOption }}
+                />
+                <p className="text-xs text-gray-500 mt-1">{newProduct.sku || 'Code'}</p>
+              </div>
 
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <label className="block text-xs text-gray-500 mb-1">
-              Đơn giá
-            </label>
-            <input
-              type="number"
-              value={newProduct.price === 0 ? '' : newProduct.price}
-              onChange={(e) => handleFieldChange('price', e.target.value)}
-              min="0"
-              step="1000"
-              className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1 focus:ring-blue-500 focus:border-blue-500"
-              inputMode="numeric"
-              disabled={isReturnOrder}
-            />
-          </div>
-          <div className="flex-1">
-            <label className="block text-xs text-gray-500 mb-1">
-              Số lượng{' '}
-              {isReturnOrder && newProduct.availableQuantity !== undefined
-                ? `(Tối đa: ${newProduct.availableQuantity})`
-                : ''}
-            </label>
-            <div className="flex items-center">
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Đơn giá
+                  </label>
+                  <input
+                    type="number"
+                    value={newProduct.price === 0 ? '' : newProduct.price}
+                    onChange={(e) => handleFieldChange('price', e.target.value)}
+                    min="0"
+                    step="1000"
+                    className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1 focus:ring-blue-500 focus:border-blue-500"
+                    inputMode="numeric"
+                    disabled={isReturnOrder}
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Số lượng{' '}
+                    {isReturnOrder && newProduct.availableQuantity !== undefined
+                      ? `(Tối đa: ${newProduct.availableQuantity})`
+                      : ''}
+                  </label>
+                  <div className="flex items-center">
+                    <button
+                      onClick={() => handleQuantityAdjust(-1)}
+                      className="p-1 bg-gray-200 rounded-l-md hover:bg-gray-300"
+                      disabled={newProduct.quantity <= 1}
+                    >
+                      <Minus className="h-4 w-4" />
+                    </button>
+                    <input
+                      type="number"
+                      value={newProduct.quantity === 0 ? '' : newProduct.quantity}
+                      onChange={(e) => handleFieldChange('quantity', e.target.value)}
+                      onFocus={(e) => e.target.value = ''}
+                      min="1"
+                      max={isReturnOrder ? newProduct.availableQuantity : undefined}
+                      className="w-full text-sm text-gray-900 border-t border-b border-gray-300 px-2 py-1 focus:ring-blue-500 focus:border-blue-500 text-center"
+                      inputMode="numeric"
+                    />
+                    <button
+                      onClick={() => handleQuantityAdjust(1)}
+                      className="p-1 bg-gray-200 rounded-r-md hover:bg-gray-300"
+                      disabled={isReturnOrder && newProduct.quantity >= (newProduct.availableQuantity || Infinity)}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
+                <span className="text-xs text-gray-500">Thành tiền</span>
+                <span className="text-sm font-medium text-blue-600">
+                  {newProduct.total.toLocaleString()} {formData.currencyName}
+                </span>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
               <button
-                onClick={() => handleQuantityAdjust(-1)}
-                className="p-1 bg-gray-200 rounded-l-md hover:bg-gray-300"
-                disabled={newProduct.quantity <= 1}
+                onClick={() => {
+                  setShowProductAddPopup(false);
+                  setNewProduct(null);
+                }}
+                className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
               >
-                <Minus className="h-4 w-4" />
+                Đóng
               </button>
-              <input
-                type="number"
-                value={newProduct.quantity === 0 ? '' : newProduct.quantity}
-                onChange={(e) => handleFieldChange('quantity', e.target.value)}
-                onFocus={(e) => e.target.value = ''} // Clear value on focus
-                min="1"
-                max={isReturnOrder ? newProduct.availableQuantity : undefined}
-                className="w-full text-sm text-gray-900 border-t border-b border-gray-300 px-2 py-1 focus:ring-blue-500 focus:border-blue-500 text-center"
-                inputMode="numeric"
-              />
               <button
-                onClick={() => handleQuantityAdjust(1)}
-                className="p-1 bg-gray-200 rounded-r-md hover:bg-gray-300"
-                disabled={isReturnOrder && newProduct.quantity >= (newProduct.availableQuantity || Infinity)}
+                onClick={handleSaveProduct}
+                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
               >
-                <Plus className="h-4 w-4" />
+                Thêm vào đơn
               </button>
             </div>
           </div>
         </div>
-
-        <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
-          <span className="text-xs text-gray-500">Thành tiền</span>
-          <span className="text-sm font-medium text-blue-600">
-            {newProduct.total.toLocaleString()} {formData.currencyName}
-          </span>
-        </div>
-      </div>
-      <div className="flex justify-end gap-2 mt-4">
-        <button
-          onClick={() => {
-            setShowProductAddPopup(false);
-            setNewProduct(null);
-          }}
-          className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
-        >
-          Đóng
-        </button>
-        <button
-          onClick={handleSaveProduct}
-          className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
-        >
-          Thêm vào đơn
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+      )}
 
       {isProcessingImages && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
