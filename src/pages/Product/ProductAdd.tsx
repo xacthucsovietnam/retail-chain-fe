@@ -39,7 +39,7 @@ export default function ProductAdd() {
     name: '',
     purchasePrice: 0,
     sellingPrice: 0,
-    riCoefficient: 1.1,
+    riCoefficient: 1, // Đổi giá trị mặc định từ 1.1 thành 1
     measurementUnit: defaultValues.productsUOM.id,
     description: ''
   });
@@ -137,18 +137,18 @@ export default function ProductAdd() {
   const handleRiCoefficientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = Number(e.target.value);
     if (value < 0) return; // Không cho phép số âm
-    setFormData(prev => ({ ...prev, riCoefficient: value }));
+    setFormData(prev => ({ ...prev, riCoefficient: Math.round(value) })); // Làm tròn về số nguyên
   };
 
   const handleRiCoefficientFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-    if (formData.riCoefficient === 1.1) {
-      e.target.value = ''; // Xóa số 1.1 khi focus
+    if (formData.riCoefficient === 1) {
+      e.target.value = ''; // Xóa số 1 khi focus
     }
   };
 
   const handleRiCoefficientBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     if (e.target.value === '') {
-      setFormData(prev => ({ ...prev, riCoefficient: 1.1 })); // Nếu để trống, đặt lại về 1.1
+      setFormData(prev => ({ ...prev, riCoefficient: 1 })); // Nếu để trống, đặt lại về 1
     }
   };
 
@@ -262,7 +262,7 @@ export default function ProductAdd() {
               onFocus={handleRiCoefficientFocus}
               onBlur={handleRiCoefficientBlur}
               min="0"
-              step="0.1"
+              step="1" // Đổi step từ 0.1 thành 1 để chỉ cho phép số nguyên
               placeholder="Nhập hệ số ri"
               className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
             />

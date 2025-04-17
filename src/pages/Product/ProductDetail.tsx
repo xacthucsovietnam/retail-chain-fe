@@ -82,20 +82,31 @@ export default function ProductDetail() {
 
   const downloadImage = async (url: string, filename: string) => {
     try {
-      // Fetch ảnh từ URL
-      const response = await fetch(url, { mode: 'cors' });
+      // Fetch ảnh từ URL với CORS headers
+      const response = await fetch(url, {
+        mode: 'cors',
+        credentials: 'omit',
+      });
       if (!response.ok) throw new Error('Không thể tải ảnh');
 
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
 
-      // Kiểm tra nếu là iOS (Safari)
+      // Kiểm tra user agent để xử lý trên các thiết bị khác nhau
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-      if (isIOS) {
-        // Trên iOS, mở ảnh trong tab mới để người dùng lưu thủ công
-        window.open(blobUrl, '_blank');
+      const isAndroid = /Android/.test(navigator.userAgent);
+      const isMobile = isIOS || isAndroid;
+
+      if (isMobile) {
+        // Trên mobile (iOS và Android), mở blob URL trong tab mới để trình duyệt xử lý tải
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       } else {
-        // Trên các thiết bị khác, sử dụng thẻ <a> để tải
+        // Trên desktop, sử dụng thẻ <a> để tải trực tiếp
         const link = document.createElement('a');
         link.href = blobUrl;
         link.download = filename;
@@ -112,11 +123,11 @@ export default function ProductDetail() {
     }
   };
 
-  const handleDownloadCurrent = () => {
+  const handleDownloadCurrent = async () => {
     if (!product?.images[currentImageIndex]) return;
     const currentImage = product.images[currentImageIndex];
     const filename = `product-${product.code}-${currentImageIndex + 1}.jpg`;
-    downloadImage(currentImage.url, filename);
+    await downloadImage(currentImage.url, filename);
   };
 
   const handleDownloadAll = async () => {
@@ -186,13 +197,6 @@ export default function ProductDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Fixed Header */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
-        <div className="px-4 py-3">
-          <h1 className="text-lg font-semibold text-gray-900">Chi tiết sản phẩm</h1>
-          <p className="text-sm text-gray-500">{product.code}</p>
-        </div>
-      </div>
 
       {/* Main Content */}
       <div className="pt-4">
@@ -252,35 +256,27 @@ export default function ProductDetail() {
         {/* Product Details */}
         <div className="px-4 py-6 space-y-4">
           <div className="space-y-1">
-            <p className="text-sm text-gray-500">Mã sản phẩm</p>
-            <p className="text-base text-gray-900">{product.code}</p>
-          </div>
-
-          <div className="space-y-1">
+            <p className="text-lg font-bold text-blue-600">{product.code}</p>
             <p className="text-sm text-gray-500">Tên sản phẩm</p>
             <p className="text-base text-gray-900">{product.name}</p>
           </div>
 
-          <div className="space-y-1">
-            <p className="text-sm text-gray-500">Loại sản phẩm</p>
-            <p className="text-base text-gray-900">{product.category}</p>
-          </div>
-
-          <div className="space-y-1">
-            <p className="text-sm text-gray-500">Đơn vị tính</p>
-            <p className="text-base text-gray-900">{product.baseUnit}</p>
+          <div className="flex justify-between space-x-4">
+            <div className="space-y-1 flex-1">
+              <p className="text-sm text-gray-500">Đơn vị tính</p>
+              <p className="text-base text-gray-900">{product.baseUnit}</p>
+            </div>
+            <div className="space-y-1 flex-1">
+              <p className="text-sm text-gray-500">Giá bán</p>
+              <p className="text-base font-semibold text-blue-600">
+                {formatCurrency(product.price, 'VND')}
+              </p>
+            </div>
           </div>
 
           <div className="space-y-1">
             <p className="text-sm text-gray-500">Hệ số Ri</p>
             <p className="text-base text-gray-900">{product.riCoefficient}</p>
-          </div>
-
-          <div className="space-y-1">
-            <p className="text-sm text-gray-500">Giá bán</p>
-            <p className="text-base font-semibold text-blue-600">
-              {formatCurrency(product.price, 'VND')}
-            </p>
           </div>
 
           {product.description && (

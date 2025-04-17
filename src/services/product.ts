@@ -168,7 +168,13 @@ export const getMeasurementUnits = async (): Promise<MeasurementUnit[]> => {
   }
 };
 
-export const getProducts = async (searchTerm: string = '', category: string = '', page: number = 1, pageSize: number = 20): Promise<PaginatedResponse<Product>> => {
+export const getProducts = async (
+  searchTerm: string = '',
+  category: string = '',
+  page: number = 1,
+  pageSize: number = 20,
+  searchType: 'description' | 'sku' = 'description'
+): Promise<PaginatedResponse<Product>> => {
   const positionFrom = (page - 1) * pageSize + 1;
   const positionTo = page * pageSize;
 
@@ -182,15 +188,15 @@ export const getProducts = async (searchTerm: string = '', category: string = ''
     positionFrom,
     positionTo,
     limit: pageSize,
-    conditions: []
+    conditions: [],
   };
 
   if (searchTerm) {
     productListData.conditions.push({
       _type: 'XTSCondition',
-      property: 'description',
+      property: searchType,
       value: searchTerm,
-      comparisonOperator: 'contains'
+      comparisonOperator: 'LIKE',
     });
   }
 
@@ -199,7 +205,7 @@ export const getProducts = async (searchTerm: string = '', category: string = ''
       _type: 'XTSCondition',
       property: 'productCategory.presentation',
       value: category,
-      comparisonOperator: '='
+      comparisonOperator: '=',
     });
   }
 
@@ -223,10 +229,10 @@ export const getProducts = async (searchTerm: string = '', category: string = ''
           category: item.object.productCategory?.presentation || '',
           name: item.object.description || '',
           code: item.object.sku || '',
-          price: item.object._price || 0
+          price: item.object._price || 0,
         };
       }),
-      hasMore: response.data.items.length === pageSize
+      hasMore: response.data.items.length === pageSize,
     };
   } catch (error) {
     console.error('Product fetch error:', error);

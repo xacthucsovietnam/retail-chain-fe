@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Plus, X } from 'lucide-react';
+import { Search, Plus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getProducts } from '../../services/product';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -17,87 +17,182 @@ interface Product {
 
 export default function Products() {
   const navigate = useNavigate();
-  const [allProducts, setAllProducts] = useState<Product[]>([]); // Lưu toàn bộ danh sách sản phẩm gốc
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]); // Danh sách sản phẩm đã lọc
-  const [isLoading, setIsLoading] = useState(true);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
-  const lastScrollY = useRef(0);
+  const [searchType, setSearchType] = useState<'description' | 'sku'>('description');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isInitialLoadDone, setIsInitialLoadDone] = useState(false);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
+  const observer = useRef<IntersectionObserver | null>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSearchRef = useRef<{ term: string; type: 'description' | 'sku' }>({
+    term: '',
+    type: 'description',
+  });
+  const radioContainerRef = useRef<HTMLDivElement>(null);
   const { t } = useLanguage();
 
-  // Fetch products từ API với page = 1 và pageSize lớn
-  const fetchProducts = async () => {
-    try {
-      setIsLoading(true);
-      const response = await getProducts(searchTerm, selectedCategory, 1, 999999999); // Lấy toàn bộ sản phẩm
-      setAllProducts(response.items);
-      setFilteredProducts(response.items); // Ban đầu hiển thị toàn bộ
-    } catch (error) {
-      toast.error(t('message.productsFailed'));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Gọi API khi component mount hoặc khi thay đổi danh mục
-  useEffect(() => {
-    fetchProducts();
-  }, [selectedCategory]);
-
-  // Lọc sản phẩm cục bộ dựa trên searchTerm
-  useEffect(() => {
-    const filtered = allProducts.filter(product =>
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.code.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    setFilteredProducts(filtered);
-  }, [searchTerm, allProducts]);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      
-      if (currentScrollY < lastScrollY.current - 20) {
-        setIsHeaderVisible(true);
-      } else if (currentScrollY > lastScrollY.current + 20) {
-        setIsHeaderVisible(false);
-        setIsSearchExpanded(false);
-      }
-      lastScrollY.current = currentScrollY;
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value); // Cập nhật searchTerm để lọc cục bộ
-  };
-
-  const clearFilters = () => {
-    setSearchTerm('');
-    setSelectedCategory('');
-    setIsFilterOpen(false);
-  };
-
+  // Format currency
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
-      currency: 'VND'
+      currency: 'VND',
     }).format(amount);
+  };
+
+  // Fetch products
+  const fetchProducts = useCallback(
+    async (pageNum: number, search: string, type: 'description' | 'sku', reset: boolean = false) => {
+      if (isLoading || (!hasMore && !reset)) return;
+
+      try {
+        setIsLoading(true);
+        const response = await getProducts(search, '', pageNum, 20, type);
+        setProducts((prev) => (reset || pageNum === 1 ? response.items : [...prev, ...response.items]));
+        setHasMore(response.hasMore);
+        lastSearchRef.current = { term: search, type };
+      } catch (error) {
+        toast.error(t('message.productsFailed'));
+      } finally {
+        setIsLoading(false);
+        setIsSearchLoading(false);
+        if (pageNum === 1) setIsInitialLoadDone(true);
+      }
+    },
+    [isLoading, hasMore, t]
+  );
+
+  // Initial fetch (only once)
+  useEffect(() => {
+    if (!isInitialLoadDone) {
+      fetchProducts(1, '', 'description', true);
+    }
+  }, [fetchProducts, isInitialLoadDone]);
+
+  // Handle search input change
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newSearchTerm = e.target.value;
+    setSearchTerm(newSearchTerm);
+    setIsSearchLoading(true);
+
+    if (isSearchFocused && newSearchTerm !== lastSearchRef.current.term) {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+      searchTimeoutRef.current = setTimeout(() => {
+        if (newSearchTerm !== lastSearchRef.current.term || searchType !== lastSearchRef.current.type) {
+          setPage(1);
+          setHasMore(true);
+          fetchProducts(1, newSearchTerm, searchType, true);
+        } else {
+          setIsSearchLoading(false);
+        }
+      }, 2000);
+    } else {
+      setIsSearchLoading(false);
+    }
+  };
+
+  // Handle blur (when search input loses focus)
+  const handleSearchBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const relatedTarget = e.relatedTarget as Node;
+    const radioContainer = radioContainerRef.current;
+
+    // If the focus moves to the radio container or its children, keep the search focused
+    if (radioContainer && relatedTarget && radioContainer.contains(relatedTarget)) {
+      return;
+    }
+
+    setTimeout(() => setIsSearchFocused(false), 200);
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (
+      searchTerm !== lastSearchRef.current.term ||
+      searchType !== lastSearchRef.current.type
+    ) {
+      setPage(1);
+      setHasMore(true);
+      fetchProducts(1, searchTerm, searchType, true);
+    } else {
+      setIsSearchLoading(false);
+    }
+  };
+
+  // Handle focus on radio container to keep search focused
+  const handleRadioFocus = () => {
+    setIsSearchFocused(true);
+  };
+
+  // Handle search type change
+  const handleSearchTypeChange = (type: 'description' | 'sku') => {
+    setSearchType(type);
+    if (searchTerm && (type !== lastSearchRef.current.type || searchTerm !== lastSearchRef.current.term)) {
+      setIsSearchLoading(true);
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+      setPage(1);
+      setHasMore(true);
+      fetchProducts(1, searchTerm, type, true);
+    }
+  };
+
+  // Infinite scroll
+  const lastProductElementRef = useCallback(
+    (node: HTMLDivElement) => {
+      if (isLoading || !hasMore || products.length < 16) return;
+
+      if (observer.current) observer.current.disconnect();
+
+      observer.current = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting) {
+            const nextPage = page + 1;
+            setPage(nextPage);
+            fetchProducts(nextPage, lastSearchRef.current.term, lastSearchRef.current.type);
+          }
+        },
+        { threshold: 0.1 }
+      );
+
+      if (node) observer.current.observe(node);
+    },
+    [isLoading, hasMore, products.length, page, fetchProducts]
+  );
+
+  // Clean up
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+      if (observer.current) {
+        observer.current.disconnect();
+      }
+    };
+  }, []);
+
+  // Clear search
+  const clearSearch = () => {
+    setSearchTerm('');
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    setPage(1);
+    setHasMore(true);
+    fetchProducts(1, '', searchType, true);
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Fixed Header */}
-      <div
-        className={`fixed top-0 left-0 right-0 z-50 bg-white shadow-md transition-transform duration-300 ${
-          isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
-        }`}
-      >
+      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-md">
         <div className="px-4 py-3">
           {/* Title and Add Button */}
           <div className="flex justify-between items-center mb-3">
@@ -110,56 +205,72 @@ export default function Products() {
             </button>
           </div>
 
-          {/* Search and Filter Bar */}
-          <div className="flex items-center gap-2">
-            <div className={`relative flex-1 transition-all duration-300 ${isSearchExpanded ? 'flex-grow' : ''}`}>
-              {isSearchExpanded ? (
-                <div className="flex items-center">
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={handleSearchChange}
-                    placeholder="Tìm kiếm sản phẩm..."
-                    className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-base focus:ring-blue-500 focus:border-blue-500"
-                    autoFocus
-                  />
-                  <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-                  <button
-                    onClick={() => {
-                      setSearchTerm('');
-                      setIsSearchExpanded(false);
-                    }}
-                    className="absolute right-3 top-2.5"
-                  >
-                    <X className="h-5 w-5 text-gray-400" />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setIsSearchExpanded(true)}
-                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
-                >
-                  <Search className="h-5 w-5" />
+          {/* Search Bar */}
+          <div className="relative">
+            <div className="flex items-center">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={handleSearchChange}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={handleSearchBlur}
+                placeholder="Tìm kiếm sản phẩm..."
+                className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-base focus:ring-blue-500 focus:border-blue-500"
+              />
+              <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+              {searchTerm && (
+                <button onClick={clearSearch} className="absolute right-3 top-2.5">
+                  <X className="h-5 w-5 text-gray-400" />
                 </button>
               )}
             </div>
 
-            <button
-              onClick={() => setIsFilterOpen(true)}
-              className={`p-2 text-gray-600 hover:bg-gray-100 rounded-lg ${
-                selectedCategory ? 'bg-blue-50 text-blue-600' : ''
-              }`}
-            >
-              <Filter className="h-5 w-5" />
-            </button>
+            {/* Radio Buttons */}
+            {isSearchFocused && (
+              <div
+                ref={radioContainerRef}
+                className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-md p-3 mt-1 z-10"
+                onFocus={handleRadioFocus}
+              >
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="searchType"
+                    value="description"
+                    checked={searchType === 'description'}
+                    onChange={() => handleSearchTypeChange('description')}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                    tabIndex={0}
+                  />
+                  <span className="text-sm text-gray-700">Theo tên</span>
+                </label>
+                <label className="flex items-center gap-2 mt-2">
+                  <input
+                    type="radio"
+                    name="searchType"
+                    value="sku"
+                    checked={searchType === 'sku'}
+                    onChange={() => handleSearchTypeChange('sku')}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                    tabIndex={0}
+                  />
+                  <span className="text-sm text-gray-700">Theo mã</span>
+                </label>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="pt-16 px-4 pb-20">
+      <div className="pt-24 px-4 pb-20 relative">
+        {isSearchLoading && (
+          <div className="absolute inset-0 bg-gray-100 bg-opacity-75 flex items-center justify-center z-10">
+            <div className="w-8 h-8 border-4 border-t-transparent border-blue-600 rounded-full animate-spin" />
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3">
-          {isLoading ? (
+          {isLoading && products.length === 0 ? (
             Array.from({ length: 4 }).map((_, index) => (
               <div key={index} className="bg-white rounded-lg shadow animate-pulse">
                 <div className="h-32 bg-gray-200 rounded-t-lg" />
@@ -171,9 +282,10 @@ export default function Products() {
               </div>
             ))
           ) : (
-            filteredProducts.map((product) => (
+            products.map((product, index) => (
               <div
                 key={product.id}
+                ref={index === products.length - 5 ? lastProductElementRef : null}
                 onClick={() => navigate(`/products/${product.id}`)}
                 className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden active:scale-95 transition-transform"
               >
@@ -191,11 +303,8 @@ export default function Products() {
                   />
                 </div>
                 <div className="p-2">
-                  <span className="inline-block px-1.5 py-0.5 text-[10px] font-medium text-blue-600 bg-blue-50 rounded-full mb-1">
-                    {product.category}
-                  </span>
-                  <h3 className="text-sm font-medium text-gray-900 line-clamp-2">{product.name}</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">{product.code}</p>
+                  <h3 className="text-sm font-medium text-gray-700 line-clamp-2">{product.name}</h3>
+                  <p className="text-sm font-medium text-black-700 mt-0.5">{product.code}</p>
                   <p className="text-sm font-semibold text-blue-600 mt-1">
                     {formatCurrency(product.price)}
                   </p>
@@ -205,65 +314,18 @@ export default function Products() {
           )}
         </div>
 
-        {!isLoading && filteredProducts.length === 0 && (
+        {!isLoading && products.length === 0 && (
           <div className="text-center py-8">
             <p className="text-gray-500">Không tìm thấy sản phẩm</p>
           </div>
         )}
-      </div>
 
-      {/* Filter Bottom Sheet */}
-      {isFilterOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
-          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl p-4">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold">Bộ lọc</h2>
-              <button onClick={() => setIsFilterOpen(false)}>
-                <X className="h-6 w-6 text-gray-500" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Danh mục
-                </label>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">Tất cả danh mục</option>
-                  <option value="clothing">Quần áo</option>
-                  <option value="toys">Đồ chơi</option>
-                  <option value="accessories">Phụ kiện</option>
-                </select>
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={clearFilters}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50"
-                >
-                  Xóa bộ lọc
-                </button>
-                <button
-                  onClick={() => {
-                    fetchProducts();
-                    setIsFilterOpen(false);
-                  }}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
-                >
-                  Áp dụng
-                </button>
-              </div>
-            </div>
-
-            {/* Bottom Safe Area */}
-            <div className="h-6" />
+        {isLoading && products.length > 0 && (
+          <div className="text-center py-4">
+            <p className="text-gray-500">Đang tải thêm...</p>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Floating Action Button */}
       <button
