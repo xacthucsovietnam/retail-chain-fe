@@ -660,14 +660,20 @@ export const createOrder = async (data: CreateOrderData): Promise<{ id: string; 
             presentation: product.productName,
             url: ''
           },
-          characteristic: {
+          characteristic: product.characteristic ? {
             _type: 'XTSObjectId',
             dataType: 'XTSProductCharacteristic',
-            id: '',
-            presentation: '',
+            id: product.characteristic,
+            presentation: product.characteristic,
             url: ''
-          },
-          vatRate: defaultVatTaxation,
+          } : null,
+          vatRate: product.vatRateId ? {
+            _type: 'XTSObjectId',
+            dataType: 'XTSVATRate',
+            id: product.vatRateId,
+            presentation: product.vatRateName,
+            url: ''
+          } : null,
           uom: {
             _type: 'XTSObjectId',
             dataType: 'XTSMeasurementUnit',
@@ -678,15 +684,15 @@ export const createOrder = async (data: CreateOrderData): Promise<{ id: string; 
           quantity: product.quantity,
           comment: '',
           price: product.price,
-          amount: product.price * product.quantity,
-          automaticDiscountAmount: 0,
-          discountsMarkupsAmount: 0,
-          vatAmount: 0,
-          total: product.price * product.quantity,
+          amount: product.amount,
+          automaticDiscountAmount: product.automaticDiscountAmount,
+          discountsMarkupsAmount: product.discountsMarkupsAmount,
+          vatAmount: product.vatAmount,
+          total: product.total,
           _sku: product.code,
           _coefficient: product.coefficient,
           _price: product.price,
-          _vatRateRate: 0,
+          _vatRateRate: product.vatAmount && product.amount ? product.vatAmount / product.amount : 0,
           _picture: {
             _type: 'XTSObjectId',
             dataType: '',
@@ -705,6 +711,8 @@ export const createOrder = async (data: CreateOrderData): Promise<{ id: string; 
       }
     ]
   };
+
+  console.log('Final orderData payload before sending:', JSON.stringify(orderData, null, 2));
 
   try {
     const response = await api.post('', orderData);

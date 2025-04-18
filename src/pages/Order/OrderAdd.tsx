@@ -1,4 +1,3 @@
-// src/pages/orderAdd.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -209,15 +208,13 @@ export default function OrderAdd() {
   const handleRemoveProduct = (index: number) => {
     setFormData(prev => ({
       ...prev,
-      products: prev.products.filter((_, i) => i !== index)
+      products: prev.products.filter((_, i) => i !== index),
+      documentAmount: calculateTotal()
     }));
   };
 
   const handleProductChange = async (selectedOption: any) => {
-    console.log('handleProductChange called with:', selectedOption);
-
     if (!selectedOption) {
-      console.log('No option selected, resetting newProduct');
       setNewProduct({
         productId: '',
         productName: '',
@@ -240,14 +237,12 @@ export default function OrderAdd() {
     }
 
     if (selectedOption.value === 'create-product') {
-      console.log('Selected create-product, opening ProductAddPopup');
       setShowProductAddPopup(false);
       setShowCreateProductPopup(true);
       return;
     }
 
     try {
-      console.log('Fetching product detail for:', selectedOption.value);
       const productDetail = await getProductDetail(selectedOption.value);
       const availableUnits = productDetail.uoms || [];
       const defaultUnit = availableUnits.length === 2 ? availableUnits[1] : availableUnits[0] || { id: '', presentation: '', coefficient: 1 };
@@ -265,7 +260,7 @@ export default function OrderAdd() {
         quantity: 1,
         price: productDetail.price,
         coefficient: defaultUnit.coefficient,
-        amount: productDetail.price * 1,
+        amount: productDetail.price * 1, // amount = quantity * price
         automaticDiscountAmount: 0,
         discountsMarkupsAmount: 0,
         vatAmount: 0,
@@ -295,7 +290,7 @@ export default function OrderAdd() {
         unitId: selectedUnit.id,
         unitName: selectedUnit.presentation,
         coefficient: selectedUnit.coefficient,
-        amount: prev!.quantity * prev!.price,
+        amount: prev!.quantity * prev!.price, // amount = quantity * price
         total: calculateProductTotal({
           ...prev!,
           coefficient: selectedUnit.coefficient,
@@ -312,7 +307,9 @@ export default function OrderAdd() {
     setNewProduct(prev => ({
       ...prev!,
       [field]: newValue,
-      amount: field === 'quantity' || field === 'price' ? newValue * (field === 'quantity' ? prev!.price : prev!.quantity) : prev!.amount,
+      amount: field === 'quantity' || field === 'price' 
+        ? newValue * (field === 'quantity' ? prev!.price : prev!.quantity) // amount = quantity * price
+        : prev!.amount,
       total: calculateProductTotal({
         ...prev!,
         [field]: newValue
@@ -338,7 +335,10 @@ export default function OrderAdd() {
 
     setFormData(prev => ({
       ...prev,
-      products: [...prev.products, newProduct],
+      products: [...prev.products, {
+        ...newProduct,
+        amount: newProduct.quantity * newProduct.price // amount = quantity * price
+      }],
       documentAmount: calculateTotal() + calculateProductTotal(newProduct)
     }));
     setShowProductAddPopup(false);
@@ -347,7 +347,6 @@ export default function OrderAdd() {
 
   const handleProductAdded = async (newProductData: { id: string; presentation: string }) => {
     try {
-      console.log('handleProductAdded called with:', newProductData);
       const productDetail = await getProductDetail(newProductData.id);
       const availableUnits = productDetail.uoms || [];
       const defaultUnit = availableUnits.length === 2 ? availableUnits[1] : availableUnits[0] || { id: '', presentation: '', coefficient: 1 };
@@ -374,7 +373,7 @@ export default function OrderAdd() {
         quantity: 1,
         price: productDetail.price,
         coefficient: defaultUnit.coefficient,
-        amount: productDetail.price * 1,
+        amount: productDetail.price * 1, // amount = quantity * price
         automaticDiscountAmount: 0,
         discountsMarkupsAmount: 0,
         vatAmount: 0,
@@ -429,16 +428,18 @@ export default function OrderAdd() {
         unitName: product.unitName,
         quantity: product.quantity,
         price: product.price,
-        amount: product.amount,
+        amount: product.quantity * product.price, // amount = quantity * price
         automaticDiscountAmount: product.automaticDiscountAmount,
         discountsMarkupsAmount: product.discountsMarkupsAmount,
         vatAmount: product.vatAmount,
         vatRateId: product.vatRateId,
         vatRateName: product.vatRateName,
-        total: product.total,
+        total: calculateProductTotal(product), // total = quantity * price * coefficient
         code: product.code,
         coefficient: product.coefficient
       }));
+
+      console.log('Final orderProducts before sending:', JSON.stringify(orderProducts, null, 2));
 
       const orderData: CreateOrderData = {
         customerId: formData.customerId,
@@ -458,6 +459,7 @@ export default function OrderAdd() {
       navigate(`/orders/${result.id}`);
     } catch (error) {
       toast.error('Không thể tạo đơn hàng');
+      console.error('Error creating order:', error);
     } finally {
       setIsLoading(false);
       setShowConfirmation(false);
@@ -539,7 +541,10 @@ export default function OrderAdd() {
   
     setFormData(prev => ({
       ...prev,
-      products: [...prev.products, newProduct],
+      products: [...prev.products, {
+        ...newProduct,
+        amount: newProduct.quantity * newProduct.price // amount = quantity * price
+      }],
       documentAmount: calculateTotal() + calculateProductTotal(newProduct)
     }));
     
@@ -1075,12 +1080,10 @@ export default function OrderAdd() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 px-4">
           <ProductAddPopup
             onClose={() => {
-              console.log('Closing ProductAddPopup');
               setShowCreateProductPopup(false);
               setShowProductAddPopup(true);
             }}
             onProductAdded={(newProductData) => {
-              console.log('Product added:', newProductData);
               handleProductAdded(newProductData);
             }}
           />

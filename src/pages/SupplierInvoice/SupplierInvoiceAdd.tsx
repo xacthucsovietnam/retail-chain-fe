@@ -1,4 +1,3 @@
-// src/pages/SupplierInvoiceAdd.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -102,6 +101,7 @@ export default function SupplierInvoiceAdd() {
   const [supplierPhone, setSupplierPhone] = useState('');
   const [supplierAddress, setSupplierAddress] = useState('');
   const [showProductAddPopup, setShowProductAddPopup] = useState(false);
+  const [showCreateProductPopup, setShowCreateProductPopup] = useState(false); // Thêm state mới
   const [currentProductIndex, setCurrentProductIndex] = useState<number | null>(null);
   const [isReturnOrder, setIsReturnOrder] = useState(false);
   const [originalProducts, setOriginalProducts] = useState<ProductItem[]>([]);
@@ -285,8 +285,8 @@ export default function SupplierInvoiceAdd() {
 
     if (selectedOption.value === 'create-product' && !isReturnOrder) {
       setShowProductAddPopup(false);
-      setCurrentProductIndex(0);
-      setShowProductAddPopup(true);
+      setCurrentProductIndex(formData.products.length); // Lưu vị trí sản phẩm mới
+      setShowCreateProductPopup(true); // Mở popup thêm mới sản phẩm
       return;
     }
 
@@ -393,25 +393,8 @@ export default function SupplierInvoiceAdd() {
       amount: calculateTotal() + newProduct.total
     }));
 
-    setNewProduct({
-      lineNumber: formData.products.length + 2,
-      product: { _type: 'XTSObjectId', dataType: 'XTSProduct', id: '', presentation: '' },
-      characteristic: null,
-      uom: { _type: 'XTSObjectId', dataType: 'XTSUOMClassifier', id: '', presentation: '' },
-      quantity: 1,
-      price: 0,
-      amount: 0,
-      discountsMarkupsAmount: null,
-      vatAmount: null,
-      vatRate: null,
-      total: 0,
-      sku: '',
-      coefficient: 1,
-      priceOriginal: 0,
-      vatRateRate: null,
-      picture: null
-    });
-
+    setNewProduct(null); // Reset newProduct
+    setShowProductAddPopup(false);
     toast.success('Đã thêm sản phẩm vào đơn hàng');
   };
 
@@ -434,28 +417,28 @@ export default function SupplierInvoiceAdd() {
 
       setProducts(prev => [...prev, newProductOption]);
 
-      if (currentProductIndex !== null) {
-        setNewProduct({
-          lineNumber: formData.products.length + 1,
-          product: { _type: 'XTSObjectId', dataType: 'XTSProduct', id: productDetail.id, presentation: productDetail.name },
-          characteristic: null,
-          uom: { _type: 'XTSObjectId', dataType: 'XTSUOMClassifier', id: defaultUnit.id, presentation: defaultUnit.presentation },
-          quantity: 1,
-          price: productDetail.price,
-          amount: productDetail.price,
-          discountsMarkupsAmount: null,
-          vatAmount: null,
-          vatRate: null,
-          total: productDetail.price,
-          sku: productDetail.code || '',
-          coefficient: productDetail.riCoefficient || defaultUnit.coefficient || 1,
-          priceOriginal: productDetail.price,
-          vatRateRate: null,
-          picture: null
-        });
-      }
+      // Tự động thêm sản phẩm mới vào popup thêm sản phẩm
+      setNewProduct({
+        lineNumber: formData.products.length + 1,
+        product: { _type: 'XTSObjectId', dataType: 'XTSProduct', id: productDetail.id, presentation: productDetail.name },
+        characteristic: null,
+        uom: { _type: 'XTSObjectId', dataType: 'XTSUOMClassifier', id: defaultUnit.id, presentation: defaultUnit.presentation },
+        quantity: 1,
+        price: productDetail.price,
+        amount: productDetail.price,
+        discountsMarkupsAmount: null,
+        vatAmount: null,
+        vatRate: null,
+        total: productDetail.price,
+        sku: productDetail.code || '',
+        coefficient: productDetail.riCoefficient || defaultUnit.coefficient || 1,
+        priceOriginal: productDetail.price,
+        vatRateRate: null,
+        picture: null
+      });
 
-      setShowProductAddPopup(true);
+      setShowCreateProductPopup(false);
+      setShowProductAddPopup(true); // Mở lại popup thêm sản phẩm
       setCurrentProductIndex(null);
       toast.success('Sản phẩm đã được thêm');
     } catch (error) {
@@ -584,7 +567,7 @@ export default function SupplierInvoiceAdd() {
         const adjustedQuantity = Number(selectedObj.quantity) || 1;
         const adjustedCoefficient = Number(selectedObj.coefficient || selectedObj._uomCoefficient || 1);
         return {
-          lineNumber: item.lineNumber, // Giữ nguyên lineNumber từ OCR
+          lineNumber: item.lineNumber,
           product: { _type: 'XTSObjectId', dataType: 'XTSProduct', id: selectedObj.objectId.id || '', presentation: selectedObj.objectId.presentation || '' },
           characteristic: null,
           uom: { _type: 'XTSObjectId', dataType: 'XTSUOMClassifier', id: selectedObj.uom?.id || '', presentation: selectedObj.uom?.presentation || '' },
@@ -607,7 +590,7 @@ export default function SupplierInvoiceAdd() {
         const adjustedQuantity = Number(item.quantity) || 1;
         const adjustedCoefficient = Number(item.coefficient) || 1;
         return {
-          lineNumber: item.lineNumber, // Giữ nguyên lineNumber từ OCR
+          lineNumber: item.lineNumber,
           product: { _type: 'XTSObjectId', dataType: 'XTSProduct', id: item.id || '', presentation: item.name || item.productDescription },
           characteristic: null,
           uom: {
@@ -632,7 +615,6 @@ export default function SupplierInvoiceAdd() {
       })
     ];
 
-    // Sắp xếp combinedProducts theo lineNumber để đảm bảo thứ tự đúng như OCR
     combinedProducts.sort((a, b) => a.lineNumber - b.lineNumber);
 
     setFormData(prev => ({
@@ -1342,6 +1324,13 @@ export default function SupplierInvoiceAdd() {
             </div>
           </div>
         </div>
+      )}
+
+      {showCreateProductPopup && (
+        <ProductAddPopup
+          onClose={() => setShowCreateProductPopup(false)}
+          onProductAdded={handleProductAdded}
+        />
       )}
 
       {isProcessingImages && (

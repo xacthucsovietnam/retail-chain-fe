@@ -47,7 +47,7 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
   const [localNotExist, setLocalNotExist] = useState<ProcessedImageData[]>(
     notExist.map(item => ({
       ...item,
-      coefficient: item.coefficient || 1,
+      coefficient: item.coefficient || '2',
       discount: '',
       originalPrice: item.price
     }))
@@ -62,7 +62,7 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
         total: (Number(item.objects[0]?.quantity || 1) * Number(item.objects[0]?.price || 0)).toString(),
         discount: '',
         originalPrice: item.objects[0]?.price || '0',
-        coefficient: item.objects[0]?._uomCoefficient || '1.1',
+        coefficient: item.objects[0]?._uomCoefficient || '2',
         productCharacteristic: item.objects[0]?.descriptionFull || ''
       }
     }))
@@ -72,7 +72,7 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
   const [calculatedQuantity, setCalculatedQuantity] = useState<string>('');
   const [showQuickFillPopup, setShowQuickFillPopup] = useState(false);
   const [quickFillName, setQuickFillName] = useState('');
-  const [quickFillCoefficient, setQuickFillCoefficient] = useState('1');
+  const [quickFillCoefficient, setQuickFillCoefficient] = useState('2');
   const [quickFillDiscount, setQuickFillDiscount] = useState('');
 
   // Gộp và sắp xếp sản phẩm theo lineNumber
@@ -131,7 +131,12 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
 
   const handleNotExistChange = (index: number, field: keyof ProcessedImageData, value: string) => {
     const updatedNotExist = [...localNotExist];
-    updatedNotExist[index] = { ...updatedNotExist[index], [field]: value };
+    if (field === 'coefficient') {
+      // Cho phép xóa hoàn toàn giá trị (chuỗi rỗng) hoặc chỉ chấp nhận số nguyên
+      updatedNotExist[index] = { ...updatedNotExist[index], [field]: value === '' ? '' : parseInt(value) ? parseInt(value).toString() : '' };
+    } else {
+      updatedNotExist[index] = { ...updatedNotExist[index], [field]: value };
+    }
     if (field === 'quantity' || field === 'coefficient') {
       const quantity = parseFloat(updatedNotExist[index].quantity) || 0;
       const price = parseFloat(updatedNotExist[index].price) || 0;
@@ -142,10 +147,18 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
 
   const handleExistedChange = (index: number, field: string, value: string) => {
     const updatedExisted = [...localExisted];
-    updatedExisted[index].selectedObject = {
-      ...updatedExisted[index].selectedObject,
-      [field]: value
-    };
+    if (field === 'coefficient') {
+      // Cho phép xóa hoàn toàn giá trị (chuỗi rỗng) hoặc chỉ chấp nhận số nguyên
+      updatedExisted[index].selectedObject = {
+        ...updatedExisted[index].selectedObject,
+        [field]: value === '' ? '' : parseInt(value) ? parseInt(value).toString() : ''
+      };
+    } else {
+      updatedExisted[index].selectedObject = {
+        ...updatedExisted[index].selectedObject,
+        [field]: value
+      };
+    }
     if (field === 'quantity' || field === 'coefficient') {
       const quantity = parseFloat(updatedExisted[index].selectedObject.quantity) || 0;
       const price = parseFloat(updatedExisted[index].selectedObject.price) || 0;
@@ -165,7 +178,7 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
         total: updatedExisted[index].selectedObject.total || (Number(selectedObj.quantity || 1) * Number(selectedObj.price || 0)).toString(),
         discount: updatedExisted[index].selectedObject.discount || '',
         originalPrice: selectedObj.price || '0',
-        coefficient: selectedObj._uomCoefficient || updatedExisted[index].selectedObject.coefficient || '1',
+        coefficient: selectedObj._uomCoefficient || updatedExisted[index].selectedObject.coefficient || '2',
         productCharacteristic: selectedObj.descriptionFull || ''
       };
     }
@@ -185,9 +198,9 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
   };
 
   const handleQuickFill = () => {
-    const coefficient = parseFloat(quickFillCoefficient) || 1.1;
-    if (coefficient < 1.1) {
-      toast.error('Hệ số ri phải lớn hơn hoặc bằng 1.1');
+    const coefficient = quickFillCoefficient === '' ? 0 : parseInt(quickFillCoefficient);
+    if (!coefficient || coefficient < 2) {
+      toast.error('Hệ số ri phải là số nguyên lớn hơn hoặc bằng 2');
       return;
     }
 
@@ -231,23 +244,23 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
     setLocalExisted(updatedExisted);
     setShowQuickFillPopup(false);
     setQuickFillName('');
-    setQuickFillCoefficient('1.1');
+    setQuickFillCoefficient('2');
     setQuickFillDiscount('');
   };
 
   const handleSave = async () => {
     for (const item of localNotExist) {
-      const coefficient = parseFloat(item.coefficient) || 0;
-      if (coefficient < 1.1) {
-        toast.error('Hệ số ri phải lớn hơn hoặc bằng 1.1');
+      const coefficient = item.coefficient === '' ? 0 : parseInt(item.coefficient);
+      if (!coefficient || coefficient < 2) {
+        toast.error('Hệ số ri phải là số nguyên lớn hơn hoặc bằng 2');
         return;
       }
     }
 
     for (const item of localExisted) {
-      const coefficient = parseFloat(item.selectedObject.coefficient) || 0;
-      if (coefficient < 1.1) {
-        toast.error('Hệ số ri phải lớn hơn hoặc bằng 1.1');
+      const coefficient = item.selectedObject.coefficient === '' ? 0 : parseInt(item.selectedObject.coefficient);
+      if (!coefficient || coefficient < 2) {
+        toast.error('Hệ số ri phải là số nguyên lớn hơn hoặc bằng 2');
         return;
       }
     }
@@ -445,11 +458,10 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
                         <label className="text-sm min-w-[60px]">Hệ số ri:</label>
                         <input
                           type="number"
-                          value={selectedProduct.coefficient || '1.1'}
+                          value={selectedProduct.coefficient}
                           onChange={(e) => handleExistedChange(localExisted.findIndex(e => e.lineNumber === item.lineNumber), 'coefficient', e.target.value)}
                           className="w-20 p-1 border rounded text-sm"
-                          min="1.1"
-                          step="0.1"
+                          min="2"
                         />
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -536,11 +548,10 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
                         <label className="text-sm min-w-[60px]">Hệ số ri:</label>
                         <input
                           type="number"
-                          value={item.coefficient || '1.1'}
+                          value={item.coefficient}
                           onChange={(e) => handleNotExistChange(notExistIndex, 'coefficient', e.target.value)}
                           className="w-20 p-1 border rounded text-sm"
-                          min="1.1"
-                          step="0.1"
+                          min="2"
                         />
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -628,8 +639,7 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
                     onChange={(e) => setQuickFillCoefficient(e.target.value)}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Nhập hệ số ri"
-                    min="1.1"
-                    step="0.1"
+                    min="2"
                   />
                 </div>
                 <div className="flex items-center gap-2">
