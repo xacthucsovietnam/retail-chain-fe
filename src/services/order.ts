@@ -313,9 +313,9 @@ export const getCustomerDropdownData = async (): Promise<CustomerDropdownItem[]>
     dataType: 'XTSCounterparty',
     columnSet: [],
     sortBy: [],
-    positionFrom: 1,
-    positionTo: 1000,
-    limit: 1000,
+    positionFrom: 0,
+    positionTo: 0,
+    limit: 0,
     conditions: [
       {
         _type: 'XTSCondition',
@@ -354,9 +354,9 @@ export const getEmployeeDropdownData = async (): Promise<EmployeeDropdownItem[]>
     dataType: 'XTSEmployee',
     columnSet: [],
     sortBy: [],
-    positionFrom: 1,
-    positionTo: 100,
-    limit: 100,
+    positionFrom: 0,
+    positionTo: 0,
+    limit: 0,
     conditions: [
       {
         _type: 'XTSCondition',
@@ -399,9 +399,9 @@ export const getProductDropdownData = async (): Promise<ProductDropdownItem[]> =
     dataType: 'XTSProduct',
     columnSet: ['objectId', 'sku'],
     sortBy: [],
-    positionFrom: 1,
-    positionTo: 10000000,
-    limit: 10000000,
+    positionFrom: 0,
+    positionTo: 0,
+    limit: 0,
     conditions: []
   };
 
