@@ -20,7 +20,7 @@ export default function Products() {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchType, setSearchType] = useState<'description' | 'sku'>('description');
+  const [searchType, setSearchType] = useState<'description' | 'sku'>('sku'); // Thay đổi mặc định thành 'sku'
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -30,7 +30,7 @@ export default function Products() {
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSearchRef = useRef<{ term: string; type: 'description' | 'sku' }>({
     term: '',
-    type: 'description',
+    type: 'sku', // Cập nhật để đồng bộ với giá trị mặc định
   });
   const radioContainerRef = useRef<HTMLDivElement>(null);
   const { t } = useLanguage();
@@ -68,7 +68,7 @@ export default function Products() {
   // Initial fetch (only once)
   useEffect(() => {
     if (!isInitialLoadDone) {
-      fetchProducts(1, '', 'description', true);
+      fetchProducts(1, '', 'sku', true); // Cập nhật type thành 'sku'
     }
   }, [fetchProducts, isInitialLoadDone]);
 
@@ -249,7 +249,7 @@ export default function Products() {
                     type="radio"
                     name="searchType"
                     value="sku"
-                    checked={searchType === 'sku'}
+                    checked={searchType === 'sku'} // Đặt mặc định là checked cho 'sku'
                     onChange={() => handleSearchTypeChange('sku')}
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500"
                     tabIndex={0}

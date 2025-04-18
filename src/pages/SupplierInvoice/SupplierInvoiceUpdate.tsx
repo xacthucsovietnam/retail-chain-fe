@@ -8,6 +8,10 @@ import {
   PlusCircle,
   Loader2,
   AlertCircle,
+  Plus,
+  Minus,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import Select from 'react-select';
 import toast from 'react-hot-toast';
@@ -17,11 +21,12 @@ import {
   getSupplierDropdownData,
   getProductDropdownData 
 } from '../../services/supplierInvoice';
-import { getProductDetail } from '../../services/product';
+import { getProductDetail, getMeasurementUnits } from '../../services/product';
 import type { SupplierInvoiceDetail, SupplierProduct, UpdateSupplierInvoiceData } from '../../services/supplierInvoice';
 import { getSession } from '../../utils/storage';
 import { getCurrencies } from '../../services/currency';
 import { createPartner } from '../../services/partner';
+import ProductAddPopup from '../../components/ProductAddPopup';
 
 interface ProductItem {
   id: string;
@@ -61,10 +66,16 @@ interface Currency {
   name: string;
 }
 
+interface MeasurementUnit {
+  id: string;
+  presentation: string;
+}
+
 export default function SupplierInvoiceUpdate() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const defaultValues = getSession()?.defaultValues || {};
+  const session = getSession();
+  const defaultValues = session?.defaultValues || {};
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -73,12 +84,17 @@ export default function SupplierInvoiceUpdate() {
   const [isFetchingSuppliers, setIsFetchingSuppliers] = useState(false);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [isFetchingCurrencies, setIsFetchingCurrencies] = useState(false);
+  const [measurementUnits, setMeasurementUnits] = useState<MeasurementUnit[]>([]);
+  const [isFetchingMeasurementUnits, setIsFetchingMeasurementUnits] = useState(false);
   const [showCreateSupplierPopup, setShowCreateSupplierPopup] = useState(false);
   const [supplierName, setSupplierName] = useState('');
   const [supplierPhone, setSupplierPhone] = useState('');
   const [supplierAddress, setSupplierAddress] = useState('');
-
-  const session = getSession();
+  const [showProductAddPopup, setShowProductAddPopup] = useState(false);
+  const [showCreateProductPopup, setShowCreateProductPopup] = useState(false);
+  const [newProduct, setNewProduct] = useState<SupplierProduct | null>(null);
+  const [isInvoiceInfoExpanded, setIsInvoiceInfoExpanded] = useState(true);
+  const [isProductListExpanded, setIsProductListExpanded] = useState(true);
 
   const [formData, setFormData] = useState<FormData>({
     id: '',
@@ -95,7 +111,7 @@ export default function SupplierInvoiceUpdate() {
     structuralUnitId: defaultValues.externalAccount?.id || '',
     structuralUnitName: defaultValues.externalAccount?.presentation || '',
     amount: 0,
-    products: [],
+    products: []
   });
 
   const [products, setProducts] = useState<ProductItem[]>([]);
@@ -113,11 +129,10 @@ export default function SupplierInvoiceUpdate() {
       setError(null);
       const data = await getSupplierInvoiceDetail(id);
 
-      // Check and update products with null uom
       const updatedProducts = await Promise.all(
         data.inventory.map(async (product, index) => {
           let updatedProduct = { ...product };
-          if (!product.uom?.id) {
+          if (!product.uom?.id && product.product.id) {
             try {
               const productDetail = await getProductDetail(product.product.id);
               updatedProduct = {
@@ -199,6 +214,19 @@ export default function SupplierInvoiceUpdate() {
     }
   };
 
+  const fetchMeasurementUnits = async () => {
+    setIsFetchingMeasurementUnits(true);
+    try {
+      const response = await getMeasurementUnits();
+      setMeasurementUnits(response || []);
+    } catch (error) {
+      toast.error('Không thể tải danh sách đơn vị đo lường');
+      console.error('Error fetching measurement units:', error);
+    } finally {
+      setIsFetchingMeasurementUnits(false);
+    }
+  };
+
   const fetchProducts = async () => {
     setIsFetchingProducts(true);
     try {
@@ -207,7 +235,10 @@ export default function SupplierInvoiceUpdate() {
         id: item.id,
         name: item.name,
         code: item.code,
-        price: 0,
+        price: item.price || 0,
+        riCoefficient: item.riCoefficient || 1,
+        baseUnitId: item.baseUnitId || '',
+        baseUnit: item.baseUnit || ''
       })));
     } catch (error) {
       toast.error('Không thể tải danh sách sản phẩm');
@@ -221,6 +252,7 @@ export default function SupplierInvoiceUpdate() {
     fetchInvoiceDetail();
     fetchSuppliers();
     fetchCurrencies();
+    fetchMeasurementUnits();
     fetchProducts();
   }, [id]);
 
@@ -229,92 +261,181 @@ export default function SupplierInvoiceUpdate() {
   };
 
   const handleAddProduct = () => {
-    setFormData((prev) => ({
-      ...prev,
-      products: [
-        ...prev.products,
-        {
-          lineNumber: prev.products.length + 1,
-          product: { _type: 'XTSObjectId', dataType: 'XTSProduct', id: '', presentation: '' },
-          characteristic: null,
-          uom: null,
-          quantity: 1,
-          price: 0,
-          amount: 0,
-          discountsMarkupsAmount: null,
-          vatAmount: null,
-          vatRate: null,
-          total: 0,
-          sku: '',
-          coefficient: 1,
-          priceOriginal: 0,
-          vatRateRate: null,
-          picture: null,
-        },
-      ],
-    }));
+    setNewProduct({
+      lineNumber: formData.products.length + 1,
+      product: { _type: 'XTSObjectId', dataType: 'XTSProduct', id: '', presentation: '' },
+      characteristic: null,
+      uom: { _type: 'XTSObjectId', dataType: 'XTSUOMClassifier', id: '', presentation: '' },
+      quantity: 1,
+      price: 0,
+      amount: 0,
+      discountsMarkupsAmount: null,
+      vatAmount: null,
+      vatRate: null,
+      total: 0,
+      sku: '',
+      coefficient: 1,
+      priceOriginal: 0,
+      vatRateRate: null,
+      picture: null
+    });
+    setShowProductAddPopup(true);
   };
 
   const handleRemoveProduct = (index: number) => {
-    setFormData((prev) => ({
+    setFormData(prev => ({
       ...prev,
       products: prev.products.filter((_, i) => i !== index).map((p, i) => ({ ...p, lineNumber: i + 1 })),
+      amount: calculateTotal()
     }));
   };
 
-  const handleProductChange = async (index: number, field: string, value: any) => {
-    setFormData((prev) => {
-      const newProducts = [...prev.products];
-      newProducts[index] = {
-        ...newProducts[index],
-        [field]: value,
+  const handleProductChange = async (selectedOption: any) => {
+    if (!selectedOption || !newProduct) return;
+
+    if (selectedOption.value === 'create-product') {
+      setShowProductAddPopup(false);
+      setShowCreateProductPopup(true);
+      return;
+    }
+
+    try {
+      const productDetail = await getProductDetail(selectedOption.value);
+      const defaultUnit = productDetail.uoms[0] || { id: '', presentation: '', coefficient: 1 };
+      const productSource = {
+        id: productDetail.id,
+        name: productDetail.name,
+        code: productDetail.code,
+        price: productDetail.price,
+        riCoefficient: productDetail.riCoefficient || defaultUnit.coefficient,
+        baseUnitId: defaultUnit.id,
+        baseUnit: defaultUnit.presentation
       };
 
-      if (field === 'quantity' || field === 'price') {
-        newProducts[index].total = newProducts[index].quantity * newProducts[index].price;
-        newProducts[index].amount = newProducts[index].quantity * newProducts[index].price;
+      setNewProduct(prev => ({
+        ...prev!,
+        product: { _type: 'XTSObjectId', dataType: 'XTSProduct', id: productSource.id, presentation: productSource.name },
+        sku: productSource.code || '',
+        price: productSource.price,
+        priceOriginal: productSource.price,
+        coefficient: productSource.riCoefficient || defaultUnit.coefficient,
+        total: productSource.price * prev!.quantity,
+        amount: productSource.price * prev!.quantity,
+        uom: {
+          _type: 'XTSObjectId',
+          dataType: 'XTSUOMClassifier',
+          id: productSource.baseUnitId || defaultUnit.id,
+          presentation: productSource.baseUnit || defaultUnit.presentation
+        }
+      }));
+    } catch (error) {
+      toast.error('Không thể tải chi tiết sản phẩm');
+      console.error('Error fetching product detail:', error);
+    }
+  };
+
+  const handleFieldChange = (field: keyof SupplierProduct, value: any) => {
+    const newValue = value === '' ? 0 : Number(value);
+
+    setNewProduct(prev => {
+      if (!prev) return prev;
+      const updatedProduct = {
+        ...prev,
+        [field]: newValue,
+        total: (field === 'quantity' ? newValue : prev.quantity) * (field === 'price' ? newValue : prev.price),
+        amount: (field === 'quantity' ? newValue : prev.quantity) * (field === 'price' ? newValue : prev.price)
+      };
+
+      if (field === 'price') {
+        updatedProduct.priceOriginal = newValue;
       }
 
-      return { ...prev, products: newProducts, amount: calculateTotal() };
+      return updatedProduct;
     });
+  };
 
-    if (field === 'product' && value) {
-      try {
-        const productDetail = await getProductDetail(value);
-        setFormData((prev) => {
-          const newProducts = [...prev.products];
-          newProducts[index] = {
-            ...newProducts[index],
-            product: { 
-              _type: 'XTSObjectId', 
-              dataType: 'XTSProduct', 
-              id: value, 
-              presentation: productDetail.name 
-            },
-            sku: productDetail.code || '',
-            price: productDetail.price,
-            priceOriginal: productDetail.price,
-            coefficient: productDetail.riCoefficient || 1,
-            uom: productDetail.uoms[0] ? { 
-              _type: 'XTSObjectId', 
-              dataType: 'XTSUOMClassifier', 
-              id: productDetail.uoms[0].id, 
-              presentation: productDetail.uoms[0].presentation 
-            } : {
-              _type: 'XTSObjectId',
-              dataType: 'XTSUOMClassifier',
-              id: '',
-              presentation: ''
-            },
-            total: productDetail.price * newProducts[index].quantity,
-            amount: productDetail.price * newProducts[index].quantity,
-          };
-          return { ...prev, products: newProducts, amount: calculateTotal() };
-        });
-      } catch (error) {
-        console.error('Failed to fetch product details:', error);
-        toast.error('Không thể tải thông tin sản phẩm');
-      }
+  const handleQuantityAdjust = (adjustment: number) => {
+    setNewProduct(prev => {
+      if (!prev) return prev;
+      const newQuantity = Math.max(1, prev.quantity + adjustment);
+      return {
+        ...prev,
+        quantity: newQuantity,
+        total: newQuantity * prev.price,
+        amount: newQuantity * prev.price
+      };
+    });
+  };
+
+  const handleSaveProduct = () => {
+    if (!newProduct || !newProduct.product.id) {
+      toast.error('Vui lòng chọn sản phẩm');
+      return;
+    }
+
+    if (newProduct.quantity <= 0) {
+      toast.error('Số lượng phải lớn hơn 0');
+      return;
+    }
+
+    if (newProduct.price < 0) {
+      toast.error('Đơn giá không được âm');
+      return;
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      products: [...prev.products, newProduct],
+      amount: calculateTotal() + newProduct.total
+    }));
+
+    setShowProductAddPopup(false);
+    setNewProduct(null);
+    toast.success('Đã thêm sản phẩm vào đơn hàng');
+  };
+
+  const handleProductAdded = async (newProductData: { id: string; presentation: string }) => {
+    try {
+      const productDetail = await getProductDetail(newProductData.id);
+      const defaultUnit = productDetail.uoms[0] || { id: '', presentation: '', coefficient: 1 };
+
+      const newProductOption: ProductItem = {
+        id: productDetail.id,
+        name: productDetail.name,
+        code: productDetail.code,
+        price: productDetail.price,
+        riCoefficient: productDetail.riCoefficient || 1,
+        baseUnitId: defaultUnit.id,
+        baseUnit: defaultUnit.presentation
+      };
+
+      setProducts(prev => [...prev, newProductOption]);
+
+      setNewProduct({
+        lineNumber: formData.products.length + 1,
+        product: { _type: 'XTSObjectId', dataType: 'XTSProduct', id: productDetail.id, presentation: productDetail.name },
+        characteristic: null,
+        uom: { _type: 'XTSObjectId', dataType: 'XTSUOMClassifier', id: defaultUnit.id, presentation: defaultUnit.presentation },
+        quantity: 1,
+        price: productDetail.price,
+        amount: productDetail.price,
+        discountsMarkupsAmount: null,
+        vatAmount: null,
+        vatRate: null,
+        total: productDetail.price,
+        sku: productDetail.code || '',
+        coefficient: productDetail.riCoefficient || defaultUnit.coefficient,
+        priceOriginal: productDetail.price,
+        vatRateRate: null,
+        picture: null
+      });
+
+      setShowCreateProductPopup(false);
+      setShowProductAddPopup(true);
+      toast.success('Sản phẩm đã được thêm');
+    } catch (error) {
+      toast.error('Không thể tải chi tiết sản phẩm vừa thêm');
+      console.error('Error fetching new product detail:', error);
     }
   };
 
@@ -368,7 +489,6 @@ export default function SupplierInvoiceUpdate() {
         formattedDate += ':00';
       }
 
-      // Ensure all products have valid uom before sending
       const validatedProducts = await Promise.all(
         formData.products.map(async (product) => {
           if (!product.uom?.id && product.product.id) {
@@ -446,6 +566,7 @@ export default function SupplierInvoiceUpdate() {
   ];
 
   const productOptions = [
+    { value: 'create-product', label: 'Thêm mới sản phẩm', isCreateOption: true },
     ...products.map((product) => ({
       value: product.id,
       label: product.name,
@@ -551,7 +672,10 @@ export default function SupplierInvoiceUpdate() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Đang tải dữ liệu...</p>
+        </div>
       </div>
     );
   }
@@ -576,190 +700,198 @@ export default function SupplierInvoiceUpdate() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <div className="px-4">
-        <div className="space-y-4 mb-6">
-          <div>
-            <p className="text-sm font-medium text-gray-700">Đơn hàng: {formData.number}</p>
-            <span className="text-sm font-medium text-gray-700">
-              Ngày tạo: <span className="text-gray-900">{new Date(formData.date).toLocaleString()}</span>
-            </span>
-          </div>
+      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
+        <div className="px-4 py-3">
+          <h1 className="text-lg font-semibold text-gray-900">Cập nhật đơn nhận hàng</h1>
+          <p className="text-sm text-gray-500">#{formData.number}</p>
+        </div>
+      </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nhà cung cấp *</label>
-            <Select
-              options={supplierOptions}
-              value={supplierOptions.find((option) => option.value === formData.counterpartyId) || null}
-              onChange={handleSupplierChange}
-              placeholder="Chọn nhà cung cấp"
-              isClearable
-              isSearchable
-              className="text-sm"
-              classNamePrefix="select"
-              isDisabled={isFetchingSuppliers}
-              components={{ Option: CustomOption }}
-            />
+      <div className="pt-2 px-4">
+        {/* Nhóm 1: Thông tin hóa đơn */}
+        <div className="mb-6 bg-white rounded-lg shadow-sm">
+          <div 
+            className="flex justify-between items-center px-4 py-3 cursor-pointer"
+            onClick={() => setIsInvoiceInfoExpanded(!isInvoiceInfoExpanded)}
+          >
+            <h2 className="text-base font-medium text-gray-900">Thông tin hóa đơn</h2>
+            {isInvoiceInfoExpanded ? (
+              <ChevronUp className="h-5 w-5 text-gray-600" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-gray-600" />
+            )}
           </div>
+          {isInvoiceInfoExpanded && (
+            <div className="px-4 pb-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Ngày tạo *
+                </label>
+                <input
+                  type="datetime-local"
+                  value={formData.date}
+                  onChange={e => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
 
-          <div>
-            <span className="text-sm font-medium text-gray-700">
-              Loại tiền tệ: <span className="text-gray-900">{formData.currencyName}</span>
-            </span>
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nhà cung cấp *
+                </label>
+                <Select
+                  options={supplierOptions}
+                  value={supplierOptions.find(option => option.value === formData.counterpartyId) || null}
+                  onChange={handleSupplierChange}
+                  placeholder="Chọn nhà cung cấp"
+                  isClearable
+                  isSearchable
+                  className="text-sm"
+                  classNamePrefix="select"
+                  isDisabled={isFetchingSuppliers}
+                  components={{ Option: CustomOption }}
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Ghi chú</label>
-            <textarea
-              value={formData.comment}
-              onChange={(e) => setFormData((prev) => ({ ...prev, comment: e.target.value }))}
-              rows={3}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
-              placeholder="Nhập ghi chú..."
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Loại tiền tệ
+                </label>
+                <Select
+                  options={currencies.map(currency => ({ value: currency.id, label: currency.name }))}
+                  value={currencies.map(currency => ({ value: currency.id, label: currency.name }))
+                    .find(option => option.value === formData.currencyId) || null}
+                  onChange={() => {}}
+                  placeholder="Chọn loại tiền tệ"
+                  isDisabled={true}
+                  className="text-sm"
+                  classNamePrefix="select"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Ghi chú
+                </label>
+                <textarea
+                  value={formData.comment}
+                  onChange={e => setFormData(prev => ({ ...prev, comment: e.target.value }))}
+                  rows={3}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
+                  placeholder="Nhập ghi chú..."
+                />
+              </div>
+            </div>
+          )}
         </div>
 
-        <div>
-          <div className="flex justify-between items-center mb-4">
+        {/* Nhóm 2: Danh sách sản phẩm */}
+        <div className="bg-white rounded-lg shadow-sm">
+          <div 
+            className="flex justify-between items-center px-4 py-3 cursor-pointer"
+            onClick={() => setIsProductListExpanded(!isProductListExpanded)}
+          >
             <h2 className="text-base font-medium text-gray-900">Danh sách sản phẩm</h2>
-            <button
-              onClick={handleAddProduct}
-              className="text-sm text-blue-600 hover:text-blue-700"
-            >
-              Thêm sản phẩm
-            </button>
+            {isProductListExpanded ? (
+              <ChevronUp className="h-5 w-5 text-gray-600" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-gray-600" />
+            )}
           </div>
+          {isProductListExpanded && (
+            <div className="px-4 pb-4">
+              <div className="space-y-2">
+                {formData.products.map((product, index) => {
+                  const selectedProduct = products.find(p => p.id === product.product.id);
+                  const code = selectedProduct?.code || product.sku || 'N/A';
+                  const riCoefficient = product.coefficient || 1;
+                  const baseUnit = product.uom?.presentation || 'N/A';
 
-          <div className="space-y-4">
-            {formData.products.map((product, index) => {
-              const selectedProduct = products.find((p) => p.id === product.product.id);
-              const code = selectedProduct?.code || product.sku || 'N/A';
-              const riCoefficient = product.coefficient || 1;
-              const unitName = product.uom?.presentation || 'N/A';
-
-              return (
-                <div key={index} className="bg-white rounded-lg shadow-sm p-4">
-                  <div className="flex gap-3 mb-3">
-                    <div className="h-16 w-16 bg-gray-100 rounded-lg flex items-center justify-center">
-                      {product.picture?.id ? (
-                        <img
-                          src={`${import.meta.env.VITE_FILE_BASE_URL}/${product.picture.id}`}
-                          alt={product.product.presentation}
-                          className="h-full w-full object-cover rounded-lg"
-                          onError={(e) => {
-                            e.currentTarget.src = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc';
-                            e.currentTarget.alt = 'Hình ảnh mặc định';
-                          }}
-                        />
-                      ) : (
-                        <Package className="h-8 w-8 text-gray-400" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <Select
-                        options={productOptions}
-                        value={productOptions.find((option) => option.value === product.product.id) || null}
-                        onChange={(selectedOption) => {
-                          handleProductChange(index, 'product', selectedOption ? selectedOption.value : '');
-                        }}
-                        placeholder="Chọn sản phẩm"
-                        isClearable
-                        isSearchable
-                        className="text-sm"
-                        classNamePrefix="select"
-                        isDisabled={isFetchingProducts}
-                      />
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="text-sm text-gray-500">Mã sản phẩm:</span>
-                        <span className="text-sm text-gray-900">{code}</span>
-                      </div>
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="text-sm text-gray-500">Hệ số ri:</span>
-                        <span className="text-sm text-gray-900">{riCoefficient}</span>
-                      </div>
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="text-sm text-gray-500">Đơn vị tính:</span>
-                        <span className="text-sm text-gray-900">{unitName}</span>
-                      </div>
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="text-sm text-gray-500">Đơn giá bán:</span>
-                        <span className="text-sm text-gray-900">{product.priceOriginal.toLocaleString()}</span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleRemoveProduct(index)}
-                      className="text-red-600"
+                  return (
+                    <div 
+                      key={index} 
+                      className={`flex items-center justify-between ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} rounded-lg p-3`}
                     >
-                      <Trash2 className="h-5 w-5" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">Số lượng</label>
-                      <input
-                        type="number"
-                        value={product.quantity}
-                        onChange={(e) => handleProductChange(index, 'quantity', Number(e.target.value))}
-                        min="1"
-                        className="w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        inputMode="numeric"
-                      />
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                          {product.picture?.id ? (
+                            <img
+                              src={`${import.meta.env.VITE_FILE_BASE_URL}/${product.picture.id}`}
+                              alt={product.product.presentation}
+                              className="h-full w-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                                (e.target as HTMLImageElement).nextSibling?.removeAttribute('style');
+                              }}
+                            />
+                          ) : null}
+                          <Package className={`h-6 w-6 text-gray-400 ${product.picture?.id ? 'hidden' : ''}`} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            #{index + 1} {product.product.presentation}
+                          </p>
+                          <p className="text-xs text-gray-500">Code: {code}</p>
+                          <p className="text-xs text-gray-500">
+                            {product.quantity} {baseUnit} x {product.price.toLocaleString()} {formData.currencyName}/chiếc
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-blue-600">
+                          {product.total.toLocaleString()} {formData.currencyName}
+                        </p>
+                        <button
+                          onClick={() => handleRemoveProduct(index)}
+                          className="text-red-600"
+                        >
+                          <Trash2 className="h-5 w-5" />
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">Đơn giá</label>
-                      <input
-                        type="number"
-                        value={product.price}
-                        onChange={(e) => handleProductChange(index, 'price', Number(e.target.value))}
-                        min="0"
-                        step="1000"
-                        className="w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        inputMode="numeric"
-                      />
-                    </div>
-                  </div>
+                  );
+                })}
+              </div>
 
-                  <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
-                    <span className="text-xs text-gray-500">Thành tiền</span>
-                    <span className="text-sm font-medium text-blue-600">
-                      {product.total.toLocaleString()} {formData.currencyName}
+              <div className="mt-6 flex justify-center">
+                <button
+                  onClick={handleAddProduct}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Plus className="h-5 w-5" />
+                  <span className="text-base font-medium">Thêm sản phẩm</span>
+                </button>
+              </div>
+
+              {formData.products.length > 0 && (
+                <div className="mt-4 bg-white rounded-lg shadow-sm p-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-gray-900">Tổng cộng</span>
+                    <span className="text-base font-semibold text-blue-600">
+                      {calculateTotal().toLocaleString()} {formData.currencyName}
                     </span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-
-          {formData.products.length > 0 && (
-            <div className="mt-4 bg-white rounded-lg shadow-sm p-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-900">Tổng cộng</span>
-                <span className="text-base font-semibold text-blue-600">
-                  {calculateTotal().toLocaleString()} {formData.currencyName}
-                </span>
-              </div>
+              )}
             </div>
           )}
         </div>
       </div>
 
-      <div className="fixed bottom-4 right-4 flex flex-row gap-2 z-50">
+      <div className="fixed bottom-4 left-0 right-0 flex justify-between px-4 z-50">
         <button
           onClick={() => navigate(`/supplier-invoices/${id}`)}
-          className="p-2 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50"
-          title="Quay lại chi tiết"
+          className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className="h-6 w-6" />
         </button>
 
         <button
           onClick={handleSubmit}
           disabled={isSaving}
-          className="p-2 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-          title="Lưu thay đổi"
+          className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
         >
-          <Save className="h-5 w-5" />
+          <Save className="h-6 w-6" />
         </button>
       </div>
 
@@ -838,6 +970,116 @@ export default function SupplierInvoiceUpdate() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {showProductAddPopup && newProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-lg p-4 w-full max-w-md">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Thêm sản phẩm
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Sản phẩm *
+                </label>
+                <Select
+                  options={productOptions}
+                  value={productOptions.find(option => option.value === newProduct.product.id) || null}
+                  onChange={handleProductChange}
+                  placeholder="Chọn sản phẩm..."
+                  isSearchable
+                  className="text-sm"
+                  classNamePrefix="select"
+                  components={{ Option: CustomOption }}
+                />
+                <p className="text-xs text-gray-500 mt-1">{newProduct.sku || 'Code'}</p>
+              </div>
+
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Đơn giá
+                  </label>
+                  <input
+                    type="number"
+                    value={newProduct.price === 0 ? '' : newProduct.price}
+                    onChange={(e) => handleFieldChange('price', e.target.value)}
+                    min="0"
+                    step="1000"
+                    className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1 focus:ring-blue-500 focus:border-blue-500"
+                    inputMode="numeric"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Số lượng
+                  </label>
+                  <div className="flex items-center">
+                    <button
+                      onClick={() => handleQuantityAdjust(-1)}
+                      className="p-1 bg-gray-200 rounded-l-md hover:bg-gray-300"
+                      disabled={newProduct.quantity <= 1}
+                    >
+                      <Minus className="h-4 w-4" />
+                    </button>
+                    <input
+                      type="number"
+                      value={newProduct.quantity === 0 ? '' : newProduct.quantity}
+                      onChange={(e) => handleFieldChange('quantity', e.target.value)}
+                      onFocus={(e) => e.target.value = ''}
+                      min="1"
+                      className="w-full text-sm text-gray-900 border-t border-b border-gray-300 px-2 py-1 focus:ring-blue-500 focus:border-blue-500 text-center"
+                      inputMode="numeric"
+                    />
+                    <button
+                      onClick={() => handleQuantityAdjust(1)}
+                      className="p-1 bg-gray-200 rounded-r-md hover:bg-gray-300"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
+                <span className="text-xs text-gray-500">Thành tiền</span>
+                <span className="text-sm font-medium text-blue-600">
+                  {newProduct.total.toLocaleString()} {formData.currencyName}
+                </span>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => {
+                  setShowProductAddPopup(false);
+                  setNewProduct(null);
+                }}
+                className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={handleSaveProduct}
+                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+              >
+                Thêm vào đơn
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCreateProductPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 px-4">
+          <ProductAddPopup
+            onClose={() => {
+              setShowCreateProductPopup(false);
+              setShowProductAddPopup(true);
+            }}
+            onProductAdded={handleProductAdded}
+          />
         </div>
       )}
     </div>

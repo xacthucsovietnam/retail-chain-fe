@@ -436,7 +436,7 @@ export const getOrders = async (page: number = 1, pageSize: number = 20, conditi
     _msgId: '',
     dataType: 'XTSOrder',
     columnSet: [],
-    sortBy: [],
+    sortBy: ['date DESC'],
     positionFrom,
     positionTo,
     limit: pageSize,

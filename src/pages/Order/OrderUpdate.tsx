@@ -1,4 +1,3 @@
-// src/pages/OrderUpdate.tsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -6,7 +5,10 @@ import {
   Save,
   Package,
   Trash2,
-  PlusCircle
+  PlusCircle,
+  Plus,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import Select from 'react-select';
 import toast from 'react-hot-toast';
@@ -17,7 +19,6 @@ import {
   getEmployeeDropdownData,
   getProductDropdownData,
   getOrderStateDropdownData,
-  type OrderDetail,
   type CustomerDropdownItem,
   type EmployeeDropdownItem,
   type ProductDropdownItem,
@@ -28,8 +29,8 @@ import {
 import { createPartner } from '../../services/partner';
 import { getSession } from '../../utils/storage';
 import { getProductDetail, type ProductDetail } from '../../services/product';
+import ProductAddPopup from '../../components/ProductAddPopup';
 
-// Cập nhật FormData để khớp với UpdateOrderData
 interface FormData {
   id: string;
   number: string;
@@ -85,8 +86,8 @@ interface FormData {
     productId: string;
     productName: string;
     characteristic: string | null;
-    unitId: string; // Changed from uomId
-    unitName: string; // Changed from uomName
+    unitId: string;
+    unitName: string;
     quantity: number;
     price: number;
     amount: number;
@@ -96,7 +97,7 @@ interface FormData {
     vatRateId: string;
     vatRateName: string;
     total: number;
-    code: string; // Changed from sku
+    code: string;
     coefficient: number;
     availableUnits: Array<{ id: string; presentation: string; coefficient: number }>;
     imageUrl?: string;
@@ -168,8 +169,8 @@ export default function OrderUpdate() {
       productId: p.productId || '',
       productName: p.productName || '',
       characteristic: p.characteristic || null,
-      unitId: p.unitId || '', // Changed from uomId
-      unitName: p.unitName || '', // Changed from uomName
+      unitId: p.unitId || '',
+      unitName: p.unitName || '',
       quantity: p.quantity || 1,
       price: p.price || 0,
       amount: p.amount || 0,
@@ -179,7 +180,7 @@ export default function OrderUpdate() {
       vatRateId: p.vatRateId || '',
       vatRateName: p.vatRateName || '',
       total: p.total || 0,
-      code: p.code || '', // Changed from sku
+      code: p.code || '',
       coefficient: p.coefficient || 1,
       availableUnits: [],
       imageUrl: undefined
@@ -197,6 +198,11 @@ export default function OrderUpdate() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
+  const [showProductAddPopup, setShowProductAddPopup] = useState(false);
+  const [newProduct, setNewProduct] = useState<FormData['products'][0] | null>(null);
+  const [isOrderInfoExpanded, setIsOrderInfoExpanded] = useState(true);
+  const [isProductListExpanded, setIsProductListExpanded] = useState(true);
+  const [showCreateProductPopup, setShowCreateProductPopup] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -259,7 +265,7 @@ export default function OrderUpdate() {
 
           const selectedCustomer = customerData.find(c => c.id === orderData.customerId);
           const selectedOrderState = orderStateData.find(s => s.name === orderData.orderState) || 
-                                   orderStateData.find(s => s.id === 'Editing'); // Mặc định "Đang soạn" nếu không khớp
+                                   orderStateData.find(s => s.id === 'Editing');
           const selectedEmployee = employeeData.find(e => e.id === orderData.employeeResponsibleId);
 
           setFormData({
@@ -319,6 +325,10 @@ export default function OrderUpdate() {
           const productsWithDetails = await Promise.all(
             initialOrderData.products.map(async (p) => {
               const productDetail = await getProductDetail(p.productId);
+              const fileStorageURL = session?.fileStorageURL || '';
+              const imageUrl = productDetail.imageUrl && productDetail.images.length > 0 
+                ? `${fileStorageURL}${productDetail.images[0].id}`
+                : undefined;
               const selectedUnit = productDetail.uoms.find(u => u.id === p.unitId) || 
                                  productDetail.uoms[0] || { id: '', presentation: '', coefficient: 1 };
               return {
@@ -326,7 +336,8 @@ export default function OrderUpdate() {
                 availableUnits: productDetail.uoms,
                 unitId: selectedUnit.id,
                 unitName: selectedUnit.presentation,
-                coefficient: selectedUnit.coefficient
+                coefficient: selectedUnit.coefficient,
+                imageUrl
               };
             })
           );
@@ -352,126 +363,180 @@ export default function OrderUpdate() {
   };
 
   const handleAddProduct = () => {
-    setFormData(prev => ({
-      ...prev,
-      products: [
-        ...prev.products,
-        {
-          lineNumber: prev.products.length + 1,
-          productId: '',
-          productName: '',
-          characteristic: null,
-          unitId: '',
-          unitName: '',
-          quantity: 1,
-          price: 0,
-          amount: 0,
-          automaticDiscountAmount: 0,
-          discountsMarkupsAmount: 0,
-          vatAmount: 0,
-          vatRateId: '',
-          vatRateName: '',
-          total: 0,
-          code: '',
-          coefficient: 1,
-          availableUnits: []
-        }
-      ]
-    }));
+    setNewProduct({
+      lineNumber: formData.products.length + 1,
+      productId: '',
+      productName: '',
+      characteristic: null,
+      unitId: '',
+      unitName: '',
+      quantity: 1,
+      price: 0,
+      amount: 0,
+      automaticDiscountAmount: 0,
+      discountsMarkupsAmount: 0,
+      vatAmount: 0,
+      vatRateId: '',
+      vatRateName: '',
+      total: 0,
+      code: '',
+      coefficient: 1,
+      availableUnits: []
+    });
+    setShowProductAddPopup(true);
+    setIsOrderInfoExpanded(false);
   };
 
   const handleRemoveProduct = (index: number) => {
     setFormData(prev => ({
       ...prev,
-      products: prev.products.filter((_, i) => i !== index)
+      products: prev.products.filter((_, i) => i !== index),
+      documentAmount: calculateTotal()
     }));
   };
 
-  const handleProductChange = async (index: number, selectedOption: any) => {
-    if (!selectedOption) return;
+  const handleProductChange = async (selectedOption: any) => {
+    if (!selectedOption) {
+      setNewProduct({
+        lineNumber: formData.products.length + 1,
+        productId: '',
+        productName: '',
+        characteristic: null,
+        unitId: '',
+        unitName: '',
+        quantity: 1,
+        price: 0,
+        amount: 0,
+        automaticDiscountAmount: 0,
+        discountsMarkupsAmount: 0,
+        vatAmount: 0,
+        vatRateId: '',
+        vatRateName: '',
+        total: 0,
+        code: '',
+        coefficient: 1,
+        availableUnits: []
+      });
+      return;
+    }
+
+    if (selectedOption.value === 'create-product') {
+      setShowProductAddPopup(false);
+      setShowCreateProductPopup(true);
+      return;
+    }
 
     try {
       const productDetail = await getProductDetail(selectedOption.value);
-      const defaultUnit = productDetail.uoms[0] || { id: '', presentation: '', coefficient: 1 };
+      const availableUnits = productDetail.uoms || [];
+      const defaultUnit = availableUnits.length === 2 ? availableUnits[1] : availableUnits[0] || { id: '', presentation: '', coefficient: 1 };
       const fileStorageURL = session?.fileStorageURL || '';
       const imageUrl = productDetail.imageUrl && productDetail.images.length > 0 
         ? `${fileStorageURL}${productDetail.images[0].id}`
         : undefined;
 
-      setFormData(prev => {
-        const newProducts = [...prev.products];
-        newProducts[index] = {
-          lineNumber: newProducts[index].lineNumber,
-          productId: productDetail.id,
-          productName: productDetail.name,
-          characteristic: null,
-          unitId: defaultUnit.id,
-          unitName: defaultUnit.presentation,
+      setNewProduct({
+        lineNumber: formData.products.length + 1,
+        productId: productDetail.id,
+        productName: productDetail.name,
+        characteristic: null,
+        unitId: defaultUnit.id,
+        unitName: defaultUnit.presentation,
+        quantity: 1,
+        price: productDetail.price,
+        amount: productDetail.price * 1,
+        automaticDiscountAmount: 0,
+        discountsMarkupsAmount: 0,
+        vatAmount: 0,
+        vatRateId: '',
+        vatRateName: '',
+        total: calculateProductTotal({
           quantity: 1,
           price: productDetail.price,
-          amount: productDetail.price * 1,
-          automaticDiscountAmount: 0,
-          discountsMarkupsAmount: 0,
-          vatAmount: 0,
-          vatRateId: '',
-          vatRateName: '',
-          total: calculateProductTotal({
-            quantity: 1,
-            price: productDetail.price,
-            coefficient: defaultUnit.coefficient
-          }),
-          code: productDetail.code,
-          coefficient: defaultUnit.coefficient,
-          availableUnits: productDetail.uoms,
-          imageUrl
-        };
-        return { ...prev, products: newProducts };
+          coefficient: defaultUnit.coefficient
+        }),
+        code: productDetail.code,
+        coefficient: defaultUnit.coefficient,
+        availableUnits,
+        imageUrl
       });
     } catch (error) {
-      toast.error('Không thể tải chi tiết sản phẩm');
       console.error('Error fetching product detail:', error);
+      toast.error('Không thể tải chi tiết sản phẩm');
     }
   };
 
-  const handleUnitChange = (index: number, selectedOption: any) => {
-    if (!selectedOption) return;
+  const handleUnitChange = (selectedOption: any) => {
+    if (!selectedOption || !newProduct) return;
 
-    setFormData(prev => {
-      const newProducts = [...prev.products];
-      const selectedUnit = newProducts[index].availableUnits.find(u => u.id === selectedOption.value);
-      if (selectedUnit) {
-        newProducts[index] = {
-          ...newProducts[index],
-          unitId: selectedUnit.id,
-          unitName: selectedUnit.presentation,
+    const selectedUnit = newProduct.availableUnits?.find(u => u.id === selectedOption.value);
+    if (selectedUnit) {
+      setNewProduct(prev => ({
+        ...prev!,
+        unitId: selectedUnit.id,
+        unitName: selectedUnit.presentation,
+        coefficient: selectedUnit.coefficient,
+        amount: prev!.quantity * prev!.price,
+        total: calculateProductTotal({
+          ...prev!,
           coefficient: selectedUnit.coefficient,
-          total: calculateProductTotal({
-            ...newProducts[index],
-            coefficient: selectedUnit.coefficient,
-            quantity: newProducts[index].quantity,
-            price: newProducts[index].price
-          })
-        };
-      }
-      return { ...prev, products: newProducts };
-    });
+          quantity: prev!.quantity,
+          price: prev!.price
+        })
+      }));
+    }
   };
 
-  const handleFieldChange = (index: number, field: keyof FormData['products'][0], value: any) => {
+  const handleFieldChange = (field: keyof FormData['products'][0], value: any) => {
     const newValue = value === '' ? 0 : Number(value);
 
-    setFormData(prev => {
-      const newProducts = [...prev.products];
-      newProducts[index] = {
-        ...newProducts[index],
-        [field]: newValue,
-        total: calculateProductTotal({
-          ...newProducts[index],
-          [field]: newValue
-        })
-      };
-      return { ...prev, products: newProducts };
-    });
+    setNewProduct(prev => ({
+      ...prev!,
+      [field]: newValue,
+      amount: field === 'quantity' || field === 'price' 
+        ? newValue * (field === 'quantity' ? prev!.price : prev!.quantity)
+        : prev!.amount,
+      total: calculateProductTotal({
+        ...prev!,
+        [field]: newValue
+      })
+    }));
+  };
+
+  const handleSaveProduct = () => {
+    if (!newProduct || !newProduct.productId) {
+      toast.error('Vui lòng chọn sản phẩm');
+      return;
+    }
+
+    if (newProduct.quantity <= 0) {
+      toast.error('Số lượng phải lớn hơn 0');
+      return;
+    }
+
+    if (newProduct.price < 0) {
+      toast.error('Đơn giá không được âm');
+      return;
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      products: [...prev.products, {
+        ...newProduct,
+        amount: newProduct.quantity * newProduct.price
+      }],
+      documentAmount: calculateTotal() + calculateProductTotal(newProduct)
+    }));
+    setShowProductAddPopup(false);
+    setNewProduct(null);
+  };
+
+  const handleProductAdded = (newProductData: { id: string; presentation: string }) => {
+    // Logic xử lý khi sản phẩm mới được thêm từ ProductAddPopup
+    // Tương tự như OrderAdd.tsx
+    toast.success('Sản phẩm đã được thêm');
+    setShowCreateProductPopup(false);
+    setShowProductAddPopup(true);
   };
 
   const validateForm = (): boolean => {
@@ -488,23 +553,6 @@ export default function OrderUpdate() {
     if (formData.products.length === 0) {
       toast.error('Vui lòng thêm ít nhất một sản phẩm');
       return false;
-    }
-
-    for (const product of formData.products) {
-      if (!product.productId) {
-        toast.error('Vui lòng chọn sản phẩm');
-        return false;
-      }
-
-      if (product.quantity <= 0) {
-        toast.error('Số lượng phải lớn hơn 0');
-        return false;
-      }
-
-      if (product.price < 0) {
-        toast.error('Đơn giá không được âm');
-        return false;
-      }
     }
 
     return true;
@@ -614,10 +662,13 @@ export default function OrderUpdate() {
     }))
   ];
 
-  const productOptions = products.map(product => ({
-    value: product.id,
-    label: product.name
-  }));
+  const productOptions = [
+    { value: 'create-product', label: 'Thêm mới sản phẩm', isCreateOption: true },
+    ...products.map(product => ({
+      value: product.id,
+      label: product.name
+    }))
+  ];
 
   const orderStateOptions = orderStates.map(state => ({
     value: state.id,
@@ -729,6 +780,8 @@ export default function OrderUpdate() {
     }
   };
 
+  const selectedCustomer = customers.find(c => c.id === formData.customerId);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -749,219 +802,209 @@ export default function OrderUpdate() {
         </div>
       </div>
 
-      <div className="pt-16 px-4">
-        <div className="space-y-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Khách hàng *
-            </label>
-            <Select
-              options={customerOptions}
-              value={customerOptions.find(option => option.value === formData.customerId) || null}
-              onChange={handleCustomerChange}
-              placeholder="Chọn khách hàng"
-              isClearable
-              isSearchable
-              className="text-sm"
-              classNamePrefix="select"
-              components={{ Option: CustomOption }}
-            />
+      <div className="pt-2 px-4">
+        {/* Nhóm 1: Thông tin đơn hàng */}
+        <div className="mb-6 bg-white rounded-lg shadow-sm">
+          <div 
+            className="flex justify-between items-center px-4 py-3 cursor-pointer"
+            onClick={() => setIsOrderInfoExpanded(!isOrderInfoExpanded)}
+          >
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-medium text-gray-900">Thông tin đơn hàng</h2>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                {formData.orderState || 'Đang soạn'}
+              </span>
+            </div>
+            {isOrderInfoExpanded ? (
+              <ChevronUp className="h-5 w-5 text-gray-600" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-gray-600" />
+            )}
           </div>
+          {isOrderInfoExpanded && (
+            <div className="px-4 pb-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Khách hàng *
+                </label>
+                <Select
+                  options={customerOptions}
+                  value={customerOptions.find(option => option.value === formData.customerId) || null}
+                  onChange={handleCustomerChange}
+                  placeholder="Chọn khách hàng"
+                  isClearable
+                  isSearchable
+                  className="text-sm"
+                  classNamePrefix="select"
+                  components={{ Option: CustomOption }}
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Người bán
-            </label>
-            <input
-              type="text"
-              value={formData.employeeResponsibleName || 'Không xác định'}
-              disabled
-              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50"
-            />
-          </div>
+              {selectedCustomer && (
+                <>
+                  <div>
+                    <p className="text-sm text-gray-900">
+                      Số điện thoại: {selectedCustomer.phoneNumber || 'Không có'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-900">
+                      Địa chỉ: {selectedCustomer.address || 'Không có'}
+                    </p>
+                  </div>
+                </>
+              )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Trạng thái *
-            </label>
-            <Select
-              options={orderStateOptions}
-              value={orderStateOptions.find(option => option.value === formData.orderStateId) || null}
-              onChange={handleOrderStateChange}
-              placeholder="Chọn trạng thái"
-              isSearchable
-              className="text-sm"
-              classNamePrefix="select"
-            />
-          </div>
+              <div>
+                <p className="text-sm text-gray-900">
+                  Người bán: {formData.employeeResponsibleName || 'Không xác định'}
+                </p>
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Địa chỉ giao hàng
-            </label>
-            <textarea
-              value={formData.deliveryAddress || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, deliveryAddress: e.target.value }))}
-              rows={2}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
-              placeholder="Nhập địa chỉ giao hàng..."
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Trạng thái *
+                </label>
+                <Select
+                  options={orderStateOptions}
+                  value={orderStateOptions.find(option => option.value === formData.orderStateId) || null}
+                  onChange={handleOrderStateChange}
+                  placeholder="Chọn trạng thái"
+                  isSearchable
+                  className="text-sm"
+                  classNamePrefix="select"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Ghi chú
-            </label>
-            <textarea
-              value={formData.comment || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, comment: e.target.value }))}
-              rows={2}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
-              placeholder="Nhập ghi chú..."
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Địa chỉ giao hàng
+                </label>
+                <textarea
+                  value={formData.deliveryAddress || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, deliveryAddress: e.target.value }))}
+                  rows={2}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
+                  placeholder="Nhập địa chỉ giao hàng..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Ghi chú
+                </label>
+                <textarea
+                  value={formData.comment || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, comment: e.target.value }))}
+                  rows={2}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
+                  placeholder="Nhập ghi chú..."
+                />
+              </div>
+            </div>
+          )}
         </div>
 
-        <div>
-          <h2 className="text-base font-medium text-gray-900 mb-4">Danh sách sản phẩm</h2>
-
-          <div className="space-y-4">
-            {formData.products.map((product, index) => (
-              <div key={index} className="bg-white rounded-lg shadow-sm p-4">
-                <div className="flex gap-3 mb-3">
-                  <div className="h-16 w-16 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
-                    {product.imageUrl ? (
-                      <img 
-                        src={product.imageUrl} 
-                        alt={product.productName} 
-                        className="h-full w-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                          (e.target as HTMLImageElement).nextSibling?.removeAttribute('style');
-                        }}
-                      />
-                    ) : null}
-                    <Package className={`h-8 w-8 text-gray-400 ${product.imageUrl ? 'hidden' : ''}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <Select
-                      options={productOptions}
-                      value={productOptions.find(option => option.value === product.productId) || null}
-                      onChange={(option) => handleProductChange(index, option)}
-                      placeholder="Chọn sản phẩm..."
-                      isSearchable
-                      className="text-sm"
-                      classNamePrefix="select"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">{product.code || 'Code'}</p>
-                  </div>
-                  <button
-                    onClick={() => handleRemoveProduct(index)}
-                    className="text-red-600"
-                  >
-                    <Trash2 className="h-5 w-5" />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Số lượng
-                    </label>
-                    <input
-                      type="number"
-                      value={product.quantity}
-                      onChange={(e) => handleFieldChange(index, 'quantity', e.target.value)}
-                      min="1"
-                      className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1 focus:ring-blue-500 focus:border-blue-500"
-                      inputMode="numeric"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Đơn giá
-                    </label>
-                    <input
-                      type="number"
-                      value={product.price}
-                      onChange={(e) => handleFieldChange(index, 'price', e.target.value)}
-                      min="0"
-                      step="1000"
-                      className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1 focus:ring-blue-500 focus:border-blue-500"
-                      inputMode="numeric"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Đơn vị tính
-                    </label>
-                    <Select
-                      options={product.availableUnits.map(unit => ({
-                        value: unit.id,
-                        label: unit.presentation
-                      }))}
-                      value={
-                        product.availableUnits
-                          .map(unit => ({ value: unit.id, label: unit.presentation }))
-                          .find(option => option.value === product.unitId) || null
-                      }
-                      onChange={(option) => handleUnitChange(index, option)}
-                      placeholder="Chọn đơn vị tính..."
-                      className="text-sm"
-                      classNamePrefix="select"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
-                  <span className="text-xs text-gray-500">Thành tiền</span>
-                  <span className="text-sm font-medium text-blue-600">
-                    {product.total.toLocaleString()} đ
-                  </span>
-                </div>
-              </div>
-            ))}
+        {/* Nhóm 2: Danh sách sản phẩm */}
+        <div className="bg-white rounded-lg shadow-sm">
+          <div 
+            className="flex justify-between items-center px-4 py-3 cursor-pointer"
+            onClick={() => setIsProductListExpanded(!isProductListExpanded)}
+          >
+            <h2 className="text-base font-medium text-gray-900">Danh sách sản phẩm</h2>
+            {isProductListExpanded ? (
+              <ChevronUp className="h-5 w-5 text-gray-600" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-gray-600" />
+            )}
           </div>
-
-          <div className="mt-4">
-            <button
-              onClick={handleAddProduct}
-              className="text-sm text-blue-600 hover:text-blue-700"
-            >
-              Thêm sản phẩm
-            </button>
-          </div>
-
-          {formData.products.length > 0 && (
-            <div className="mt-4 bg-white rounded-lg shadow-sm p-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-900">Tổng cộng</span>
-                <span className="text-base font-semibold text-blue-600">
-                  {calculateTotal().toLocaleString()} đ
-                </span>
+          {isProductListExpanded && (
+            <div className="px-4 pb-4">
+              <div className="space-y-2">
+                {formData.products.map((product, index) => (
+                  <div key={index} className={`flex items-center justify-between ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} rounded-lg p-3`}>
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                        {product.imageUrl ? (
+                          <img 
+                            src={product.imageUrl} 
+                            alt={product.productName} 
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              (e.target as HTMLImageElement).nextSibling?.removeAttribute('style');
+                            }}
+                          />
+                        ) : null}
+                        <Package className={`h-6 w-6 text-gray-400 ${product.imageUrl ? 'hidden' : ''}`} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          #{index + 1} {product.productName}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Code: {product.code}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {product.quantity} {product.unitName} x {product.price.toLocaleString()} đồng/chiếc
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-blue-600">
+                        {product.total.toLocaleString()} đ
+                      </p>
+                      <button
+                        onClick={() => handleRemoveProduct(index)}
+                        className="text-red-600"
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
+
+              <div className="mt-6 flex justify-center">
+                <button
+                  onClick={handleAddProduct}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Plus className="h-5 w-5" />
+                  <span className="text-base font-medium">Thêm sản phẩm</span>
+                </button>
+              </div>
+
+              {formData.products.length > 0 && (
+                <div className="mt-4 bg-white rounded-lg shadow-sm p-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-gray-900">Tổng cộng</span>
+                    <span className="text-base font-semibold text-blue-600">
+                      {calculateTotal().toLocaleString()} đ
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
 
-      <div className="fixed bottom-4 left-0 right-0 px-4 z-50">
-        <div className="flex justify-between items-center max-w-screen-xl mx-auto">
-          <button
-            onClick={() => navigate(`/orders/${id}`)}
-            className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-          >
-            <ArrowLeft className="h-6 w-6" />
-          </button>
-          
-          <button
-            onClick={handleSubmit}
-            disabled={isSaving}
-            className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-          >
-            <Save className="h-6 w-6" />
-          </button>
-        </div>
+      <div className="fixed bottom-4 left-0 right-0 flex justify-between px-4">
+        <button
+          onClick={() => navigate(`/orders/${id}`)}
+          className="p-3 bg-gray-600 text-white rounded-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        >
+          <ArrowLeft className="h-6 w-6" />
+        </button>
+        
+        <button
+          onClick={handleSubmit}
+          disabled={isSaving}
+          className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+        >
+          <Save className="h-6 w-6" />
+        </button>
       </div>
 
       {showConfirmation && (
@@ -1051,6 +1094,168 @@ export default function OrderUpdate() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {showProductAddPopup && newProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-900 mb-5">
+              Thêm sản phẩm
+            </h3>
+            <div className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Sản phẩm <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  options={productOptions}
+                  value={productOptions.find(option => option.value === newProduct.productId) || null}
+                  onChange={handleProductChange}
+                  placeholder="Chọn sản phẩm..."
+                  isSearchable
+                  className="text-sm"
+                  classNamePrefix="select"
+                  components={{ Option: CustomOption }}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Mã sản phẩm
+                  </label>
+                  <input
+                    type="text"
+                    value={newProduct.code || ''}
+                    readOnly
+                    className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-3 py-2 bg-gray-50"
+                    placeholder="Mã sản phẩm"
+                  />
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Đơn vị tính
+                  </label>
+                  <Select
+                    options={newProduct.availableUnits?.map(unit => ({
+                      value: unit.id,
+                      label: unit.presentation
+                    }))}
+                    value={newProduct.availableUnits
+                      ?.map(unit => ({ value: unit.id, label: unit.presentation }))
+                      .find(option => option.value === newProduct.unitId) || null}
+                    onChange={handleUnitChange}
+                    placeholder="Chọn đơn vị"
+                    className="text-sm"
+                    classNamePrefix="select"
+                    styles={{
+                      control: (provided) => ({
+                        ...provided,
+                        minHeight: 'auto',
+                        height: '38px',
+                        fontSize: '14px',
+                      }),
+                      valueContainer: (provided) => ({
+                        ...provided,
+                        padding: '2px 8px',
+                      }),
+                      indicatorsContainer: (provided) => ({
+                        ...provided,
+                        height: '38px',
+                      }),
+                      menu: (provided) => ({
+                        ...provided,
+                        zIndex: 9999,
+                      }),
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Đơn giá
+                  </label>
+                  <input
+                    type="number"
+                    value={newProduct.price === 0 ? '' : newProduct.price}
+                    onChange={(e) => handleFieldChange('price', e.target.value)}
+                    min="0"
+                    step="1000"
+                    className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+                    inputMode="numeric"
+                    placeholder="Nhập đơn giá"
+                  />
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Số lượng
+                  </label>
+                  <div className="relative flex items-center">
+                    <button
+                      onClick={() =>
+                        handleFieldChange('quantity', Math.max(1, newProduct.quantity - 1))
+                      }
+                      className="absolute left-0 h-9 w-9 flex items-center justify-center bg-gray-100 text-gray-600 rounded-l-md hover:bg-gray-200 focus:outline-none"
+                    >
+                      <span className="text-lg">-</span>
+                    </button>
+                    <input
+                      type="number"
+                      value={newProduct.quantity === 0 ? '' : newProduct.quantity}
+                      onChange={(e) => handleFieldChange('quantity', e.target.value)}
+                      min="1"
+                      className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-12 py-2 text-center focus:ring-blue-500 focus:border-blue-500"
+                      inputMode="numeric"
+                    />
+                    <button
+                      onClick={() => handleFieldChange('quantity', newProduct.quantity + 1)}
+                      className="absolute right-0 h-9 w-9 flex items-center justify-center bg-gray-100 text-gray-600 rounded-r-md hover:bg-gray-200 focus:outline-none"
+                    >
+                      <span className="text-lg">+</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-between items-center pt-4 border-t border-gray-200">
+                <span className="text-sm font-medium text-gray-700">Thành tiền</span>
+                <span className="text-base font-semibold text-blue-600">
+                  {newProduct.total.toLocaleString()} đ
+                </span>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowProductAddPopup(false);
+                  setNewProduct(null);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 rounded-md"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={handleSaveProduct}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+              >
+                Thêm vào đơn
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCreateProductPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 px-4">
+          <ProductAddPopup
+            onClose={() => {
+              setShowCreateProductPopup(false);
+              setShowProductAddPopup(true);
+            }}
+            onProductAdded={(newProductData) => {
+              handleProductAdded(newProductData);
+            }}
+          />
         </div>
       )}
     </div>
