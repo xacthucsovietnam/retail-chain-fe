@@ -223,7 +223,7 @@ const mapSupplierProducts = (
   _lineNumber: index + 1,
   product: item.product,
   characteristic: item.characteristic || createObjectId('', '', ''),
-  uom: item.uom || createObjectId('', '', ''),
+  uom: getDefaultValues().productsUOM || createObjectId('', '', ''),
   quantity: item.quantity || 0,
   price: item.price || 0,
   amount: item.amount || (item.quantity || 0) * (item.price || 0),

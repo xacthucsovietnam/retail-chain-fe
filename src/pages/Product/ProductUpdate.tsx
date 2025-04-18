@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   Save,
@@ -11,7 +11,7 @@ import {
   Download
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getProductDetail, updateProduct, getCategories, getMeasurementUnits } from '../../services/product';
+import { getCategories, getMeasurementUnits, updateProduct } from '../../services/product';
 import type { ProductDetail, Category, MeasurementUnit, UpdateProductData } from '../../services/product';
 import { DEFAULT_IMAGE_URL } from '../../services/file';
 
@@ -26,7 +26,8 @@ interface FormData extends UpdateProductData {
 export default function ProductUpdate() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [product, setProduct] = useState<ProductDetail | null>(null);
+  const location = useLocation();
+  const product: ProductDetail | undefined = location.state?.product;
   const [categories, setCategories] = useState<Category[]>([]);
   const [measurementUnits, setMeasurementUnits] = useState<MeasurementUnit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -37,24 +38,24 @@ export default function ProductUpdate() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState<FormData>({
-    id: '',
-    name: '',
-    code: '',
-    description: '',
-    category: '',
-    measurementUnit: '',
-    riCoefficient: 1,
-    price: 0,
-    comment: '',
-    picture: '',
+    id: product?.id || '',
+    name: product?.name || '',
+    code: product?.code || '',
+    description: product?.description || '',
+    category: product?.category || '',
+    measurementUnit: product?.baseUnitId || '',
+    riCoefficient: product?.riCoefficient || 1,
+    price: product?.price || 0,
+    comment: product?.comment || '',
+    picture: product?.imageUrl || '',
     newImages: [],
     deletedImageIds: []
   });
 
   useEffect(() => {
     const loadData = async () => {
-      if (!id) {
-        setError('Product ID is missing');
+      if (!id || !product) {
+        setError('Không tìm thấy thông tin sản phẩm');
         setIsLoading(false);
         return;
       }
@@ -63,33 +64,16 @@ export default function ProductUpdate() {
         setIsLoading(true);
         setError(null);
 
-        // Load all required data in parallel
-        const [productData, categoryData, unitData] = await Promise.all([
-          getProductDetail(id),
+        // Load categories and measurement units in parallel
+        const [categoryData, unitData] = await Promise.all([
           getCategories(),
           getMeasurementUnits()
         ]);
 
-        setProduct(productData);
         setCategories(categoryData);
         setMeasurementUnits(unitData);
-
-        setFormData({
-          id: productData.id,
-          name: productData.name,
-          code: productData.code,
-          description: productData.description,
-          category: productData.category,
-          measurementUnit: productData.baseUnit,
-          riCoefficient: productData.riCoefficient,
-          price: productData.price,
-          comment: productData.comment,
-          picture: productData.imageUrl || '',
-          newImages: [],
-          deletedImageIds: []
-        });
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to load product details';
+        const errorMessage = error instanceof Error ? error.message : 'Không thể tải dữ liệu';
         setError(errorMessage);
         toast.error(errorMessage);
       } finally {
@@ -98,7 +82,7 @@ export default function ProductUpdate() {
     };
 
     loadData();
-  }, [id]);
+  }, [id, product]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -450,6 +434,19 @@ export default function ProductUpdate() {
             <p className="mt-1 text-xs text-gray-500 text-right">
               {formData.description.length}/{MAX_DESCRIPTION_LENGTH}
             </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Ghi chú
+            </label>
+            <textarea
+              value={formData.comment}
+              onChange={(e) => handleInputChange('comment', e.target.value)}
+              placeholder="Nhập ghi chú"
+              rows={4}
+              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
+            />
           </div>
         </div>
       </div>

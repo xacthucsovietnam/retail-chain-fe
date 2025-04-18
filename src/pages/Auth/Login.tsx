@@ -1,5 +1,4 @@
-// src/pages/Login.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, User } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -9,12 +8,26 @@ import LanguageSwitcher from '../../components/LanguageSwitcher';
 import { useUser } from '../../contexts/UserContext';
 
 export default function Login() {
-  const [username, setUsername] = useState('test');
-  const [password, setPassword] = useState('1');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { t } = useLanguage();
   const { setUser } = useUser();
+
+  // Load saved username and password if remember me was previously checked
+  useEffect(() => {
+    const savedUsername = localStorage.getItem('rememberedUsername');
+    const savedPassword = localStorage.getItem('rememberedPassword');
+    const savedRememberMe = localStorage.getItem('rememberMe') === 'true';
+    
+    if (savedRememberMe && savedUsername && savedPassword) {
+      setUsername(savedUsername);
+      setPassword(savedPassword);
+      setRememberMe(true);
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,6 +36,18 @@ export default function Login() {
     try {
       const response = await login(username, password);
       setUser(response.user);
+      
+      // Handle remember me functionality
+      if (rememberMe) {
+        localStorage.setItem('rememberedUsername', username);
+        localStorage.setItem('rememberedPassword', password);
+        localStorage.setItem('rememberMe', 'true');
+      } else {
+        localStorage.removeItem('rememberedUsername');
+        localStorage.removeItem('rememberedPassword');
+        localStorage.removeItem('rememberMe');
+      }
+
       toast.success(t('message.loginSuccess'));
       navigate('/dashboard');
     } catch (error) {
@@ -72,6 +97,19 @@ export default function Login() {
                 placeholder={t('login.password')}
                 className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+            </div>
+
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="rememberMe"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="rememberMe" className="ml-2 block text-sm text-gray-600">
+                {t('login.rememberMe')}
+              </label>
             </div>
           </div>
 

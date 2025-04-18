@@ -63,7 +63,8 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
         discount: '',
         originalPrice: item.objects[0]?.price || '0',
         coefficient: item.objects[0]?._uomCoefficient || '2',
-        productCharacteristic: item.objects[0]?.descriptionFull || ''
+        productCharacteristic: item.objects[0]?.descriptionFull || '',
+        isNewProduct: false
       }
     }))
   );
@@ -132,12 +133,11 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
   const handleNotExistChange = (index: number, field: keyof ProcessedImageData, value: string) => {
     const updatedNotExist = [...localNotExist];
     if (field === 'coefficient') {
-      // Cho phép xóa hoàn toàn giá trị (chuỗi rỗng) hoặc chỉ chấp nhận số nguyên
       updatedNotExist[index] = { ...updatedNotExist[index], [field]: value === '' ? '' : parseInt(value) ? parseInt(value).toString() : '' };
     } else {
       updatedNotExist[index] = { ...updatedNotExist[index], [field]: value };
     }
-    if (field === 'quantity' || field === 'coefficient') {
+    if (field === 'quantity' || field === 'price' || field === 'coefficient') {
       const quantity = parseFloat(updatedNotExist[index].quantity) || 0;
       const price = parseFloat(updatedNotExist[index].price) || 0;
       updatedNotExist[index].total = (quantity * price).toFixed(2);
@@ -148,7 +148,6 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
   const handleExistedChange = (index: number, field: string, value: string) => {
     const updatedExisted = [...localExisted];
     if (field === 'coefficient') {
-      // Cho phép xóa hoàn toàn giá trị (chuỗi rỗng) hoặc chỉ chấp nhận số nguyên
       updatedExisted[index].selectedObject = {
         ...updatedExisted[index].selectedObject,
         [field]: value === '' ? '' : parseInt(value) ? parseInt(value).toString() : ''
@@ -159,7 +158,7 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
         [field]: value
       };
     }
-    if (field === 'quantity' || field === 'coefficient') {
+    if (field === 'quantity' || field === 'price' || field === 'coefficient') {
       const quantity = parseFloat(updatedExisted[index].selectedObject.quantity) || 0;
       const price = parseFloat(updatedExisted[index].selectedObject.price) || 0;
       updatedExisted[index].selectedObject.total = (quantity * price).toFixed(2);
@@ -179,9 +178,23 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
         discount: updatedExisted[index].selectedObject.discount || '',
         originalPrice: selectedObj.price || '0',
         coefficient: selectedObj._uomCoefficient || updatedExisted[index].selectedObject.coefficient || '2',
-        productCharacteristic: selectedObj.descriptionFull || ''
+        productCharacteristic: selectedObj.descriptionFull || '',
+        isNewProduct: updatedExisted[index].selectedObject.isNewProduct || false
       };
     }
+    setLocalExisted(updatedExisted);
+  };
+
+  const handleExistedNewProductToggle = (index: number) => {
+    const updatedExisted = [...localExisted];
+    const isNewProduct = !updatedExisted[index].selectedObject.isNewProduct;
+    updatedExisted[index].selectedObject = {
+      ...updatedExisted[index].selectedObject,
+      isNewProduct,
+      // Xóa giá trị tên sản phẩm khi chuyển thành sản phẩm mới
+      objectId: isNewProduct ? { id: '', presentation: '' } : updatedExisted[index].selectedObject.objectId,
+      productCharacteristic: isNewProduct ? '' : updatedExisted[index].selectedObject.productCharacteristic
+    };
     setLocalExisted(updatedExisted);
   };
 
@@ -310,7 +323,29 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
       supplierId
     };
 
-    onSave(localNotExist, localExisted, updatedGeneralInfo);
+    // Chuyển các sản phẩm có isNewProduct: true từ localExisted sang localNotExist
+    const newNotExistProducts: ProcessedImageData[] = localExisted
+      .filter(item => item.selectedObject.isNewProduct)
+      .map(item => ({
+        lineNumber: item.lineNumber,
+        productCode: item.selectedObject.sku || item.attributeValue || `NEW-${item.lineNumber}`,
+        productDescription: item.selectedObject.objectId.presentation || 'Sản phẩm mới',
+        productCharacteristic: item.selectedObject.productCharacteristic || '',
+        quantity: item.selectedObject.quantity || '1',
+        price: item.selectedObject.price || '0',
+        total: item.selectedObject.total || '0',
+        coefficient: item.selectedObject.coefficient || '2',
+        discount: item.selectedObject.discount || '',
+        originalPrice: item.selectedObject.originalPrice || '0'
+      }));
+
+    // Cập nhật localNotExist bằng cách thêm các sản phẩm mới
+    const finalNotExist = [...localNotExist, ...newNotExistProducts];
+
+    // Loại bỏ các sản phẩm có isNewProduct: true khỏi localExisted
+    const finalExisted = localExisted.filter(item => !item.selectedObject.isNewProduct);
+
+    onSave(finalNotExist, finalExisted, updatedGeneralInfo);
   };
 
   return (
@@ -424,42 +459,72 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
                     label: obj.objectId.presentation || 'N/A'
                   }));
                   const selectedProduct = item.selectedObject;
+                  const existedIndex = localExisted.findIndex(e => e.lineNumber === item.lineNumber);
 
                   return (
                     <div key={`existed-${item.lineNumber}`} className="bg-gray-50 p-3 rounded-lg shadow-sm mb-2 relative">
                       <button
-                        onClick={() => handleRemoveExisted(localExisted.findIndex(e => e.lineNumber === item.lineNumber))}
+                        onClick={() => handleRemoveExisted(existedIndex)}
                         className="absolute top-2 right-2 text-red-600 hover:text-red-800"
                       >
                         <Trash2 className="w-5 h-5" />
                       </button>
-                      <div className="flex justify-between items-center mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium min-w-[60px]">Mã:</span>
-                          <span className="text-sm">{item.attributeValue || 'N/A'}</span>
-                        </div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedProduct.isNewProduct}
+                          onChange={() => handleExistedNewProductToggle(existedIndex)}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                        <label className="text-sm text-gray-700">Sản phẩm mới</label>
                       </div>
                       <div className="flex items-center gap-2 mb-2">
-                        <label className="text-sm min-w-[60px]">Tên:</label>
-                        <Select
-                          options={productOptions}
-                          value={productOptions.find(option => option.value === selectedProduct.objectId.id) || null}
-                          onChange={(selectedOption) => handleExistedProductChange(localExisted.findIndex(e => e.lineNumber === item.lineNumber), selectedOption)}
-                          placeholder="Chọn sản phẩm"
-                          className="flex-1 text-sm"
-                          classNamePrefix="select"
+                        <label className="text-sm min-w-[60px]">Mã:</label>
+                        <input
+                          type="text"
+                          value={selectedProduct.sku || item.attributeValue || ''}
+                          onChange={(e) => handleExistedChange(existedIndex, 'sku', e.target.value)}
+                          className="text-sm p-1 border rounded flex-1"
+                          disabled={!selectedProduct.isNewProduct}
                         />
                       </div>
                       <div className="flex items-center gap-2 mb-2">
+                        <label className="text-sm min-w-[60px]">Tên:</label>
+                        {selectedProduct.isNewProduct ? (
+                          <input
+                            type="text"
+                            value={selectedProduct.objectId.presentation || ''}
+                            onChange={(e) => handleExistedChange(existedIndex, 'objectId', { ...selectedProduct.objectId, presentation: e.target.value })}
+                            className="flex-1 p-1 border rounded text-sm"
+                            placeholder="Nhập tên sản phẩm..."
+                          />
+                        ) : (
+                          <Select
+                            options={productOptions}
+                            value={productOptions.find(option => option.value === selectedProduct.objectId.id) || null}
+                            onChange={(selectedOption) => handleExistedProductChange(existedIndex, selectedOption)}
+                            placeholder="Chọn sản phẩm"
+                            className="flex-1 text-sm"
+                            classNamePrefix="select"
+                          />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mb-2">
                         <label className="text-sm min-w-[60px]">Đặc điểm:</label>
-                        <span className="text-sm">{selectedProduct.productCharacteristic || 'Không có'}</span>
+                        <input
+                          type="text"
+                          value={selectedProduct.productCharacteristic || ''}
+                          onChange={(e) => handleExistedChange(existedIndex, 'productCharacteristic', e.target.value)}
+                          className="flex-1 p-1 border rounded text-sm"
+                          placeholder="Nhập đặc điểm..."
+                        />
                       </div>
                       <div className="flex items-center gap-2 mb-2">
                         <label className="text-sm min-w-[60px]">Hệ số ri:</label>
                         <input
                           type="number"
                           value={selectedProduct.coefficient}
-                          onChange={(e) => handleExistedChange(localExisted.findIndex(e => e.lineNumber === item.lineNumber), 'coefficient', e.target.value)}
+                          onChange={(e) => handleExistedChange(existedIndex, 'coefficient', e.target.value)}
                           className="w-20 p-1 border rounded text-sm"
                           min="2"
                         />
@@ -469,18 +534,20 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
                           <label className="text-sm min-w-[60px]">Số lượng:</label>
                           <input
                             type="number"
-                            value={selectedProduct.quantity || '1'}
-                            onChange={(e) => handleExistedChange(localExisted.findIndex(e => e.lineNumber === item.lineNumber), 'quantity', e.target.value)}
+                            value={selectedProduct.quantity || ''}
+                            onChange={(e) => handleExistedChange(existedIndex, 'quantity', e.target.value)}
                             className="w-20 p-1 border rounded text-sm"
+                            placeholder="0"
                           />
                         </div>
                         <div className="flex items-center gap-2">
                           <label className="text-sm min-w-[60px]">Đơn giá:</label>
                           <input
                             type="number"
-                            value={selectedProduct.price || '0'}
-                            onChange={(e) => handleExistedChange(localExisted.findIndex(e => e.lineNumber === item.lineNumber), 'price', e.target.value)}
+                            value={selectedProduct.price || ''}
+                            onChange={(e) => handleExistedChange(existedIndex, 'price', e.target.value)}
                             className="w-20 p-1 border rounded text-sm"
+                            placeholder="0"
                           />
                         </div>
                         <div className="flex items-center gap-2">
@@ -488,9 +555,10 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
                           <input
                             type="number"
                             value={selectedProduct.discount || ''}
-                            onChange={(e) => handleExistedChange(localExisted.findIndex(e => e.lineNumber === item.lineNumber), 'discount', e.target.value)}
-                            onBlur={(e) => handleExistedDiscountChange(localExisted.findIndex(e => e.lineNumber === item.lineNumber), e.target.value)}
+                            onChange={(e) => handleExistedChange(existedIndex, 'discount', e.target.value)}
+                            onBlur={(e) => handleExistedDiscountChange(existedIndex, e.target.value)}
                             className="w-20 p-1 border rounded text-sm"
+                            placeholder="0"
                           />
                         </div>
                       </div>
@@ -559,28 +627,31 @@ const ProductPreviewPopup: React.FC<ProductPreviewPopupProps> = ({
                           <label className="text-sm min-w-[60px]">Số lượng:</label>
                           <input
                             type="number"
-                            value={item.quantity}
+                            value={item.quantity || ''}
                             onChange={(e) => handleNotExistChange(notExistIndex, 'quantity', e.target.value)}
                             className="w-20 p-1 border rounded text-sm"
+                            placeholder="0"
                           />
                         </div>
                         <div className="flex items-center gap-2">
                           <label className="text-sm min-w-[60px]">Đơn giá:</label>
                           <input
                             type="number"
-                            value={item.price}
+                            value={item.price || ''}
                             onChange={(e) => handleNotExistChange(notExistIndex, 'price', e.target.value)}
                             className="w-20 p-1 border rounded text-sm"
+                            placeholder="0"
                           />
                         </div>
                         <div className="flex items-center gap-2">
                           <label className="text-sm min-w-[60px]">Chiết khấu:</label>
                           <input
                             type="number"
-                            value={item.discount}
+                            value={item.discount || ''}
                             onChange={(e) => handleNotExistChange(notExistIndex, 'discount', e.target.value)}
                             onBlur={(e) => handleNotExistDiscountChange(notExistIndex, e.target.value)}
                             className="w-20 p-1 border rounded text-sm"
+                            placeholder="0"
                           />
                         </div>
                       </div>

@@ -322,7 +322,7 @@ export default function ProductDetail() {
           {/* Nút Edit bên phải */}
           <div className="flex gap-2">
             <button
-              onClick={() => navigate(`/products/edit/${id}`)}
+              onClick={() => navigate(`/products/edit/${id}`, { state: { product } })}
               className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               <Pencil className="h-6 w-6" />

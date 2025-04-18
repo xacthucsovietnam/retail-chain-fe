@@ -101,7 +101,7 @@ export default function SupplierInvoiceAdd() {
   const [supplierPhone, setSupplierPhone] = useState('');
   const [supplierAddress, setSupplierAddress] = useState('');
   const [showProductAddPopup, setShowProductAddPopup] = useState(false);
-  const [showCreateProductPopup, setShowCreateProductPopup] = useState(false); // Thêm state mới
+  const [showCreateProductPopup, setShowCreateProductPopup] = useState(false);
   const [currentProductIndex, setCurrentProductIndex] = useState<number | null>(null);
   const [isReturnOrder, setIsReturnOrder] = useState(false);
   const [originalProducts, setOriginalProducts] = useState<ProductItem[]>([]);
@@ -276,7 +276,8 @@ export default function SupplierInvoiceAdd() {
   const handleRemoveProduct = (index: number) => {
     setFormData(prev => ({
       ...prev,
-      products: prev.products.filter((_, i) => i !== index).map((p, i) => ({ ...p, lineNumber: i + 1 }))
+      products: prev.products.filter((_, i) => i !== index).map((p, i) => ({ ...p, lineNumber: i + 1 })),
+      amount: prev.products.filter((_, i) => i !== index).reduce((sum, p) => sum + p.total, 0)
     }));
   };
 
@@ -285,8 +286,8 @@ export default function SupplierInvoiceAdd() {
 
     if (selectedOption.value === 'create-product' && !isReturnOrder) {
       setShowProductAddPopup(false);
-      setCurrentProductIndex(formData.products.length); // Lưu vị trí sản phẩm mới
-      setShowCreateProductPopup(true); // Mở popup thêm mới sản phẩm
+      setCurrentProductIndex(formData.products.length);
+      setShowCreateProductPopup(true);
       return;
     }
 
@@ -393,7 +394,7 @@ export default function SupplierInvoiceAdd() {
       amount: calculateTotal() + newProduct.total
     }));
 
-    setNewProduct(null); // Reset newProduct
+    setNewProduct(null);
     setShowProductAddPopup(false);
     toast.success('Đã thêm sản phẩm vào đơn hàng');
   };
@@ -417,7 +418,6 @@ export default function SupplierInvoiceAdd() {
 
       setProducts(prev => [...prev, newProductOption]);
 
-      // Tự động thêm sản phẩm mới vào popup thêm sản phẩm
       setNewProduct({
         lineNumber: formData.products.length + 1,
         product: { _type: 'XTSObjectId', dataType: 'XTSProduct', id: productDetail.id, presentation: productDetail.name },
@@ -438,7 +438,7 @@ export default function SupplierInvoiceAdd() {
       });
 
       setShowCreateProductPopup(false);
-      setShowProductAddPopup(true); // Mở lại popup thêm sản phẩm
+      setShowProductAddPopup(true);
       setCurrentProductIndex(null);
       toast.success('Sản phẩm đã được thêm');
     } catch (error) {
@@ -631,6 +631,42 @@ export default function SupplierInvoiceAdd() {
     setIsSavingFromPopup(false);
   };
 
+  const handleProductFieldChange = (index: number, field: keyof SupplierProduct, value: string) => {
+    const newValue = value === '' ? 0 : Number(value);
+
+    if (field === 'quantity' && newValue <= 0) {
+      toast.error('Số lượng phải lớn hơn 0');
+      return;
+    }
+
+    if (field === 'price' && newValue < 0) {
+      toast.error('Đơn giá không được âm');
+      return;
+    }
+
+    setFormData(prev => {
+      const updatedProducts = [...prev.products];
+      const product = updatedProducts[index];
+      const maxQuantity = isReturnOrder ? product.availableQuantity || Infinity : Infinity;
+
+      updatedProducts[index] = {
+        ...product,
+        [field]: field === 'quantity' ? Math.min(newValue, maxQuantity) : newValue,
+        total: (field === 'quantity' ? Math.min(newValue, maxQuantity) : product.quantity) * 
+               (field === 'price' ? newValue : product.price),
+        amount: (field === 'quantity' ? Math.min(newValue, maxQuantity) : product.quantity) * 
+                (field === 'price' ? newValue : product.price),
+        priceOriginal: field === 'price' ? newValue : product.priceOriginal
+      };
+
+      return {
+        ...prev,
+        products: updatedProducts,
+        amount: updatedProducts.reduce((sum, p) => sum + p.total, 0)
+      };
+    });
+  };
+
   const validateForm = (): boolean => {
     if (!formData.counterpartyId) {
       toast.error('Vui lòng chọn nhà cung cấp');
@@ -648,8 +684,8 @@ export default function SupplierInvoiceAdd() {
         return false;
       }
 
-      if (product.quantity < 0) {
-        toast.error('Số lượng không được âm');
+      if (product.quantity <= 0) {
+        toast.error('Số lượng phải lớn hơn 0');
         return false;
       }
 
@@ -1050,18 +1086,25 @@ export default function SupplierInvoiceAdd() {
                       </label>
                       <input
                         type="number"
-                        value={product.quantity}
+                        value={product.quantity === 0 ? '' : product.quantity}
+                        onChange={(e) => handleProductFieldChange(index, 'quantity', e.target.value)}
+                        min="1"
+                        max={isReturnOrder ? product.availableQuantity : undefined}
                         className="w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled={true}
+                        inputMode="numeric"
                       />
                     </div>
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">Đơn giá</label>
                       <input
                         type="number"
-                        value={product.price}
+                        value={product.price === 0 ? '' : product.price}
+                        onChange={(e) => handleProductFieldChange(index, 'price', e.target.value)}
+                        min="0"
+                        step="1000"
                         className="w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled={true}
+                        inputMode="numeric"
+                        disabled={isReturnOrder}
                       />
                     </div>
                   </div>
@@ -1164,7 +1207,7 @@ export default function SupplierInvoiceAdd() {
                   type="text"
                   value={supplierName}
                   onChange={e => setSupplierName(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                  className="block w-full px works for me -3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Nhập tên nhà cung cấp"
                 />
               </div>

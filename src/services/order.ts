@@ -684,7 +684,7 @@ export const createOrder = async (data: CreateOrderData): Promise<{ id: string; 
           quantity: product.quantity,
           comment: '',
           price: product.price,
-          amount: product.amount,
+          amount: product.total,
           automaticDiscountAmount: product.automaticDiscountAmount,
           discountsMarkupsAmount: product.discountsMarkupsAmount,
           vatAmount: product.vatAmount,
