@@ -250,7 +250,7 @@ export const getSupplierDropdownData = async (): Promise<SupplierDropdownItem[]>
     sortBy: [],
     positionFrom: 0,
     positionTo: 0,
-    limit: 0,
+    limit: 1000000,
     conditions: [{ _type: 'XTSCondition', property: 'vendor', value: true, comparisonOperator: '=' }],
   };
 
@@ -279,7 +279,7 @@ export const getProductDropdownData = async (): Promise<ProductDropdownItem[]> =
     sortBy: [],
     positionFrom: 0,
     positionTo: 0,
-    limit: 0,
+    limit: 1000000,
     conditions: [],
   };
 

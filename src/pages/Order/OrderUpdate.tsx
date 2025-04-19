@@ -8,7 +8,8 @@ import {
   PlusCircle,
   Plus,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Minus
 } from 'lucide-react';
 import Select from 'react-select';
 import toast from 'react-hot-toast';
@@ -88,7 +89,7 @@ interface FormData {
     characteristic: string | null;
     unitId: string;
     unitName: string;
-    quantity: number;
+    quantity: number | string;
     price: number;
     amount: number;
     automaticDiscountAmount: number;
@@ -203,6 +204,7 @@ export default function OrderUpdate() {
   const [isOrderInfoExpanded, setIsOrderInfoExpanded] = useState(true);
   const [isProductListExpanded, setIsProductListExpanded] = useState(true);
   const [showCreateProductPopup, setShowCreateProductPopup] = useState(false);
+  const [currentProductIndex, setCurrentProductIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -355,7 +357,8 @@ export default function OrderUpdate() {
   }, [id, initialOrderData]);
 
   const calculateProductTotal = (product: FormData['products'][0]) => {
-    return product.quantity * product.price * product.coefficient;
+    const quantity = typeof product.quantity === 'string' && product.quantity === '' ? 0 : Number(product.quantity);
+    return quantity * product.price * product.coefficient;
   };
 
   const calculateTotal = () => {
@@ -466,6 +469,57 @@ export default function OrderUpdate() {
     }
   };
 
+  const handleProductChangeInList = async (index: number, selectedOption: any) => {
+    if (!selectedOption) return;
+
+    if (selectedOption.value === 'create-product') {
+      setCurrentProductIndex(index);
+      setShowCreateProductPopup(true);
+      return;
+    }
+
+    try {
+      const productDetail = await getProductDetail(selectedOption.value);
+      const availableUnits = productDetail.uoms || [];
+      const defaultUnit = availableUnits.length === 2 ? availableUnits[1] : availableUnits[0] || { id: '', presentation: '', coefficient: 1 };
+      const fileStorageURL = session?.fileStorageURL || '';
+      const imageUrl = productDetail.imageUrl && productDetail.images.length > 0 
+        ? `${fileStorageURL}${productDetail.images[0].id}`
+        : undefined;
+
+      setFormData(prev => {
+        const updatedProducts = [...prev.products];
+        const currentProduct = updatedProducts[index];
+        updatedProducts[index] = {
+          ...currentProduct,
+          productId: productDetail.id,
+          productName: productDetail.name,
+          code: productDetail.code,
+          unitId: defaultUnit.id,
+          unitName: defaultUnit.presentation,
+          coefficient: defaultUnit.coefficient,
+          price: productDetail.price,
+          amount: productDetail.price * (currentProduct.quantity === '' ? 0 : Number(currentProduct.quantity)),
+          total: calculateProductTotal({
+            quantity: currentProduct.quantity,
+            price: productDetail.price,
+            coefficient: defaultUnit.coefficient
+          }),
+          availableUnits,
+          imageUrl
+        };
+        return {
+          ...prev,
+          products: updatedProducts,
+          documentAmount: calculateTotal()
+        };
+      });
+    } catch (error) {
+      console.error('Error fetching product detail:', error);
+      toast.error('Không thể tải chi tiết sản phẩm');
+    }
+  };
+
   const handleUnitChange = (selectedOption: any) => {
     if (!selectedOption || !newProduct) return;
 
@@ -476,31 +530,131 @@ export default function OrderUpdate() {
         unitId: selectedUnit.id,
         unitName: selectedUnit.presentation,
         coefficient: selectedUnit.coefficient,
-        amount: prev!.quantity * prev!.price,
+        amount: (prev!.quantity === '' ? 0 : Number(prev!.quantity)) * prev!.price,
         total: calculateProductTotal({
           ...prev!,
           coefficient: selectedUnit.coefficient,
-          quantity: prev!.quantity,
-          price: prev!.price
+          quantity: prev!.quantity
         })
       }));
     }
   };
 
-  const handleFieldChange = (field: keyof FormData['products'][0], value: any) => {
-    const newValue = value === '' ? 0 : Number(value);
+  const handleUnitChangeInList = (index: number, selectedOption: any) => {
+    if (!selectedOption) return;
 
-    setNewProduct(prev => ({
-      ...prev!,
-      [field]: newValue,
-      amount: field === 'quantity' || field === 'price' 
-        ? newValue * (field === 'quantity' ? prev!.price : prev!.quantity)
-        : prev!.amount,
-      total: calculateProductTotal({
+    const selectedUnit = formData.products[index].availableUnits?.find(u => u.id === selectedOption.value);
+    if (selectedUnit) {
+      setFormData(prev => {
+        const updatedProducts = [...prev.products];
+        const currentProduct = updatedProducts[index];
+        updatedProducts[index] = {
+          ...currentProduct,
+          unitId: selectedUnit.id,
+          unitName: selectedUnit.presentation,
+          coefficient: selectedUnit.coefficient,
+          amount: (currentProduct.quantity === '' ? 0 : Number(currentProduct.quantity)) * currentProduct.price,
+          total: calculateProductTotal({
+            ...currentProduct,
+            coefficient: selectedUnit.coefficient
+          })
+        };
+        return {
+          ...prev,
+          products: updatedProducts,
+          documentAmount: calculateTotal()
+        };
+      });
+    }
+  };
+
+  const handleFieldChange = (field: keyof FormData['products'][0], value: any) => {
+    const newValue = field === 'quantity' ? (value === '' ? '' : Number(value)) : (value === '' ? 0 : Number(value));
+
+    setNewProduct(prev => {
+      const quantityForCalc = field === 'quantity' && value === '' ? 0 : newValue;
+      return {
         ...prev!,
-        [field]: newValue
-      })
-    }));
+        [field]: newValue,
+        amount: field === 'quantity' || field === 'price' 
+          ? quantityForCalc * (field === 'quantity' ? prev!.price : (prev!.quantity === '' ? 0 : Number(prev!.quantity)))
+          : prev!.amount,
+        total: calculateProductTotal({
+          ...prev!,
+          [field]: quantityForCalc
+        })
+      };
+    });
+  };
+
+  const handleQuantityBlur = () => {
+    if (newProduct && (newProduct.quantity === '' || Number(newProduct.quantity) < 1)) {
+      toast.error('Số lượng phải lớn hơn 0');
+      setNewProduct(prev => ({
+        ...prev!,
+        quantity: 1,
+        amount: 1 * prev!.price,
+        total: calculateProductTotal({
+          ...prev!,
+          quantity: 1
+        })
+      }));
+    }
+  };
+
+  const handleProductFieldChange = (index: number, field: keyof FormData['products'][0], value: string) => {
+    const newValue = field === 'quantity' ? (value === '' ? '' : Number(value)) : (value === '' ? 0 : Number(value));
+
+    if (field === 'price' && newValue < 0) {
+      toast.error('Đơn giá không được âm');
+      return;
+    }
+
+    setFormData(prev => {
+      const updatedProducts = [...prev.products];
+      const product = updatedProducts[index];
+      const quantityForCalc = field === 'quantity' && value === '' ? 0 : newValue;
+      updatedProducts[index] = {
+        ...product,
+        [field]: newValue,
+        amount: field === 'quantity' || field === 'price' 
+          ? quantityForCalc * (field === 'quantity' ? product.price : (product.quantity === '' ? 0 : Number(product.quantity)))
+          : product.amount,
+        total: calculateProductTotal({
+          ...product,
+          [field]: quantityForCalc
+        })
+      };
+      return {
+        ...prev,
+        products: updatedProducts,
+        documentAmount: calculateTotal()
+      };
+    });
+  };
+
+  const handleProductQuantityBlur = (index: number) => {
+    const product = formData.products[index];
+    if (product.quantity === '' || Number(product.quantity) < 1) {
+      toast.error('Số lượng phải lớn hơn 0');
+      setFormData(prev => {
+        const updatedProducts = [...prev.products];
+        updatedProducts[index] = {
+          ...product,
+          quantity: 1,
+          amount: 1 * product.price,
+          total: calculateProductTotal({
+            ...product,
+            quantity: 1
+          })
+        };
+        return {
+          ...prev,
+          products: updatedProducts,
+          documentAmount: calculateTotal()
+        };
+      });
+    }
   };
 
   const handleSaveProduct = () => {
@@ -509,7 +663,7 @@ export default function OrderUpdate() {
       return;
     }
 
-    if (newProduct.quantity <= 0) {
+    if (newProduct.quantity === '' || Number(newProduct.quantity) <= 0) {
       toast.error('Số lượng phải lớn hơn 0');
       return;
     }
@@ -523,20 +677,102 @@ export default function OrderUpdate() {
       ...prev,
       products: [...prev.products, {
         ...newProduct,
-        amount: newProduct.quantity * newProduct.price
+        quantity: Number(newProduct.quantity),
+        amount: Number(newProduct.quantity) * newProduct.price
       }],
       documentAmount: calculateTotal() + calculateProductTotal(newProduct)
     }));
-    setShowProductAddPopup(false);
-    setNewProduct(null);
+    toast.success('Thêm sản phẩm vào đơn thành công');
+    setNewProduct({
+      lineNumber: formData.products.length + 2,
+      productId: '',
+      productName: '',
+      characteristic: null,
+      unitId: '',
+      unitName: '',
+      quantity: 1,
+      price: 0,
+      amount: 0,
+      automaticDiscountAmount: 0,
+      discountsMarkupsAmount: 0,
+      vatAmount: 0,
+      vatRateId: '',
+      vatRateName: '',
+      total: 0,
+      code: '',
+      coefficient: 1,
+      availableUnits: []
+    });
   };
 
-  const handleProductAdded = (newProductData: { id: string; presentation: string }) => {
-    // Logic xử lý khi sản phẩm mới được thêm từ ProductAddPopup
-    // Tương tự như OrderAdd.tsx
-    toast.success('Sản phẩm đã được thêm');
-    setShowCreateProductPopup(false);
-    setShowProductAddPopup(true);
+  const handleProductAdded = async (newProductData: { id: string; presentation: string }) => {
+    try {
+      const productDetail = await getProductDetail(newProductData.id);
+      const availableUnits = productDetail.uoms || [];
+      const defaultUnit = availableUnits.length === 2 ? availableUnits[1] : availableUnits[0] || { id: '', presentation: '', coefficient: 1 };
+      const fileStorageURL = session?.fileStorageURL || '';
+      const imageUrl = productDetail.imageUrl && productDetail.images.length > 0 
+        ? `${fileStorageURL}${productDetail.images[0].id}`
+        : undefined;
+
+      const newProductOption: ProductDropdownItem = {
+        id: productDetail.id,
+        name: productDetail.name
+      };
+      setProducts(prev => [...prev, newProductOption]);
+
+      const newProductDataFormatted = {
+        lineNumber: formData.products.length + 1,
+        productId: productDetail.id,
+        productName: productDetail.name,
+        characteristic: null,
+        unitId: defaultUnit.id,
+        unitName: defaultUnit.presentation,
+        quantity: 1,
+        price: productDetail.price,
+        amount: productDetail.price * 1,
+        automaticDiscountAmount: 0,
+        discountsMarkupsAmount: 0,
+        vatAmount: 0,
+        vatRateId: '',
+        vatRateName: '',
+        total: calculateProductTotal({
+          quantity: 1,
+          price: productDetail.price,
+          coefficient: defaultUnit.coefficient
+        }),
+        code: productDetail.code,
+        coefficient: defaultUnit.coefficient,
+        availableUnits,
+        imageUrl
+      };
+
+      if (currentProductIndex !== null) {
+        setFormData(prev => {
+          const updatedProducts = [...prev.products];
+          updatedProducts[currentProductIndex] = {
+            ...newProductDataFormatted,
+            lineNumber: updatedProducts[currentProductIndex].lineNumber
+          };
+          return {
+            ...prev,
+            products: updatedProducts,
+            documentAmount: calculateTotal()
+          };
+        });
+        setCurrentProductIndex(null);
+        setShowProductAddPopup(false);
+      } else {
+        setNewProduct(newProductDataFormatted);
+        setShowProductAddPopup(true);
+      }
+
+      setShowCreateProductPopup(false);
+      toast.success('Sản phẩm đã được thêm');
+    } catch (error) {
+      console.error('Error fetching new product detail:', error);
+      toast.error('Không thể tải chi tiết sản phẩm vừa thêm');
+    }
   };
 
   const validateForm = (): boolean => {
@@ -574,7 +810,7 @@ export default function OrderUpdate() {
         characteristic: product.characteristic,
         unitId: product.unitId,
         unitName: product.unitName,
-        quantity: product.quantity,
+        quantity: Number(product.quantity),
         price: product.price,
         amount: product.amount,
         automaticDiscountAmount: product.automaticDiscountAmount,
@@ -667,7 +903,13 @@ export default function OrderUpdate() {
     ...products.map(product => ({
       value: product.id,
       label: product.name
-    }))
+    })),
+    ...formData.products
+      .filter(p => p.productId && !products.some(mp => mp.id === p.productId))
+      .map(p => ({
+        value: p.productId,
+        label: p.productName
+      }))
   ];
 
   const orderStateOptions = orderStates.map(state => ({
@@ -920,11 +1162,11 @@ export default function OrderUpdate() {
           </div>
           {isProductListExpanded && (
             <div className="px-4 pb-4">
-              <div className="space-y-2">
+              <div className="space-y-4">
                 {formData.products.map((product, index) => (
-                  <div key={index} className={`flex items-center justify-between ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} rounded-lg p-3`}>
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                  <div key={index} className="bg-white rounded-lg shadow-sm p-4">
+                    <div className="flex gap-3 mb-3">
+                      <div className="h-16 w-16 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
                         {product.imageUrl ? (
                           <img 
                             src={product.imageUrl} 
@@ -936,30 +1178,126 @@ export default function OrderUpdate() {
                             }}
                           />
                         ) : null}
-                        <Package className={`h-6 w-6 text-gray-400 ${product.imageUrl ? 'hidden' : ''}`} />
+                        <Package className={`h-8 w-8 text-gray-400 ${product.imageUrl ? 'hidden' : ''}`} />
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          #{index + 1} {product.productName}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Code: {product.code}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {product.quantity} {product.unitName} x {product.price.toLocaleString()} đồng/chiếc
-                        </p>
+                      <div className="flex-1 min-w-0">
+                        <Select
+                          options={productOptions}
+                          value={productOptions.find(option => option.value === product.productId) || null}
+                          onChange={(selectedOption) => handleProductChangeInList(index, selectedOption)}
+                          placeholder="Chọn sản phẩm..."
+                          isSearchable
+                          className="text-sm"
+                          classNamePrefix="select"
+                          components={{ Option: CustomOption }}
+                        />
+                        {product.productId && (
+                          <>
+                            <div className="mt-2 flex items-center gap-2">
+                              <span className="text-sm text-gray-500">Mã sản phẩm:</span>
+                              <span className="text-sm text-gray-900">{product.code}</span>
+                            </div>
+                            <div className="mt-2 flex items-center gap-2">
+                              <span className="text-sm text-gray-500">Hệ số:</span>
+                              <span className="text-sm text-gray-900">{product.coefficient}</span>
+                            </div>
+                          </>
+                        )}
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-blue-600">
-                        {product.total.toLocaleString()} đ
-                      </p>
                       <button
                         onClick={() => handleRemoveProduct(index)}
                         className="text-red-600"
                       >
                         <Trash2 className="h-5 w-5" />
                       </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Đơn vị tính</label>
+                          <Select
+                            options={product.availableUnits?.map(unit => ({
+                              value: unit.id,
+                              label: unit.presentation
+                            }))}
+                            value={product.availableUnits
+                              ?.map(unit => ({ value: unit.id, label: unit.presentation }))
+                              .find(option => option.value === product.unitId) || null}
+                            onChange={(selectedOption) => handleUnitChangeInList(index, selectedOption)}
+                            placeholder="Chọn đơn vị"
+                            className="text-sm"
+                            classNamePrefix="select"
+                            styles={{
+                              control: (provided) => ({
+                                ...provided,
+                                minHeight: 'auto',
+                                height: '38px',
+                                fontSize: '14px',
+                              }),
+                              valueContainer: (provided) => ({
+                                ...provided,
+                                padding: '2px 8px',
+                              }),
+                              indicatorsContainer: (provided) => ({
+                                ...provided,
+                                height: '38px',
+                              }),
+                              menu: (provided) => ({
+                                ...provided,
+                                zIndex: 9999,
+                              }),
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Đơn giá</label>
+                          <input
+                            type="number"
+                            value={product.price === 0 ? '' : product.price}
+                            onChange={(e) => handleProductFieldChange(index, 'price', e.target.value)}
+                            min="0"
+                            step="1000"
+                            className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+                            inputMode="numeric"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Số lượng</label>
+                          <div className="relative flex items-center">
+                            <button
+                              onClick={() => handleProductFieldChange(index, 'quantity', Math.max(1, Number(product.quantity) - 1).toString())}
+                              className="absolute left-0 h-9 w-9 flex items-center justify-center bg-gray-100 text-gray-600 rounded-l-md hover:bg-gray-200 focus:outline-none"
+                            >
+                              <Minus className="h-4 w-4" />
+                            </button>
+                            <input
+                              type="number"
+                              value={product.quantity === '' ? '' : product.quantity}
+                              onChange={(e) => handleProductFieldChange(index, 'quantity', e.target.value)}
+                              onBlur={() => handleProductQuantityBlur(index)}
+                              className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-12 py-2 text-center focus:ring-blue-500 focus:border-blue-500"
+                              inputMode="numeric"
+                            />
+                            <button
+                              onClick={() => handleProductFieldChange(index, 'quantity', (Number(product.quantity) + 1).toString())}
+                              className="absolute right-0 h-9 w-9 flex items-center justify-center bg-gray-100 text-gray-600 rounded-r-md hover:bg-gray-200 focus:outline-none"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex flex-col justify-end">
+                          <label className="block text-xs text-gray-500 mb-1">Thành tiền</label>
+                          <div className="flex items-center justify-between h-9 px-3">
+                            <span className="text-sm font-medium text-blue-600">
+                              {product.total.toLocaleString()} đ
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1194,25 +1532,25 @@ export default function OrderUpdate() {
                   <div className="relative flex items-center">
                     <button
                       onClick={() =>
-                        handleFieldChange('quantity', Math.max(1, newProduct.quantity - 1))
+                        handleFieldChange('quantity', Math.max(1, Number(newProduct.quantity) - 1))
                       }
                       className="absolute left-0 h-9 w-9 flex items-center justify-center bg-gray-100 text-gray-600 rounded-l-md hover:bg-gray-200 focus:outline-none"
                     >
-                      <span className="text-lg">-</span>
+                      <Minus className="h-4 w-4" />
                     </button>
                     <input
                       type="number"
-                      value={newProduct.quantity === 0 ? '' : newProduct.quantity}
+                      value={newProduct.quantity === '' ? '' : newProduct.quantity}
                       onChange={(e) => handleFieldChange('quantity', e.target.value)}
-                      min="1"
+                      onBlur={handleQuantityBlur}
                       className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-12 py-2 text-center focus:ring-blue-500 focus:border-blue-500"
                       inputMode="numeric"
                     />
                     <button
-                      onClick={() => handleFieldChange('quantity', newProduct.quantity + 1)}
+                      onClick={() => handleFieldChange('quantity', Number(newProduct.quantity) + 1)}
                       className="absolute right-0 h-9 w-9 flex items-center justify-center bg-gray-100 text-gray-600 rounded-r-md hover:bg-gray-200 focus:outline-none"
                     >
-                      <span className="text-lg">+</span>
+                      <Plus className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
@@ -1250,7 +1588,8 @@ export default function OrderUpdate() {
           <ProductAddPopup
             onClose={() => {
               setShowCreateProductPopup(false);
-              setShowProductAddPopup(true);
+              setShowProductAddPopup(currentProductIndex === null);
+              setCurrentProductIndex(null);
             }}
             onProductAdded={(newProductData) => {
               handleProductAdded(newProductData);

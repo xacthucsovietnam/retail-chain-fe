@@ -96,6 +96,9 @@ export default function SupplierInvoiceUpdate() {
   const [isInvoiceInfoExpanded, setIsInvoiceInfoExpanded] = useState(true);
   const [isProductListExpanded, setIsProductListExpanded] = useState(true);
 
+  const [products, setProducts] = useState<ProductItem[]>([]);
+  const [isFetchingProducts, setIsFetchingProducts] = useState(false);
+
   const [formData, setFormData] = useState<FormData>({
     id: '',
     number: '',
@@ -113,9 +116,6 @@ export default function SupplierInvoiceUpdate() {
     amount: 0,
     products: []
   });
-
-  const [products, setProducts] = useState<ProductItem[]>([]);
-  const [isFetchingProducts, setIsFetchingProducts] = useState(false);
 
   const fetchInvoiceDetail = async () => {
     if (!id) {
@@ -286,11 +286,63 @@ export default function SupplierInvoiceUpdate() {
     setFormData(prev => ({
       ...prev,
       products: prev.products.filter((_, i) => i !== index).map((p, i) => ({ ...p, lineNumber: i + 1 })),
-      amount: calculateTotal()
+      amount: prev.products.filter((_, i) => i !== index).reduce((sum, p) => sum + p.total, 0)
     }));
   };
 
-  const handleProductChange = async (selectedOption: any) => {
+  const handleProductChange = async (index: number, selectedOption: any) => {
+    if (!selectedOption) return;
+
+    if (selectedOption.value === 'create-product') {
+      setShowCreateProductPopup(true);
+      return;
+    }
+
+    try {
+      const productDetail = await getProductDetail(selectedOption.value);
+      const defaultUnit = productDetail.uoms[0] || { id: '', presentation: '', coefficient: 1 };
+      const productSource = {
+        id: productDetail.id,
+        name: productDetail.name,
+        code: productDetail.code,
+        price: productDetail.price,
+        riCoefficient: productDetail.riCoefficient || defaultUnit.coefficient,
+        baseUnitId: defaultUnit.id,
+        baseUnit: defaultUnit.presentation
+      };
+
+      setFormData(prev => {
+        const updatedProducts = [...prev.products];
+        const currentProduct = updatedProducts[index];
+        updatedProducts[index] = {
+          ...currentProduct,
+          product: { _type: 'XTSObjectId', dataType: 'XTSProduct', id: productSource.id, presentation: productSource.name },
+          sku: productSource.code || '',
+          price: productSource.price,
+          priceOriginal: productSource.price,
+          coefficient: productSource.riCoefficient || defaultUnit.coefficient,
+          total: productSource.price * currentProduct.quantity,
+          amount: productSource.price * currentProduct.quantity,
+          uom: {
+            _type: 'XTSObjectId',
+            dataType: 'XTSUOMClassifier',
+            id: productSource.baseUnitId || defaultUnit.id,
+            presentation: productSource.baseUnit || defaultUnit.presentation
+          }
+        };
+        return {
+          ...prev,
+          products: updatedProducts,
+          amount: updatedProducts.reduce((sum, p) => sum + p.total, 0)
+        };
+      });
+    } catch (error) {
+      toast.error('Không thể tải chi tiết sản phẩm');
+      console.error('Error fetching product detail:', error);
+    }
+  };
+
+  const handleNewProductChange = async (selectedOption: any) => {
     if (!selectedOption || !newProduct) return;
 
     if (selectedOption.value === 'create-product') {
@@ -334,8 +386,8 @@ export default function SupplierInvoiceUpdate() {
     }
   };
 
-  const handleFieldChange = (field: keyof SupplierProduct, value: any) => {
-    const newValue = value === '' ? 0 : Number(value);
+  const handleFieldChange = (field: keyof Supplier | keyof SupplierProduct, value: any) => {
+  const newValue = value === '' ? 0 : Number(value);
 
     setNewProduct(prev => {
       if (!prev) return prev;
@@ -345,11 +397,11 @@ export default function SupplierInvoiceUpdate() {
         total: (field === 'quantity' ? newValue : prev.quantity) * (field === 'price' ? newValue : prev.price),
         amount: (field === 'quantity' ? newValue : prev.quantity) * (field === 'price' ? newValue : prev.price)
       };
-
+  
       if (field === 'price') {
         updatedProduct.priceOriginal = newValue;
       }
-
+  
       return updatedProduct;
     });
   };
@@ -392,6 +444,37 @@ export default function SupplierInvoiceUpdate() {
     setShowProductAddPopup(false);
     setNewProduct(null);
     toast.success('Đã thêm sản phẩm vào đơn hàng');
+  };
+
+  const handleProductFieldChange = (index: number, field: keyof SupplierProduct, value: string) => {
+    const newValue = value === '' ? 0 : Number(value);
+
+    if (field === 'quantity' && newValue <= 0) {
+      toast.error('Số lượng phải lớn hơn 0');
+      return;
+    }
+
+    if (field === 'price' && newValue < 0) {
+      toast.error('Đơn giá không được âm');
+      return;
+    }
+
+    setFormData(prev => {
+      const updatedProducts = [...prev.products];
+      const product = updatedProducts[index];
+      updatedProducts[index] = {
+        ...product,
+        [field]: newValue,
+        total: (field === 'quantity' ? newValue : product.quantity) * (field === 'price' ? newValue : product.price),
+        amount: (field === 'quantity' ? newValue : product.quantity) * (field === 'price' ? newValue : product.price),
+        priceOriginal: field === 'price' ? newValue : product.priceOriginal
+      };
+      return {
+        ...prev,
+        products: updatedProducts,
+        amount: updatedProducts.reduce((sum, p) => sum + p.total, 0)
+      };
+    });
   };
 
   const handleProductAdded = async (newProductData: { id: string; presentation: string }) => {
@@ -800,7 +883,7 @@ export default function SupplierInvoiceUpdate() {
           </div>
           {isProductListExpanded && (
             <div className="px-4 pb-4">
-              <div className="space-y-2">
+              <div className="space-y-4">
                 {formData.products.map((product, index) => {
                   const selectedProduct = products.find(p => p.id === product.product.id);
                   const code = selectedProduct?.code || product.sku || 'N/A';
@@ -808,45 +891,95 @@ export default function SupplierInvoiceUpdate() {
                   const baseUnit = product.uom?.presentation || 'N/A';
 
                   return (
-                    <div 
-                      key={index} 
-                      className={`flex items-center justify-between ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} rounded-lg p-3`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                    <div key={index} className="bg-white rounded-lg shadow-sm p-4">
+                      <div className="flex gap-3 mb-3">
+                        <div className="h-16 w-16 bg-gray-100 rounded-lg flex items-center justify-center">
                           {product.picture?.id ? (
                             <img
                               src={`${import.meta.env.VITE_FILE_BASE_URL}/${product.picture.id}`}
                               alt={product.product.presentation}
-                              className="h-full w-full object-cover"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display = 'none';
-                                (e.target as HTMLImageElement).nextSibling?.removeAttribute('style');
+                              className="h-full w-full object-cover rounded-lg"
+                              onError={e => {
+                                e.currentTarget.src = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc';
+                                e.currentTarget.alt = 'Hình ảnh mặc định';
                               }}
                             />
-                          ) : null}
-                          <Package className={`h-6 w-6 text-gray-400 ${product.picture?.id ? 'hidden' : ''}`} />
+                          ) : (
+                            <Package className="h-8 w-8 text-gray-400" />
+                          )}
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            #{index + 1} {product.product.presentation}
-                          </p>
-                          <p className="text-xs text-gray-500">Code: {code}</p>
-                          <p className="text-xs text-gray-500">
-                            {product.quantity} {baseUnit} x {product.price.toLocaleString()} {formData.currencyName}/chiếc
-                          </p>
+                        <div className="flex-1 min-w-0">
+                          <Select
+                            options={productOptions}
+                            value={productOptions.find(option => option.value === product.product.id) || null}
+                            onChange={(selectedOption) => handleProductChange(index, selectedOption)}
+                            placeholder="Chọn sản phẩm"
+                            isClearable
+                            isSearchable
+                            className="text-sm"
+                            classNamePrefix="select"
+                            components={{ Option: CustomOption }}
+                          />
+                          {product.product.id && (
+                            <>
+                              <div className="mt-2 flex items-center gap-2">
+                                <span className="text-sm text-gray-500">Mã sản phẩm:</span>
+                                <span className="text-sm text-gray-900">{code}</span>
+                              </div>
+                              <div className="mt-2 flex items-center gap-2">
+                                <span className="text-sm text-gray-500">Hệ số ri:</span>
+                                <span className="text-sm text-gray-900">{riCoefficient}</span>
+                              </div>
+                              <div className="mt-2 flex items-center gap-2">
+                                <span className="text-sm text-gray-500">Đơn vị tính:</span>
+                                <span className="text-sm text-gray-900">{baseUnit}</span>
+                              </div>
+                              <div className="mt-2 flex items-center gap-2">
+                                <span className="text-sm text-gray-500">Giá bán:</span>
+                                <span className="text-sm text-gray-900">{product.price.toLocaleString()}</span>
+                              </div>
+                            </>
+                          )}
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-blue-600">
-                          {product.total.toLocaleString()} {formData.currencyName}
-                        </p>
                         <button
                           onClick={() => handleRemoveProduct(index)}
                           className="text-red-600"
                         >
                           <Trash2 className="h-5 w-5" />
                         </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Số lượng</label>
+                          <input
+                            type="number"
+                            value={product.quantity === 0 ? '' : product.quantity}
+                            onChange={(e) => handleProductFieldChange(index, 'quantity', e.target.value)}
+                            min="1"
+                            className="w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            inputMode="numeric"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Đơn giá</label>
+                          <input
+                            type="number"
+                            value={product.price === 0 ? '' : product.price}
+                            onChange={(e) => handleProductFieldChange(index, 'price', e.target.value)}
+                            min="0"
+                            step="1000"
+                            className="w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            inputMode="numeric"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
+                        <span className="text-xs text-gray-500">Thành tiền</span>
+                        <span className="text-sm font-medium text-blue-600">
+                          {product.total.toLocaleString()} {formData.currencyName}
+                        </span>
                       </div>
                     </div>
                   );
@@ -900,7 +1033,7 @@ export default function SupplierInvoiceUpdate() {
           <div className="bg-white rounded-lg p-4 w-full max-w-sm">
             <h3 className="text-lg font-medium text-gray-900 mb-2">Xác nhận cập nhật đơn nhận hàng</h3>
             <p className="text-sm text-gray-500 mb-4">Bạn có chắc chắn muốn cập nhật đơn nhận hàng này không?</p>
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gage-2">
               <button
                 onClick={() => setShowConfirmation(false)}
                 className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
@@ -987,7 +1120,7 @@ export default function SupplierInvoiceUpdate() {
                 <Select
                   options={productOptions}
                   value={productOptions.find(option => option.value === newProduct.product.id) || null}
-                  onChange={handleProductChange}
+                  onChange={handleNewProductChange}
                   placeholder="Chọn sản phẩm..."
                   isSearchable
                   className="text-sm"

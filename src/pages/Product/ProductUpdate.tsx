@@ -37,6 +37,9 @@ export default function ProductUpdate() {
   const [isDirty, setIsDirty] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Store initial product data for comparison
+  const initialProductData = useRef<ProductDetail | undefined>(product);
+
   const [formData, setFormData] = useState<FormData>({
     id: product?.id || '',
     name: product?.name || '',
@@ -84,6 +87,27 @@ export default function ProductUpdate() {
     loadData();
   }, [id, product]);
 
+  // Check if form is dirty by comparing current formData with initial product data
+  useEffect(() => {
+    if (!initialProductData.current) return;
+
+    const initial = initialProductData.current;
+    const isFormDirty =
+      formData.name !== initial.name ||
+      formData.code !== initial.code ||
+      formData.description !== initial.description ||
+      formData.category !== initial.category ||
+      formData.measurementUnit !== initial.baseUnitId ||
+      formData.riCoefficient !== initial.riCoefficient ||
+      formData.price !== initial.price ||
+      formData.comment !== initial.comment ||
+      formData.picture !== initial.imageUrl ||
+      formData.newImages.length > 0 ||
+      formData.deletedImageIds.length > 0;
+
+    setIsDirty(isFormDirty);
+  }, [formData]);
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     
@@ -116,7 +140,6 @@ export default function ProductUpdate() {
         ...prev,
         newImages: [...prev.newImages, ...validFiles]
       }));
-      setIsDirty(true);
     }
   };
 
@@ -125,7 +148,6 @@ export default function ProductUpdate() {
       ...prev,
       deletedImageIds: [...prev.deletedImageIds, imageId]
     }));
-    setIsDirty(true);
   };
 
   const handleRemoveNewImage = (index: number) => {
@@ -133,12 +155,10 @@ export default function ProductUpdate() {
       ...prev,
       newImages: prev.newImages.filter((_, i) => i !== index)
     }));
-    setIsDirty(true);
   };
 
   const handleInputChange = (field: keyof FormData, value: string | number) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    setIsDirty(true);
   };
 
   const validateForm = (): boolean => {
@@ -354,24 +374,6 @@ export default function ProductUpdate() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Loại sản phẩm *
-            </label>
-            <select
-              value={formData.category}
-              onChange={(e) => handleInputChange('category', e.target.value)}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">Chọn loại sản phẩm</option>
-              {categories.map(category => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
               Giá bán *
             </label>
             <input
@@ -382,24 +384,6 @@ export default function ProductUpdate() {
               step="1000"
               className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Đơn vị tính *
-            </label>
-            <select
-              value={formData.measurementUnit}
-              onChange={(e) => handleInputChange('measurementUnit', e.target.value)}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">Chọn đơn vị</option>
-              {measurementUnits.map(unit => (
-                <option key={unit.id} value={unit.id}>
-                  {unit.name}
-                </option>
-              ))}
-            </select>
           </div>
 
           <div>
@@ -462,9 +446,9 @@ export default function ProductUpdate() {
         
         <button
           onClick={handleSubmit}
-          disabled={!isDirty || isSaving}
+          disabled={isSaving}
           className={`p-3 rounded-full shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-            isDirty ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500' : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+            isDirty && !isSaving ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500' : 'bg-gray-400 text-gray-200 cursor-not-allowed'
           }`}
         >
           <Save className="h-6 w-6" />

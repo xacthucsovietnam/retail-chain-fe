@@ -315,7 +315,7 @@ export const getCustomerDropdownData = async (): Promise<CustomerDropdownItem[]>
     sortBy: [],
     positionFrom: 0,
     positionTo: 0,
-    limit: 0,
+    limit: 1000000,
     conditions: [
       {
         _type: 'XTSCondition',
@@ -356,7 +356,7 @@ export const getEmployeeDropdownData = async (): Promise<EmployeeDropdownItem[]>
     sortBy: [],
     positionFrom: 0,
     positionTo: 0,
-    limit: 0,
+    limit: 1000000,
     conditions: [
       {
         _type: 'XTSCondition',
@@ -401,7 +401,7 @@ export const getProductDropdownData = async (): Promise<ProductDropdownItem[]> =
     sortBy: [],
     positionFrom: 0,
     positionTo: 0,
-    limit: 0,
+    limit: 1000000,
     conditions: []
   };
 
