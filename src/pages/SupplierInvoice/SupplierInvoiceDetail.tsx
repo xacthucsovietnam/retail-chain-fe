@@ -34,8 +34,8 @@ export default function SupplierInvoiceDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [invoice, setInvoice] = useState<ISupplierInvoiceDetail | null>(null);
-  const [productPrices, setProductPrices] = useState<Map<string, { price?: number; oldPrice?: number }>>(new Map());
-  const [originalProductPrices, setOriginalProductPrices] = useState<Map<string, { price?: number; oldPrice?: number }>>(new Map());
+  const [productPrices, setProductPrices] = useState<Map<string, { price?: number | null; oldPrice?: number }>>(new Map());
+  const [originalProductPrices, setOriginalProductPrices] = useState<Map<string, { price?: number | null; oldPrice?: number }>>(new Map());
   const [isPriceChanged, setIsPriceChanged] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -84,12 +84,10 @@ export default function SupplierInvoiceDetail() {
         setError(null);
 
         const invoiceData = await getSupplierInvoiceDetail(id);
-        // console.log('Dữ liệu nhận được khi vào màn hình SupplierInvoiceDetail:', invoiceData);
         setInvoice(invoiceData);
 
         const productIds = invoiceData.inventory.map((product) => product.product.id);
         const pricesMap = await getProductPrices(productIds);
-        // console.log('Product prices response:', Array.from(pricesMap.entries()));
         setProductPrices(pricesMap);
         setOriginalProductPrices(new Map(pricesMap));
       } catch (error) {
@@ -104,7 +102,7 @@ export default function SupplierInvoiceDetail() {
     fetchData();
   }, [id]);
 
-  const areMapsEqual = (map1: Map<string, { price?: number; oldPrice?: number }>, map2: Map<string, { price?: number; oldPrice?: number }>) => {
+  const areMapsEqual = (map1: Map<string, { price?: number | null; oldPrice?: number }>, map2: Map<string, { price?: number | null; oldPrice?: number }>) => {
     if (map1.size !== map2.size) return false;
     for (const [key, value] of map1) {
       const map2Value = map2.get(key);
@@ -121,7 +119,6 @@ export default function SupplierInvoiceDetail() {
 
   const handleEdit = () => {
     if (id) {
-      // console.log('Dữ liệu truyền sang SupplierInvoiceUpdate:', invoice);
       navigate(`/supplier-invoices/edit/${id}`);
     }
   };
@@ -317,17 +314,24 @@ export default function SupplierInvoiceDetail() {
     }
   };
 
-  const handlePriceChange = (productId: string, newPrice: number) => {
+  const handlePriceChange = (productId: string, value: string) => {
     const newProductPrices = new Map(productPrices);
     const currentPriceData = newProductPrices.get(productId) || { oldPrice: 0 };
-    newProductPrices.set(productId, {
-      price: newPrice,
-      oldPrice: currentPriceData.oldPrice,
-    });
-    setProductPrices(newProductPrices);
+    
+    // If the input is empty, set price to null
+    const newPrice = value === '' ? null : Number(value);
+    
+    // Only update if the value is empty or a non-negative number
+    if (value === '' || (!isNaN(newPrice) && newPrice >= 0)) {
+      newProductPrices.set(productId, {
+        price: newPrice,
+        oldPrice: currentPriceData.oldPrice,
+      });
+      setProductPrices(newProductPrices);
 
-    const hasChanged = !areMapsEqual(newProductPrices, originalProductPrices);
-    setIsPriceChanged(hasChanged);
+      const hasChanged = !areMapsEqual(newProductPrices, originalProductPrices);
+      setIsPriceChanged(hasChanged);
+    }
   };
 
   const handlePrint = () => {
@@ -360,8 +364,14 @@ export default function SupplierInvoiceDetail() {
     });
   };
 
-  const formatCurrency = (amount: number, currency: ObjectId) => {
-    const currencyString = currency?.presentation || 'VND';
+  const formatCurrency = (amount: number, currency: ObjectId | string) => {
+    let currencyString: string;
+    if (typeof currency === 'string') {
+      currencyString = currency;
+    } else {
+      currencyString = currency?.presentation || 'VND';
+    }
+
     const normalizedCurrency = currencyString
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
@@ -544,18 +554,14 @@ export default function SupplierInvoiceDetail() {
                             <input
                               type="number"
                               value={sellingPrice !== undefined && sellingPrice !== null ? sellingPrice : ''}
-                              onChange={(e) => {
-                                const newPrice = Number(e.target.value);
-                                if (!isNaN(newPrice) && newPrice >= 0) {
-                                  handlePriceChange(product.product.id, newPrice);
-                                }
-                              }}
+                              onChange={(e) => handlePriceChange(product.product.id, e.target.value)}
                               className="w-32 text-right border rounded-md px-2 py-1 focus:border-blue-500 focus:ring-blue-500"
+                              placeholder="Nhập giá bán"
                             />
                           ) : (
                             <span className={sellingPrice === undefined || sellingPrice === null ? 'text-red-500' : ''}>
                               {sellingPrice !== undefined && sellingPrice !== null
-                                ? formatCurrency(sellingPrice, 'đ')
+                                ? formatCurrency(sellingPrice, 'VND')
                                 : 'Chưa có giá bán'}
                             </span>
                           )}

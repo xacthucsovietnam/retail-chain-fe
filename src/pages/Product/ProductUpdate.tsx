@@ -34,7 +34,7 @@ export default function ProductUpdate() {
   const [isSaving, setIsSaving] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isDirty, setIsDirty] = useState(false);
+  const [isDirty, setIsDirty] = useState(true); // Changed to true initially
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Store initial product data for comparison
@@ -47,8 +47,8 @@ export default function ProductUpdate() {
     description: product?.description || '',
     category: product?.category || '',
     measurementUnit: product?.baseUnitId || '',
-    riCoefficient: product?.riCoefficient || 1,
-    price: product?.price || 0,
+    riCoefficient: product?.riCoefficient || '',
+    price: product?.price || '',
     comment: product?.comment || '',
     picture: product?.imageUrl || '',
     newImages: [],
@@ -98,8 +98,8 @@ export default function ProductUpdate() {
       formData.description !== initial.description ||
       formData.category !== initial.category ||
       formData.measurementUnit !== initial.baseUnitId ||
-      formData.riCoefficient !== initial.riCoefficient ||
-      formData.price !== initial.price ||
+      String(formData.riCoefficient) !== String(initial.riCoefficient) ||
+      String(formData.price) !== String(initial.price) ||
       formData.comment !== initial.comment ||
       formData.picture !== initial.imageUrl ||
       formData.newImages.length > 0 ||
@@ -177,7 +177,12 @@ export default function ProductUpdate() {
       return false;
     }
 
-    if (formData.price <= 0) {
+    if (!formData.price) {
+      toast.error('Vui lòng nhập giá bán');
+      return false;
+    }
+
+    if (Number(formData.price) <= 0) {
       toast.error('Giá bán phải lớn hơn 0');
       return false;
     }
@@ -187,7 +192,12 @@ export default function ProductUpdate() {
       return false;
     }
 
-    if (formData.riCoefficient <= 0) {
+    if (!formData.riCoefficient) {
+      toast.error('Vui lòng nhập hệ số ri');
+      return false;
+    }
+
+    if (Number(formData.riCoefficient) <= 0) {
       toast.error('Hệ số ri phải lớn hơn 0');
       return false;
     }
@@ -379,23 +389,21 @@ export default function ProductUpdate() {
             <input
               type="number"
               value={formData.price}
-              onChange={(e) => handleInputChange('price', Number(e.target.value))}
-              min="0"
-              step="1000"
+              onChange={(e) => handleInputChange('price', e.target.value)}
+              placeholder="Nhập giá bán"
               className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Hệ số ri
+              Hệ số ri *
             </label>
             <input
               type="number"
               value={formData.riCoefficient}
-              onChange={(e) => handleInputChange('riCoefficient', Number(e.target.value))}
-              min="1"
-              step="1"
+              onChange={(e) => handleInputChange('riCoefficient', e.target.value)}
+              placeholder="Nhập hệ số ri"
               className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
@@ -448,7 +456,7 @@ export default function ProductUpdate() {
           onClick={handleSubmit}
           disabled={isSaving}
           className={`p-3 rounded-full shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-            isDirty && !isSaving ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500' : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+            !isSaving ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500' : 'bg-gray-400 text-gray-200 cursor-not-allowed'
           }`}
         >
           <Save className="h-6 w-6" />

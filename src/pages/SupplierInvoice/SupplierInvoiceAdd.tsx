@@ -632,14 +632,7 @@ export default function SupplierInvoiceAdd() {
   };
 
   const handleProductFieldChange = (index: number, field: keyof SupplierProduct, value: string) => {
-    const newValue = value === '' ? 0 : Number(value);
-
-    if (field === 'quantity' && newValue <= 0) {
-      toast.error('Số lượng phải lớn hơn 0');
-      return;
-    }
-
-    if (field === 'price' && newValue < 0) {
+    if (field === 'price' && value !== '' && Number(value) < 0) {
       toast.error('Đơn giá không được âm');
       return;
     }
@@ -651,12 +644,12 @@ export default function SupplierInvoiceAdd() {
 
       updatedProducts[index] = {
         ...product,
-        [field]: field === 'quantity' ? Math.min(newValue, maxQuantity) : newValue,
-        total: (field === 'quantity' ? Math.min(newValue, maxQuantity) : product.quantity) * 
-               (field === 'price' ? newValue : product.price),
-        amount: (field === 'quantity' ? Math.min(newValue, maxQuantity) : product.quantity) * 
-                (field === 'price' ? newValue : product.price),
-        priceOriginal: field === 'price' ? newValue : product.priceOriginal
+        [field]: value === '' ? '' : Math.min(Number(value), maxQuantity),
+        total: (field === 'quantity' ? (value === '' ? 0 : Math.min(Number(value), maxQuantity)) : product.quantity) * 
+               (field === 'price' ? (value === '' ? 0 : Number(value)) : product.price),
+        amount: (field === 'quantity' ? (value === '' ? 0 : Math.min(Number(value), maxQuantity)) : product.quantity) * 
+                (field === 'price' ? (value === '' ? 0 : Number(value)) : product.price),
+        priceOriginal: field === 'price' ? (value === '' ? 0 : Number(value)) : product.priceOriginal
       };
 
       return {
@@ -684,8 +677,8 @@ export default function SupplierInvoiceAdd() {
         return false;
       }
 
-      if (product.quantity <= 0) {
-        toast.error('Số lượng phải lớn hơn 0');
+      if (product.quantity === '' || product.quantity <= 0) {
+        toast.error(`Vui lòng nhập số lượng cho ${product.product.presentation}`);
         return false;
       }
 
@@ -1086,12 +1079,12 @@ export default function SupplierInvoiceAdd() {
                       </label>
                       <input
                         type="number"
-                        value={product.quantity === 0 ? '' : product.quantity}
+                        value={product.quantity}
                         onChange={(e) => handleProductFieldChange(index, 'quantity', e.target.value)}
-                        min="1"
                         max={isReturnOrder ? product.availableQuantity : undefined}
                         className="w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         inputMode="numeric"
+                        placeholder="Nhập số lượng"
                       />
                     </div>
                     <div>
@@ -1207,7 +1200,7 @@ export default function SupplierInvoiceAdd() {
                   type="text"
                   value={supplierName}
                   onChange={e => setSupplierName(e.target.value)}
-                  className="block w-full px works for me -3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Nhập tên nhà cung cấp"
                 />
               </div>
