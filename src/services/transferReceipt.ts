@@ -2,14 +2,66 @@ import api from './axiosClient';
 import { ListRequest, PaginatedResponse } from './types';
 import { getSession } from '../utils/storage';
 
-// Interfaces giữ nguyên
-export interface TransferReceiptDetail {
+// Interface cho XTSObjectId
+interface XTSObjectId {
+  _type: string;
+  id: string;
+  dataType: string;
+  presentation: string;
+  navigationRef: null | string;
+  url?: string;
+}
+
+// Interface cho PaymentReceiptPaymentDetails
+interface PaymentReceiptPaymentDetails {
+  _type: string;
+  _lineNumber: number;
+  contract: XTSObjectId;
+  document: null | XTSObjectId;
+  paymentAmount: number;
+  settlementsAmount: number;
+  rate: number;
+  multiplicity: number;
+  advanceFlag: boolean;
+  docOrder: XTSObjectId;
+}
+
+// Interface cho PaymentReceipt (phản ánh cấu trúc response)
+interface PaymentReceipt {
+  _type: string;
+  _isFullData: boolean | null;
+  objectId: XTSObjectId;
+  deletionMark: boolean;
+  date: string;
+  number: string;
+  author: XTSObjectId | null;
+  comment: string | null;
+  company: XTSObjectId | null;
+  counterparty: XTSObjectId | null;
+  emailAddress: string | null;
+  operationKind: XTSObjectId | null;
+  bankAccount: XTSObjectId | null;
+  documentAmount: number;
+  accountingAmount: number | null;
+  cashCurrency: XTSObjectId | null;
+  phone: string | null;
+  rate: number;
+  multiplicity: number;
+  cashFlowItem: XTSObjectId | null;
+  documentBasis: XTSObjectId | null;
+  paymentDetails: PaymentReceiptPaymentDetails[];
+}
+
+// Interface cho TransferReceiptDetail (giữ cấu trúc tương tự response nhưng ánh xạ các trường cần thiết)
+interface TransferReceiptDetail {
   id: string;
   number: string;
   date: string;
   transactionType: string;
   customer: string;
+  customerId: string;
   order: string;
+  documentBasisId: string;
   amount: number;
   currency: string;
   collector: string;
@@ -17,23 +69,8 @@ export interface TransferReceiptDetail {
   bankAccount: string;
 }
 
-export interface PaymentReceipt {
-  id: string;
-  number: string;
-  date: string;
-  author: string;
-  comment: string;
-  company: string;
-  counterparty: string;
-  operationType: string;
-  bankAccount: string;
-  amount: number;
-  currency: string;
-  purpose: string;
-  sourceDocument: string;
-}
-
-export interface CreateTransferReceiptData {
+// Interface cho CreateTransferReceiptData (phù hợp với request của API Add)
+interface CreateTransferReceiptData {
   date: string;
   operationKindId: string;
   operationKindName: string;
@@ -51,7 +88,8 @@ export interface CreateTransferReceiptData {
   documentBasisName?: string;
 }
 
-export interface UpdateTransferReceiptData {
+// Interface cho UpdateTransferReceiptData (phù hợp với request của API Update)
+interface UpdateTransferReceiptData {
   id: string;
   number: string;
   title: string;
@@ -68,6 +106,9 @@ export interface UpdateTransferReceiptData {
   bankAccountName: string;
   cashFlowItemId: string;
   cashFlowItemName: string;
+  documentBasisId?: string;
+  documentBasisName?: string;
+  paymentDetails?: PaymentReceiptPaymentDetails[];
 }
 
 // Hàm tiện ích để xử lý API
@@ -130,19 +171,28 @@ const getSessionData = (): SessionData => {
 const mapToPaymentReceipt = (item: any): PaymentReceipt | null => {
   if (!item?.object) return null;
   return {
-    id: item.object.objectId?.id ?? '',
-    number: item.object.number ?? '',
-    date: item.object.date ?? '',
-    author: item.object.author?.presentation ?? '',
-    comment: item.object.comment ?? '',
-    company: item.object.company?.presentation ?? '',
-    counterparty: item.object.counterparty?.presentation ?? '',
-    operationType: item.object.operationKind?.presentation ?? '',
-    bankAccount: item.object.bankAccount?.presentation ?? '',
-    amount: item.object.documentAmount ?? 0,
-    currency: item.object.currency?.presentation ?? '',
-    purpose: item.object.cashFlowItem?.presentation ?? '',
-    sourceDocument: item.object.documentBasis?.presentation ?? ''
+    _type: item.object._type || 'XTSPaymentReceipt',
+    _isFullData: item.object._isFullData || null,
+    objectId: item.object.objectId || { _type: 'XTSObjectId', id: '', dataType: 'XTSPaymentReceipt', presentation: '' },
+    deletionMark: item.object.deletionMark || false,
+    date: item.object.date || new Date().toISOString(),
+    number: item.object.number || '',
+    author: item.object.author || null,
+    comment: item.object.comment || null,
+    company: item.object.company || null,
+    counterparty: item.object.counterparty || null,
+    emailAddress: item.object.emailAddress || null,
+    operationKind: item.object.operationKind || null,
+    bankAccount: item.object.bankAccount || null,
+    documentAmount: item.object.documentAmount || 0,
+    accountingAmount: item.object.accountingAmount || null,
+    cashCurrency: item.object.cashCurrency || null,
+    phone: item.object.phone || null,
+    rate: item.object.rate || 1,
+    multiplicity: item.object.multiplicity || 1,
+    cashFlowItem: item.object.cashFlowItem || null,
+    documentBasis: item.object.documentBasis || null,
+    paymentDetails: item.object.paymentDetails || []
   };
 };
 
@@ -152,9 +202,11 @@ const mapToTransferReceiptDetail = (receipt: any): TransferReceiptDetail => ({
   date: receipt.date ?? '',
   transactionType: receipt.operationKind?.presentation ?? '',
   customer: receipt.counterparty?.presentation ?? '',
+  customerId: receipt.counterparty?.id ?? '',
   order: receipt.documentBasis?.presentation ?? '',
+  documentBasisId: receipt.documentBasis?.id ?? '',
   amount: receipt.documentAmount ?? 0,
-  currency: receipt.currency?.presentation ?? '',
+  currency: receipt.cashCurrency?.presentation ?? '',
   collector: receipt.author?.presentation ?? '',
   notes: receipt.comment ?? '',
   bankAccount: receipt.bankAccount?.presentation ?? ''
@@ -362,7 +414,7 @@ export const createTransferReceipt = async (
       documentBasis: data.documentBasisId
         ? {
             _type: 'XTSObjectId',
-            dataType: 'XTSSupplierInvoice',
+            dataType: 'XTSOrder',
             id: data.documentBasisId,
             presentation: data.documentBasisName || '',
             url: ''
@@ -403,7 +455,7 @@ export const createTransferReceipt = async (
       ? {
           documentBasis: {
             _type: 'XTSObjectId',
-            dataType: 'XTSSupplierInvoice',
+            dataType: 'XTSOrder',
             id: data.documentBasisId,
             presentation: data.documentBasisName || '',
             url: ''
@@ -514,12 +566,12 @@ export const updateTransferReceipt = async (data: UpdateTransferReceiptData): Pr
         },
         documentBasis: {
           _type: 'XTSObjectId',
-          dataType: '',
-          id: '',
-          presentation: '',
+          dataType: data.documentBasisId ? 'XTSOrder' : '',
+          id: data.documentBasisId || '',
+          presentation: data.documentBasisName || '',
           url: ''
         },
-        paymentDetails: [],
+        paymentDetails: data.paymentDetails || [],
         employeeResponsible: data.employeeId
           ? {
               _type: 'XTSObjectId',

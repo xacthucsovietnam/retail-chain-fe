@@ -152,7 +152,23 @@ const translations = {
     'product.detail.noImage': 'Không có ảnh',
     'product.detail.notFound': 'Không Tìm Thấy Sản Phẩm',
     'product.detail.loadError': 'Không thể tải thông tin sản phẩm',
-    'product.detail.loading': 'Đang tải...'
+    'product.detail.loading': 'Đang tải...',
+    "transferReceiptDetail": {
+      "title": "Chi tiết phiếu thu",
+      "idMissing": "ID phiếu thu không tồn tại",
+      "fetchError": "Không thể tải thông tin phiếu thu",
+      "notFound": "Không tìm thấy phiếu thu",
+      "backToList": "Quay lại danh sách",
+      "deleteNotImplemented": "Chức năng xóa chưa được triển khai",
+      "date": "Ngày thu",
+      "customer": "Khách hàng",
+      "amount": "Số tiền",
+      "bankAccount": "Tài khoản ngân hàng",
+      "order": "Đơn hàng",
+      "collector": "Người thu",
+      "unknown": "Chưa xác định",
+      "notes": "Ghi chú"
+      }
   },
   en: {
     'menu.overview': 'Overview',
@@ -297,7 +313,23 @@ const translations = {
     'product.detail.noImage': 'No image available',
     'product.detail.notFound': 'Product Not Found',
     'product.detail.loadError': 'Failed to load product details',
-    'product.detail.loading': 'Loading...'
+    'product.detail.loading': 'Loading...',
+    "transferReceiptDetail": {
+      "title": "Receipt Details",
+      "idMissing": "Receipt ID is missing",
+      "fetchError": "Unable to load receipt information",
+      "notFound": "Receipt not found",
+      "backToList": "Back to list",
+      "deleteNotImplemented": "Delete function is not yet implemented",
+      "date": "Date",
+      "customer": "Customer",
+      "amount": "Amount",
+      "bankAccount": "Bank Account",
+      "order": "Order",
+      "collector": "Collector",
+      "unknown": "Unknown",
+      "notes": "Notes"
+    }
   },
   zh: {
     'menu.overview': '总览',
@@ -442,7 +474,23 @@ const translations = {
     'product.detail.noImage': '无图片',
     'product.detail.notFound': '未找到产品',
     'product.detail.loadError': '无法加载产品详情',
-    'product.detail.loading': '加载中...'
+    'product.detail.loading': '加载中...',
+    "transferReceiptDetail": {
+      "title": "收据详情",
+      "idMissing": "收据ID不存在",
+      "fetchError": "无法加载收据信息",
+      "notFound": "未找到收据",
+      "backToList": "返回列表",
+      "deleteNotImplemented": "删除功能尚未实现",
+      "date": "日期",
+      "customer": "客户",
+      "amount": "金额",
+      "bankAccount": "银行账户",
+      "order": "订单",
+      "collector": "收款人",
+      "unknown": "未知",
+      "notes": "备注"
+    }
   }
 };
 

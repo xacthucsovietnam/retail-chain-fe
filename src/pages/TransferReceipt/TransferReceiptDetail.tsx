@@ -1,33 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import {
-  ArrowLeft,
-  Pencil,
-  Trash2,
-  FileText,
-  User,
-  Calendar,
-  DollarSign,
-  Loader2,
-  AlertCircle,
-  CreditCard,
-  Tag,
-  Building,
-  Receipt
-} from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2, FileText, User, DollarSign, Loader2, AlertCircle, CreditCard, Receipt } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getTransferReceiptDetail } from '../../services/transferReceipt';
-import type { TransferReceiptDetail as ITransferReceiptDetail } from '../../services/transferReceipt';
-import { formatCurrency } from '../../utils/currency';
-import { useLanguage } from '../../contexts/LanguageContext';
+import { getTransferReceiptDetail, TransferReceiptDetail } from '../../services/transferReceipt';
 
-export default function TransferReceiptDetail() {
+export default function TransferReceiptDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [receipt, setReceipt] = useState<ITransferReceiptDetail | null>(null);
+  const [receipt, setReceipt] = useState<TransferReceiptDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { t } = useLanguage();
 
   useEffect(() => {
     const fetchReceiptDetail = async () => {
@@ -36,7 +18,7 @@ export default function TransferReceiptDetail() {
         setIsLoading(false);
         return;
       }
-      
+
       try {
         setIsLoading(true);
         setError(null);
@@ -64,19 +46,42 @@ export default function TransferReceiptDetail() {
     toast.error('Chức năng xóa chưa được triển khai');
   };
 
+  const formatCurrency = (amount: number, currencyString: string) => {
+    const currencyMap: { [key: string]: string } = {
+      đồng: 'VND',
+      USD: 'USD',
+      Dollar: 'USD',
+      Euro: 'EUR',
+      EUR: 'EUR',
+      JPY: 'JPY',
+      Yen: 'JPY',
+    };
+
+    const currencyCode = currencyMap[currencyString] || 'VND';
+
+    try {
+      return new Intl.NumberFormat('vi-VN', {
+        style: 'currency',
+        currency: currencyCode,
+      }).format(amount);
+    } catch (error) {
+      return new Intl.NumberFormat('vi-VN').format(amount) + ' ' + currencyString;
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('vi-VN', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
       </div>
     );
@@ -84,12 +89,10 @@ export default function TransferReceiptDetail() {
 
   if (error || !receipt) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            {error || 'Không tìm thấy phiếu thu'}
-          </h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">{error || 'Không tìm thấy phiếu thu'}</h2>
           <button
             onClick={() => navigate('/transfer-receipts')}
             className="text-blue-600 hover:text-blue-800 flex items-center gap-2 mx-auto"
@@ -104,14 +107,6 @@ export default function TransferReceiptDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Fixed Header */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
-        <div className="px-4 py-3">
-          <h1 className="text-lg font-semibold text-gray-900">Chi tiết</h1>
-          <p className="text-sm text-gray-500">#{receipt.number}</p>
-        </div>
-      </div>
-
       {/* Main Content */}
       <div className="pt-4 px-4">
         {/* Basic Information */}
@@ -192,7 +187,7 @@ export default function TransferReceiptDetail() {
         >
           <ArrowLeft className="h-6 w-6" />
         </button>
-        
+
         <button
           onClick={handleEdit}
           className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"

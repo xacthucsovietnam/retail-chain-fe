@@ -1,4 +1,3 @@
-// src/pages/OrderDetail.tsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -40,8 +39,8 @@ import { getFilePlugin } from '@react-pdf-viewer/get-file';
 import { getSession } from '../../utils/storage';
 
 interface PaymentFormData {
-  cash: number;
-  bankTransfer: number;
+  cash: number | '';
+  bankTransfer: number | '';
   credit: number;
 }
 
@@ -58,16 +57,16 @@ export default function OrderDetail() {
   const [relatedDocs, setRelatedDocs] = useState<RelatedDocument[]>([]);
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
   const [showPdfViewer, setShowPdfViewer] = useState(false);
-  const [showDebtCollectionModal, setShowDebtCollectionModal] = useState(false); // Thêm state cho popup Thu công nợ
+  const [showDebtCollectionModal, setShowDebtCollectionModal] = useState(false);
   const { t } = useLanguage();
   const [isOrderInfoExpanded, setIsOrderInfoExpanded] = useState(true);
   const [isPaymentExpanded, setIsPaymentExpanded] = useState(true);
   const [isProductListExpanded, setIsProductListExpanded] = useState(true);
 
   const [paymentData, setPaymentData] = useState<PaymentFormData>({
-    cash: 0,
-    bankTransfer: 0,
-    credit: 0
+    cash: '',
+    bankTransfer: '',
+    credit: 0,
   });
 
   const session = getSession();
@@ -103,16 +102,16 @@ export default function OrderDetail() {
         setIsLoading(false);
         return;
       }
-      
+
       try {
         setIsLoading(true);
         setError(null);
         const data = await getOrderDetail(id);
         setOrder(data);
         setPaymentData({
-          cash: data.cash || 0,
-          bankTransfer: data.bankTransfer || 0,
-          credit: data.documentAmount - (data.cash || 0) - (data.bankTransfer || 0)
+          cash: data.cash || '',
+          bankTransfer: data.bankTransfer || '',
+          credit: data.documentAmount - (data.cash || 0) - (data.bankTransfer || 0),
         });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to load order details';
@@ -126,34 +125,39 @@ export default function OrderDetail() {
     fetchOrderDetail();
   }, [id]);
 
-  const handlePaymentChange = (field: keyof PaymentFormData, value: number) => {
-    const newValue = Math.max(0, value);
-    
-    setPaymentData(prev => {
+  const handlePaymentChange = (field: keyof PaymentFormData, value: string) => {
+    // Allow empty string or valid number
+    const newValue = value === '' ? '' : Math.max(0, Number(value));
+
+    setPaymentData((prev) => {
       const total = order?.documentAmount || 0;
       let newPaymentData = { ...prev, [field]: newValue };
-      
+
       if (field === 'cash' || field === 'bankTransfer') {
-        const credit = total - newPaymentData.cash - newPaymentData.bankTransfer;
+        // Convert empty strings to 0 for calculations
+        const cash = newPaymentData.cash === '' ? 0 : Number(newPaymentData.cash);
+        const bankTransfer = newPaymentData.bankTransfer === '' ? 0 : Number(newPaymentData.bankTransfer);
+        const credit = total - cash - bankTransfer;
         newPaymentData.credit = Math.max(0, credit);
-        
+
+        // If credit is negative, adjust the input field
         if (credit < 0) {
-          newPaymentData[field] = total - (field === 'cash' ? newPaymentData.bankTransfer : newPaymentData.cash);
+          newPaymentData[field] = total - (field === 'cash' ? bankTransfer : cash);
           newPaymentData.credit = 0;
         }
       }
-      
+
       return newPaymentData;
     });
   };
 
   const handleQuickFill = (field: 'cash' | 'bankTransfer') => {
     if (!order) return;
-    
+
     setPaymentData({
-      cash: field === 'cash' ? order.documentAmount : 0,
-      bankTransfer: field === 'bankTransfer' ? order.documentAmount : 0,
-      credit: 0
+      cash: field === 'cash' ? order.documentAmount : '',
+      bankTransfer: field === 'bankTransfer' ? order.documentAmount : '',
+      credit: 0,
     });
   };
 
@@ -174,7 +178,7 @@ export default function OrderDetail() {
 
   const getNextOrderState = (currentState: string, action: 'payment' | 'delivery'): string => {
     const lowerState = currentState.toLowerCase();
-    
+
     if (action === 'payment') {
       if (lowerState.includes('đang soạn') || lowerState.includes('chờ trả trước')) {
         return 'Preparing';
@@ -184,7 +188,7 @@ export default function OrderDetail() {
         return 'Delivered';
       }
     }
-    
+
     return currentState;
   };
 
@@ -193,7 +197,7 @@ export default function OrderDetail() {
 
     try {
       setIsProcessing(true);
-      
+
       const nextStateId = getNextOrderState(order.orderState, 'payment');
 
       const updateData: UpdateOrderData = {
@@ -232,8 +236,8 @@ export default function OrderDetail() {
         phone: order.phone,
         completionOptionId: order.completionOption ? order.completionOption.split(': ')[1] : null,
         completionOption: order.completionOption,
-        cash: paymentData.cash,
-        bankTransfer: paymentData.bankTransfer,
+        cash: paymentData.cash === '' ? 0 : Number(paymentData.cash),
+        bankTransfer: paymentData.bankTransfer === '' ? 0 : Number(paymentData.bankTransfer),
         postPayment: paymentData.credit,
         paymentNote: order.paymentNote,
         rate: order.rate,
@@ -246,7 +250,7 @@ export default function OrderDetail() {
         receiptableIncrease: order.receiptableIncrease,
         receiptableDecrease: order.receiptableDecrease,
         receiptableBalance: order.receiptableBalance,
-        products: order.products.map(p => ({
+        products: order.products.map((p) => ({
           lineNumber: p.lineNumber,
           productId: p.productId,
           productName: p.productName,
@@ -263,9 +267,9 @@ export default function OrderDetail() {
           vatRateName: p.vatRateName,
           total: p.total,
           code: p.code,
-          coefficient: p.coefficient
+          coefficient: p.coefficient,
         })),
-        date: order.date
+        date: order.date,
       };
 
       await updateOrder(updateData);
@@ -273,7 +277,7 @@ export default function OrderDetail() {
       toast.success('Payment updated successfully');
       setShowPaymentModal(false);
       setShowConfirmation(false);
-      
+
       const updatedOrder = await getOrderDetail(id);
       setOrder(updatedOrder);
     } catch (error) {
@@ -288,7 +292,7 @@ export default function OrderDetail() {
 
     try {
       setIsProcessing(true);
-      
+
       const nextStateId = getNextOrderState(order.orderState, 'delivery');
 
       const updateData: UpdateOrderData = {
@@ -341,7 +345,7 @@ export default function OrderDetail() {
         receiptableIncrease: order.receiptableIncrease,
         receiptableDecrease: order.receiptableDecrease,
         receiptableBalance: order.receiptableBalance,
-        products: order.products.map(p => ({
+        products: order.products.map((p) => ({
           lineNumber: p.lineNumber,
           productId: p.productId,
           productName: p.productName,
@@ -358,15 +362,15 @@ export default function OrderDetail() {
           vatRateName: p.vatRateName,
           total: p.total,
           code: p.code,
-          coefficient: p.coefficient
+          coefficient: p.coefficient,
         })),
-        date: order.date
+        date: order.date,
       };
 
       await updateOrder(updateData);
 
       toast.success('Order marked as delivered');
-      
+
       const updatedOrder = await getOrderDetail(id);
       setOrder(updatedOrder);
     } catch (error) {
@@ -387,7 +391,7 @@ export default function OrderDetail() {
 
   const handleReturn = () => {
     if (!order) return;
-  
+
     const preloadData = {
       isReturnOrder: true,
       customerId: order.customerId || '',
@@ -396,16 +400,16 @@ export default function OrderDetail() {
       employeeName: order.employeeResponsibleName || '',
       originalOrderId: order.id,
       originalOrderNumber: order.number,
-      originalProducts: order.products.map(p => ({
+      originalProducts: order.products.map((p) => ({
         id: p.productId,
         name: p.productName,
         code: p.code,
         price: p.price,
         riCoefficient: p.coefficient,
-        availableQuantity: p.quantity
-      }))
+        availableQuantity: p.quantity,
+      })),
     };
-  
+
     sessionStorage.setItem('newSupplierInvoiceData', JSON.stringify(preloadData));
     navigate('/supplier-invoices/add');
   };
@@ -468,12 +472,20 @@ export default function OrderDetail() {
       documentCurrency: order.documentCurrency,
       employeeResponsibleId: order.employeeResponsibleId,
       employeeResponsibleName: order.employeeResponsibleName,
-      orderStateId: order.orderState === 'Đang soạn' ? 'Editing' : 
-                    order.orderState === 'Đã giao hàng' ? 'Delivered' : 
-                    order.orderState === 'Chờ trả trước' ? 'ToPrepay' : 
-                    order.orderState === 'Đang chuẩn bị' ? 'Preparing' : 
-                    order.orderState === 'Đã hủy' ? 'ecfc6706-bdd8-11ef-a6a7-00155d058802' : 
-                    order.orderState === 'Đã hoàn thành' ? 'Completed' : 'Editing',
+      orderStateId:
+        order.orderState === 'Đang soạn'
+          ? 'Editing'
+          : order.orderState === 'Đã giao hàng'
+          ? 'Delivered'
+          : order.orderState === 'Chờ trả trước'
+          ? 'ToPrepay'
+          : order.orderState === 'Đang chuẩn bị'
+          ? 'Preparing'
+          : order.orderState === 'Đã hủy'
+          ? 'ecfc6706-bdd8-11ef-a6a7-00155d058802'
+          : order.orderState === 'Đã hoàn thành'
+          ? 'Completed'
+          : 'Editing',
       orderState: order.orderState,
       shippingCost: order.shippingCost,
       phone: order.phone,
@@ -493,7 +505,7 @@ export default function OrderDetail() {
       receiptableIncrease: order.receiptableIncrease,
       receiptableDecrease: order.receiptableDecrease,
       receiptableBalance: order.receiptableBalance,
-      products: order.products.map(p => ({
+      products: order.products.map((p) => ({
         lineNumber: p.lineNumber,
         productId: p.productId,
         productName: p.productName,
@@ -510,9 +522,9 @@ export default function OrderDetail() {
         vatRateName: p.vatRateName,
         total: p.total,
         code: p.code,
-        coefficient: p.coefficient
+        coefficient: p.coefficient,
       })),
-      date: order.date
+      date: order.date,
     };
 
     navigate(`/orders/edit/${id}`, { state: { orderData: updateData } });
@@ -598,7 +610,7 @@ export default function OrderDetail() {
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   };
 
@@ -617,7 +629,7 @@ export default function OrderDetail() {
         title="Quay lại"
       >
         <ArrowLeft className="h-6 w-6" />
-      </button>
+      </button>,
     );
 
     rightButtons.push(
@@ -629,7 +641,7 @@ export default function OrderDetail() {
         title="Chứng từ liên quan"
       >
         <Files className="h-6 w-6" />
-      </button>
+      </button>,
     );
 
     if (status.includes('đang soạn') || status.includes('chờ trả trước')) {
@@ -642,7 +654,7 @@ export default function OrderDetail() {
           title="Xóa"
         >
           <Trash2 className="h-6 w-6" />
-        </button>
+        </button>,
       );
       rightButtons.push(
         <button
@@ -660,7 +672,7 @@ export default function OrderDetail() {
           title="Thanh toán"
         >
           <CreditCard className="h-6 w-6" />
-        </button>
+        </button>,
       );
     } else if (status.includes('đang chuẩn bị')) {
       leftButtons.push(
@@ -672,7 +684,7 @@ export default function OrderDetail() {
           title="Xóa"
         >
           <Trash2 className="h-6 w-6" />
-        </button>
+        </button>,
       );
       rightButtons.push(
         <button
@@ -691,7 +703,7 @@ export default function OrderDetail() {
           title="In"
         >
           <Printer className="h-6 w-6" />
-        </button>
+        </button>,
       );
     } else if (status.includes('đã giao hàng') || status.includes('đã hoàn thành')) {
       rightButtons.push(
@@ -702,11 +714,10 @@ export default function OrderDetail() {
           title="In"
         >
           <Printer className="h-6 w-6" />
-        </button>
+        </button>,
       );
     }
 
-    // Thêm nút Thu công nợ nếu có công nợ
     if (order.postPayment && order.postPayment > 0) {
       rightButtons.push(
         <button
@@ -716,18 +727,14 @@ export default function OrderDetail() {
           title="Thu công nợ"
         >
           <Wallet className="h-6 w-6" />
-        </button>
+        </button>,
       );
     }
 
     return (
       <div className="flex justify-between items-center w-full px-4">
-        <div className="flex gap-2">
-          {leftButtons}
-        </div>
-        <div className="flex gap-2">
-          {rightButtons}
-        </div>
+        <div className="flex gap-2">{leftButtons}</div>
+        <div className="flex gap-2">{rightButtons}</div>
       </div>
     );
   };
@@ -745,9 +752,7 @@ export default function OrderDetail() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            {error || 'Order Not Found'}
-          </h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">{error || 'Order Not Found'}</h2>
           <button
             onClick={() => navigate('/orders')}
             className="text-blue-600 hover:text-blue-800 flex items-center gap-2 mx-auto"
@@ -773,13 +778,17 @@ export default function OrderDetail() {
       <div className="pt-2 px-4">
         {/* Nhóm 1: Thông tin đơn hàng */}
         <div className="mb-6 bg-white rounded-lg shadow-sm">
-          <div 
+          <div
             className="flex justify-between items-center px-4 py-3 cursor-pointer"
             onClick={() => setIsOrderInfoExpanded(!isOrderInfoExpanded)}
           >
             <div className="flex items-center gap-2">
               <h2 className="text-base font-medium text-gray-900">Thông tin đơn hàng</h2>
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.orderState)}`}>
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
+                  order.orderState,
+                )}`}
+              >
                 {order.orderState}
               </span>
             </div>
@@ -827,7 +836,7 @@ export default function OrderDetail() {
 
         {/* Nhóm 2: Tổng tiền và thanh toán */}
         <div className="mb-6 bg-white rounded-lg shadow-sm">
-          <div 
+          <div
             className="flex justify-between items-center px-4 py-3 cursor-pointer"
             onClick={() => setIsPaymentExpanded(!isPaymentExpanded)}
           >
@@ -873,7 +882,7 @@ export default function OrderDetail() {
 
         {/* Nhóm 3: Danh sách sản phẩm */}
         <div className="bg-white rounded-lg shadow-sm">
-          <div 
+          <div
             className="flex justify-between items-center px-4 py-3 cursor-pointer"
             onClick={() => setIsProductListExpanded(!isProductListExpanded)}
           >
@@ -887,8 +896,8 @@ export default function OrderDetail() {
           {isProductListExpanded && (
             <div className="px-4 pb-4 space-y-2">
               {order.products.map((product, index) => (
-                <div 
-                  key={product.lineNumber} 
+                <div
+                  key={product.lineNumber}
                   className="flex items-center justify-between bg-gray-50 rounded-lg p-3 cursor-pointer hover:bg-gray-100 transition-colors"
                   onClick={() => handleViewProductDetail(product.productId)}
                 >
@@ -911,9 +920,7 @@ export default function OrderDetail() {
                       <p className="text-sm font-medium text-gray-900">
                         #{index + 1} {product.productName}
                       </p>
-                      <p className="text-xs text-gray-500">
-                        SKU: {product.code}
-                      </p>
+                      <p className="text-xs text-gray-500">SKU: {product.code}</p>
                       <p className="text-xs text-gray-500">
                         {product.quantity} {product.unitName} x {product.price.toLocaleString()} đồng/chiếc
                       </p>
@@ -931,9 +938,7 @@ export default function OrderDetail() {
         </div>
       </div>
 
-      <div className="fixed bottom-4 left-0 right-0 z-50">
-        {getActionButtons()}
-      </div>
+      <div className="fixed bottom-4 left-0 right-0 z-50">{getActionButtons()}</div>
 
       {showPaymentModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
@@ -947,9 +952,7 @@ export default function OrderDetail() {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tổng tiền
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tổng tiền</label>
                 <div className="relative">
                   <input
                     type="text"
@@ -963,13 +966,8 @@ export default function OrderDetail() {
 
               <div>
                 <div className="flex justify-between items-center mb-1">
-                  <label className="text-sm font-medium text-gray-700">
-                    Tiền mặt
-                  </label>
-                  <button
-                    onClick={() => handleQuickFill('cash')}
-                    className="text-xs text-blue-600"
-                  >
+                  <label className="text-sm font-medium text-gray-700">Tiền mặt</label>
+                  <button onClick={() => handleQuickFill('cash')} className="text-xs text-blue-600">
                     Điền toàn bộ
                   </button>
                 </div>
@@ -977,8 +975,9 @@ export default function OrderDetail() {
                   <input
                     type="number"
                     value={paymentData.cash}
-                    onChange={(e) => handlePaymentChange('cash', Number(e.target.value))}
+                    onChange={(e) => handlePaymentChange('cash', e.target.value)}
                     className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="0"
                   />
                   <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
                 </div>
@@ -986,13 +985,8 @@ export default function OrderDetail() {
 
               <div>
                 <div className="flex justify-between items-center mb-1">
-                  <label className="text-sm font-medium text-gray-700">
-                    Chuyển khoản
-                  </label>
-                  <button
-                    onClick={() => handleQuickFill('bankTransfer')}
-                    className="text-xs text-blue-600"
-                  >
+                  <label className="text-sm font-medium text-gray-700">Chuyển khoản</label>
+                  <button onClick={() => handleQuickFill('bankTransfer')} className="text-xs text-blue-600">
                     Điền toàn bộ
                   </button>
                 </div>
@@ -1000,17 +994,16 @@ export default function OrderDetail() {
                   <input
                     type="number"
                     value={paymentData.bankTransfer}
-                    onChange={(e) => handlePaymentChange('bankTransfer', Number(e.target.value))}
+                    onChange={(e) => handlePaymentChange('bankTransfer', e.target.value)}
                     className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="0"
                   />
                   <CreditCard className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Công nợ
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Công nợ</label>
                 <div className="relative">
                   <input
                     type="text"
@@ -1056,14 +1049,12 @@ export default function OrderDetail() {
                 <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
               </div>
             ) : relatedDocs.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                Không có chứng từ liên quan
-              </div>
+              <div className="text-center py-8 text-gray-500">Không có chứng từ liên quan</div>
             ) : (
               <div className="space-y-4 mb-4">
                 {relatedDocs.map((doc) => (
-                  <div 
-                    key={doc.id} 
+                  <div
+                    key={doc.id}
                     className="bg-gray-50 rounded-lg p-4 cursor-pointer hover:bg-gray-100 transition-colors"
                     onClick={() => handleViewRelatedDocDetail(doc)}
                   >
@@ -1076,9 +1067,9 @@ export default function OrderDetail() {
                         {doc.dataType.replace('XTS', '')}
                       </span>
                     </div>
-                    
+
                     <p className="text-sm text-gray-600 mb-2">{doc.presentation}</p>
-                    
+
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div>
                         <span className="text-gray-500">Số tiền:</span>

@@ -1,96 +1,55 @@
 import api from './axiosClient';
-import { ListRequest, PaginatedResponse } from './types';
+import { ListRequest, PaginatedResponse, ObjectId } from './types';
 import { getSession } from '../utils/storage';
 
-// Interfaces giữ nguyên
-export interface CashReceiptDetail {
+interface XTSObjectId {
+  _type: 'XTSObjectId';
+  dataType: string;
   id: string;
-  number: string;
-  date: string;
-  transactionType: string;
-  customer: string;
-  order: string;
-  amount: number;
-  currency: string;
-  collector: string;
-  notes: string;
+  presentation: string;
+  url: string;
 }
 
-export interface CashReceipt {
-  id: string;
-  number: string;
-  date: string;
-  counterparty: string;
-  operationType: string;
-  cashAccount: string;
-  amount: number;
-  currency: string;
-  purpose: string;
-  sourceDocument: string;
-  notes: string;
-}
-
-export interface CreateCashReceiptData {
-  date: string;
-  operationKindId: string;
-  operationKindName: string;
-  customerId: string;
-  customerName: string;
-  amount: number;
-  comment: string;
-  employeeId?: string;
-  employeeName?: string;
-  cashAccountId?: string;
-  cashAccountName?: string;
-  cashFlowItemId?: string;
-  cashFlowItemName?: string;
-  documentBasisId?: string;
-  documentBasisName?: string;
-}
-
-export interface UpdateCashReceiptData {
-  id: string;
-  number: string;
-  title: string;
-  date: string;
-  operationKindId: string;
-  operationKindName: string;
-  customerId: string;
-  customerName: string;
-  amount: number;
-  comment: string;
-  employeeId?: string;
-  employeeName?: string;
-  cashAccountId: string;
-  cashAccountName: string;
-  cashFlowItemId: string;
-  cashFlowItemName: string;
-  contractId?: string;
-  contractName?: string;
-}
-
-export interface CashReceiptPaymentDetail {
-  contractId: string;
-  contractName: string;
+interface XTSCashReceiptPaymentDetails {
+  _type: string;
+  _lineNumber: number;
+  contract: XTSObjectId;
+  document: XTSObjectId | null;
   paymentAmount: number;
+  settlementsAmount: number | null;
+  rate: number;
+  multiplicity: number;
   advanceFlag: boolean;
+  docOrder: XTSObjectId | null;
 }
 
-// Hàm tiện ích để xử lý API
-const handleApiRequest = async <T>(data: any): Promise<T> => {
-  try {
-    const response = await api.post('', data);
-    if (!response.data) {
-      throw new Error('Invalid response format');
-    }
-    return response.data;
-  } catch (error) {
-    console.error('API request error:', error);
-    throw new Error(`API request failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
-};
+interface XTSCashReceipt {
+  _type: string;
+  _isFullData: boolean | null;
+  objectId: XTSObjectId;
+  deletionMark: boolean;
+  date: string;
+  number: string;
+  author: XTSObjectId | null;
+  comment: string | null;
+  company: XTSObjectId;
+  counterparty: XTSObjectId;
+  emailAddress: string | null;
+  operationKind: XTSObjectId;
+  cashAccount: XTSObjectId;
+  documentAmount: number;
+  accountingAmount: number | null;
+  cashCurrency: XTSObjectId;
+  phone: string | null;
+  rate: number;
+  multiplicity: number;
+  cashFlowItem: XTSObjectId;
+  documentBasis: XTSObjectId | null;
+  structuralUnit: XTSObjectId | null;
+  department: XTSObjectId | null;
+  paymentDetails: XTSCashReceiptPaymentDetails[];
+}
 
-// Hàm lấy thông tin từ session
 interface SessionData {
   user?: {
     _type: string;
@@ -117,6 +76,64 @@ interface SessionData {
   };
 }
 
+// Input data interfaces
+interface CreateCashReceiptData {
+  date: string;
+  operationKindId: string;
+  operationKindName: string;
+  customerId: string;
+  customerName: string;
+  amount: number;
+  comment: string;
+  employeeId?: string;
+  employeeName?: string;
+  cashAccountId?: string;
+  cashAccountName?: string;
+  cashFlowItemId?: string;
+  cashFlowItemName?: string;
+  documentBasisId?: string;
+  documentBasisName?: string;
+}
+
+interface UpdateCashReceiptData {
+  id: string;
+  number: string;
+  title: string;
+  date: string;
+  operationKindId: string;
+  operationKindName: string;
+  customerId: string;
+  customerName: string;
+  amount: number;
+  comment: string;
+  employeeId?: string;
+  employeeName?: string;
+  cashAccountId: string;
+  cashAccountName: string;
+  cashFlowItemId: string;
+  cashFlowItemName: string;
+  contractId?: string;
+  contractName?: string;
+  documentBasisId?: string;
+  documentBasisName?: string;
+  paymentDetails: XTSCashReceiptPaymentDetails[];
+}
+
+// Utility function for API requests
+const handleApiRequest = async <T>(data: any): Promise<T> => {
+  try {
+    const response = await api.post('', data);
+    if (!response.data) {
+      throw new Error('Invalid response format');
+    }
+    return response.data;
+  } catch (error) {
+    console.error('API request error:', error);
+    throw new Error(`API request failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+};
+
+// Get session data
 const getSessionData = (): SessionData => {
   const session = getSession();
   if (!session) {
@@ -125,36 +142,16 @@ const getSessionData = (): SessionData => {
   return session;
 };
 
-// Hàm ánh xạ dữ liệu
-const mapToCashReceipt = (item: any): CashReceipt | null => {
+// Map response to XTSCashReceipt
+const mapToCashReceipt = (item: any): XTSCashReceipt | null => {
   if (!item?.object) return null;
-  return {
-    id: item.object.objectId?.id ?? '',
-    number: item.object.number ?? '',
-    date: item.object.date ?? '',
-    counterparty: item.object.counterparty?.presentation ?? '',
-    operationType: item.object.operationKind?.presentation ?? '',
-    cashAccount: item.object.cashAccount?.presentation ?? '',
-    amount: item.object.documentAmount ?? 0,
-    currency: item.object.cashCurrency?.presentation ?? '',
-    purpose: item.object.cashFlowItem?.presentation ?? '',
-    sourceDocument: item.object.documentBasis?.presentation ?? '',
-    notes: item.object.comment ?? ''
-  };
+  return item.object;
 };
 
-const mapToCashReceiptDetail = (receipt: any): CashReceiptDetail => ({
-  id: receipt.objectId?.id ?? '',
-  number: receipt.number ?? '',
-  date: receipt.date ?? '',
-  transactionType: receipt.operationKind?.presentation ?? '',
-  customer: receipt.counterparty?.presentation ?? '',
-  order: receipt.documentBasis?.presentation ?? '',
-  amount: receipt.documentAmount ?? 0,
-  currency: receipt.cashCurrency?.presentation ?? '',
-  collector: receipt.author?.presentation ?? '',
-  notes: receipt.comment ?? ''
-});
+// Map response to XTSCashReceipt
+const mapToCashReceiptDetail = (receipt: any): XTSCashReceipt => {
+  return receipt;
+};
 
 /**
  * Fetches a list of cash receipts with pagination and optional conditions
@@ -167,7 +164,7 @@ export const getCashReceipts = async (
   page: number = 1,
   pageSize: number = 20,
   conditions: any[] = []
-): Promise<PaginatedResponse<CashReceipt>> => {
+): Promise<PaginatedResponse<XTSCashReceipt>> => {
   const positionFrom = (page - 1) * pageSize + 1;
   const positionTo = page * pageSize;
 
@@ -212,7 +209,7 @@ export const getCashReceipts = async (
 
   const receipts = response.items
     .map(mapToCashReceipt)
-    .filter((item): item is CashReceipt => item !== null);
+    .filter((item): item is XTSCashReceipt => item !== null);
 
   return {
     items: receipts,
@@ -225,7 +222,7 @@ export const getCashReceipts = async (
  * @param id Cash receipt ID
  * @returns Detailed cash receipt information
  */
-export const getCashReceiptDetail = async (id: string): Promise<CashReceiptDetail> => {
+export const getCashReceiptDetail = async (id: string): Promise<XTSCashReceipt> => {
   const receiptData = {
     _type: 'XTSGetObjectsRequest',
     _dbId: '',
@@ -427,15 +424,6 @@ export const updateCashReceipt = async (data: UpdateCashReceiptData): Promise<vo
     throw new Error('Required session data (company, author, or currency) not found');
   }
 
-  const paymentDetails: CashReceiptPaymentDetail[] = [
-    {
-      contractId: data.contractId || '',
-      contractName: data.contractName || '',
-      paymentAmount: data.amount,
-      advanceFlag: true
-    }
-  ];
-
   const updateData = {
     _type: 'XTSUpdateObjectsRequest',
     _dbId: '',
@@ -456,8 +444,8 @@ export const updateCashReceipt = async (data: UpdateCashReceiptData): Promise<vo
         operationKind: {
           _type: 'XTSObjectId',
           dataType: 'XTSOperationKindsCashReceipt',
-          id: data.operationKindId,
-          presentation: data.operationKindName,
+          id: data.operationKindId || '',
+          presentation: data.operationKindName || '',
           url: ''
         },
         company: {
@@ -503,53 +491,83 @@ export const updateCashReceipt = async (data: UpdateCashReceiptData): Promise<vo
         cashAccount: {
           _type: 'XTSObjectId',
           dataType: 'XTSPettyCash',
-          id: data.cashAccountId,
-          presentation: data.cashAccountName,
+          id: data.cashAccountId || '',
+          presentation: data.cashAccountName || '',
           url: ''
         },
         cashFlowItem: {
           _type: 'XTSObjectId',
           dataType: 'XTSCashFlowItem',
-          id: data.cashFlowItemId,
-          presentation: data.cashFlowItemName,
+          id: data.cashFlowItemId || '',
+          presentation: data.cashFlowItemName || '',
           url: ''
         },
         documentBasis: {
+          _type: 'XTSObjectId',
+          dataType: data.documentBasisId ? 'XTSOrder' : '',
+          id: data.documentBasisId || '',
+          presentation: data.documentBasisName || '',
+          url: ''
+        },
+        structuralUnit: {
           _type: 'XTSObjectId',
           dataType: '',
           id: '',
           presentation: '',
           url: ''
         },
-        paymentDetails: paymentDetails.map((detail, index) => ({
+        department: {
+          _type: 'XTSObjectId',
+          dataType: '',
+          id: '',
+          presentation: '',
+          url: ''
+        },
+        paymentDetails: data.paymentDetails.map((detail, index) => ({
           _type: 'XTSCashReceiptPaymentDetails',
           _lineNumber: index + 1,
           contract: {
             _type: 'XTSObjectId',
             dataType: 'XTSCounterpartyContract',
-            id: detail.contractId,
-            presentation: detail.contractName,
-            url: ''
+            id: detail.contract?.id || '',
+            presentation: detail.contract?.presentation || '',
+            url: detail.contract?.url || ''
           },
-          document: {
-            _type: 'XTSObjectId',
-            dataType: '',
-            id: '',
-            presentation: '',
-            url: ''
-          },
+          document: detail.document
+            ? {
+                _type: 'XTSObjectId',
+                dataType: detail.document.dataType || '',
+                id: detail.document.id || '',
+                presentation: detail.document.presentation || '',
+                url: detail.document.url || ''
+              }
+            : {
+                _type: 'XTSObjectId',
+                dataType: '',
+                id: '',
+                presentation: '',
+                url: ''
+              },
           paymentAmount: detail.paymentAmount,
-          settlementsAmount: 0,
-          rate: 1,
-          multiplicity: 1,
-          advanceFlag: detail.advanceFlag,
-          docOrder: {
-            _type: 'XTSObjectId',
-            dataType: '',
-            id: '',
-            presentation: '',
-            url: ''
-          }
+          settlementsAmount: detail.settlementsAmount || detail.paymentAmount,
+          rate: detail.rate || 1,
+          multiplicity: detail.multiplicity || 1,
+          advanceFlag: detail.advanceFlag || false,
+          docOrder: detail.docOrder
+            ? {
+                _type: 'XTSObjectId',
+                dataType: 'XTSOrder',
+                id: detail.docOrder.id || '',
+                presentation: detail.docOrder.presentation || '',
+                url: detail.docOrder.url || ''
+              }
+            : {
+                _type: 'XTSObjectId',
+                dataType: '',
+                id: '',
+                presentation: '',
+                url: ''
+              }
         }))
       }
     ]

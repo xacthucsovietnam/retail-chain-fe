@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -7,31 +7,20 @@ import {
   Calendar,
   FileText,
   DollarSign,
-  Tag,
-  Receipt
+  Receipt,
 } from 'lucide-react';
 import Select from 'react-select';
 import toast from 'react-hot-toast';
-import { createCashReceipt } from '../../services/cashReceipt';
+import { createCashReceipt, CreateCashReceiptData } from '../../services/cashReceipt';
 import { getCustomerDropdownData, getOrders } from '../../services/order';
-import type { CreateCashReceiptData } from '../../services/cashReceipt';
 import type { CustomerDropdownItem, Order } from '../../services/order';
 import { getSession } from '../../utils/storage';
 
-interface FormData {
-  date: string;
-  operationKindId: string;
-  operationKindName: string;
-  customerId: string;
-  customerName: string;
-  amount: number;
-  comment: string;
-  employeeId?: string;
-  employeeName?: string;
-  cashFlowItemId?: string;
-  cashFlowItemName?: string;
-  documentBasisId?: string;
-  documentBasisName?: string;
+// Update FormData to allow amount to be undefined
+interface FormData extends Omit<CreateCashReceiptData, 'amount'> {
+  amount: number | undefined; // Allow undefined for amount
+  contractId?: string;
+  contractName?: string;
 }
 
 export default function CashReceiptAdd() {
@@ -39,27 +28,31 @@ export default function CashReceiptAdd() {
   const location = useLocation();
   const orderData = (location.state as any)?.orderData;
 
-  // Lấy dữ liệu từ session
-  const getInitialFormData = (): FormData => {
+  // Initialize form data
+  const getInitialFormData = useCallback((): FormData => {
     const session = getSession();
     const employeeResponsible = session?.defaultValues?.employeeResponsible;
 
     return {
       date: new Date().toISOString(),
-      operationKindId: 'FromCustomer',
-      operationKindName: 'Từ khách hàng',
+      operationKindId: '',
+      operationKindName: '',
       customerId: orderData?.customerId || '',
       customerName: orderData?.customerName || '',
-      amount: orderData?.postPayment || 0,
+      amount: orderData?.postPayment || undefined, // Initialize as undefined if no orderData
       comment: '',
       employeeId: employeeResponsible?.id || '',
       employeeName: employeeResponsible?.presentation || '',
-      cashFlowItemId: '6ceda0e4-5b28-11ef-a699-00155d058802', // Giữ nguyên vì không có trong session
-      cashFlowItemName: 'Nhận tiền từ người mua', // Giữ nguyên vì không có trong session
+      cashAccountId: '',
+      cashAccountName: '',
+      cashFlowItemId: '',
+      cashFlowItemName: '',
       documentBasisId: orderData?.orderId || '',
-      documentBasisName: orderData?.orderNumber ? `Đơn hàng #${orderData.orderNumber}` : ''
+      documentBasisName: orderData?.orderNumber ? `Đơn hàng #${orderData.orderNumber}` : '',
+      contractId: '',
+      contractName: '',
     };
-  };
+  }, [orderData]);
 
   const [formData, setFormData] = useState<FormData>(getInitialFormData());
   const [isLoading, setIsLoading] = useState(false);
@@ -69,23 +62,21 @@ export default function CashReceiptAdd() {
   const [isFetchingCustomers, setIsFetchingCustomers] = useState(false);
   const [isFetchingOrders, setIsFetchingOrders] = useState(false);
 
-  // Log orderData khi mở từ OrderDetail.tsx
+  // Log orderData for debugging
   useEffect(() => {
     if (orderData) {
-      console.log('Order data received from OrderDetail.tsx:', JSON.stringify(orderData, null, 2));
-    } else {
-      console.log('No order data received from OrderDetail.tsx');
+      console.log('Order data received:', JSON.stringify(orderData, null, 2));
     }
   }, [orderData]);
 
-  // Tải dữ liệu dropdown cho khách hàng và đơn hàng
+  // Fetch dropdown data
   useEffect(() => {
     const fetchDropdownData = async () => {
       try {
         setIsFetchingCustomers(true);
         const customerData = await getCustomerDropdownData();
         setCustomers(customerData);
-      } catch (error) {
+      } catch {
         toast.error('Không thể tải danh sách khách hàng');
       } finally {
         setIsFetchingCustomers(false);
@@ -93,9 +84,9 @@ export default function CashReceiptAdd() {
 
       try {
         setIsFetchingOrders(true);
-        const orderDataResponse = await getOrders(1, 1000); // Lấy tối đa 1000 đơn hàng
+        const orderDataResponse = await getOrders(1, 1000);
         setOrders(orderDataResponse.items);
-      } catch (error) {
+      } catch {
         toast.error('Không thể tải danh sách đơn hàng');
       } finally {
         setIsFetchingOrders(false);
@@ -105,119 +96,107 @@ export default function CashReceiptAdd() {
     fetchDropdownData();
   }, []);
 
-  const validateForm = (): boolean => {
+  // Handle form changes
+  const updateFormData = useCallback((key: keyof FormData, value: any) => {
+    setFormData(prev => ({ ...prev, [key]: value }));
+  }, []);
+
+  // Validate form
+  const validateForm = useCallback((): boolean => {
     if (!formData.customerId) {
       toast.error('Vui lòng chọn khách hàng');
       return false;
     }
-
-    if (formData.amount <= 0) {
+    if (formData.amount === undefined || formData.amount <= 0) {
       toast.error('Số tiền phải lớn hơn 0');
       return false;
     }
-
-    if (!formData.operationKindId) {
-      toast.error('Vui lòng chọn loại nghiệp vụ');
-      return false;
-    }
-
     return true;
-  };
+  }, [formData]);
 
-  const handleSubmit = () => {
+  // Handle form submission
+  const handleSubmit = useCallback(() => {
     if (!validateForm()) return;
     setShowConfirmation(true);
-  };
+  }, [validateForm]);
 
-  const handleConfirmSubmit = async () => {
+  const handleConfirmSubmit = useCallback(async () => {
     try {
       setIsLoading(true);
-
       const createData: CreateCashReceiptData = {
         date: formData.date,
-        operationKindId: formData.operationKindId,
-        operationKindName: formData.operationKindName,
+        operationKindId: undefined,
+        operationKindName: undefined,
         customerId: formData.customerId,
         customerName: formData.customerName,
-        amount: formData.amount,
-        comment: formData.comment,
-        employeeId: formData.employeeId,
-        employeeName: formData.employeeName,
-        cashFlowItemId: formData.cashFlowItemId,
-        cashFlowItemName: formData.cashFlowItemName,
-        documentBasisId: formData.documentBasisId,
-        documentBasisName: formData.documentBasisName
+        amount: formData.amount ?? 0, // Default to 0 if undefined (though validation ensures it's not)
+        comment: formData.comment || undefined,
+        employeeId: formData.employeeId || undefined,
+        employeeName: formData.employeeName || undefined,
+        cashAccountId: undefined,
+        cashAccountName: undefined,
+        cashFlowItemId: undefined,
+        cashFlowItemName: undefined,
+        documentBasisId: formData.documentBasisId || undefined,
+        documentBasisName: formData.documentBasisName || undefined,
       };
 
       const result = await createCashReceipt(createData);
-      toast.success('Tạo phiếu thu thành công');
+      toast.success(`Tạo phiếu thu #${result.number} thành công`);
       navigate(`/cash-receipts/${result.id}`);
     } catch (error) {
-      toast.error('Không thể tạo phiếu thu');
+      toast.error(`Không thể tạo phiếu thu: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`);
     } finally {
       setIsLoading(false);
       setShowConfirmation(false);
     }
-  };
+  }, [formData, navigate]);
 
+  // Dropdown options
   const customerOptions = customers.map(customer => ({
     value: customer.id,
-    label: `${customer.code ? `${customer.code} - ` : ''}${customer.name}`
+    label: `${customer.code ? `${customer.code} - ` : ''}${customer.name}`,
   }));
 
   const orderOptions = orders.map(order => ({
     value: order.id,
-    label: `Đơn hàng #${order.number}`
+    label: `Đơn hàng #${order.number}`,
   }));
 
+  // Selected values for dropdowns
   const selectedCustomer = customerOptions.find(option => option.value === formData.customerId);
   const selectedOrder = orderOptions.find(option => option.value === formData.documentBasisId);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Fixed Header */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
-        <div className="px-4 py-3">
-          <h1 className="text-lg font-semibold text-gray-900">Thêm mới phiếu thu</h1>
-        </div>
-      </div>
-
       {/* Main Content */}
       <div className="pt-4 px-4">
-        {/* Form Fields */}
         <div className="space-y-4">
           {/* Date */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Ngày thu *
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Ngày thu *</label>
             <div className="relative">
               <input
                 type="datetime-local"
                 value={formData.date.slice(0, 16)}
                 readOnly
-                className="block w-full pl-10 pr-3 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm"
+                className="block w-full pl-12 pr-3 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm"
               />
-              <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+              <Calendar className="absolute left-4 top-2.5 h-5 w-5 text-gray-400" />
             </div>
           </div>
 
           {/* Customer */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Khách hàng *
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Khách hàng *</label>
             <div className="relative">
               <Select
                 options={customerOptions}
                 value={selectedCustomer}
-                onChange={(option) => {
+                onChange={option => {
                   if (!orderData && option) {
-                    setFormData(prev => ({
-                      ...prev,
-                      customerId: option.value,
-                      customerName: option.label
-                    }));
+                    updateFormData('customerId', option.value);
+                    updateFormData('customerName', option.label);
                   }
                 }}
                 placeholder="Chọn khách hàng..."
@@ -225,96 +204,74 @@ export default function CashReceiptAdd() {
                 isDisabled={!!orderData}
                 className="text-sm"
                 classNamePrefix="react-select"
+                noOptionsMessage={() => "Không tìm thấy khách hàng"}
               />
-            </div>
-          </div>
-
-          {/* Operation Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Loại nghiệp vụ *
-            </label>
-            <div className="relative">
-              <select
-                value={formData.operationKindId}
-                onChange={(e) => setFormData(prev => ({
-                  ...prev,
-                  operationKindId: e.target.value,
-                  operationKindName: e.target.options[e.target.selectedIndex].text
-                }))}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="FromCustomer">Từ khách hàng</option>
-                <option value="FromSupplier">Từ người bán</option>
-              </select>
-              <Tag className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
           </div>
 
           {/* Amount */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Số tiền *
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Số tiền *</label>
             <div className="relative">
               <input
                 type="number"
-                value={formData.amount}
-                onChange={(e) => {
+                value={formData.amount ?? ''} // Use empty string if undefined
+                onChange={e => {
                   if (!orderData) {
-                    setFormData(prev => ({ ...prev, amount: Number(e.target.value) }));
+                    const value = e.target.value;
+                    updateFormData('amount', value === '' ? undefined : Number(value));
                   }
                 }}
                 min="0"
                 step="1000"
                 readOnly={!!orderData}
-                className={`block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm ${orderData ? 'bg-gray-50' : 'focus:ring-blue-500 focus:border-blue-500'}`}
+                className={`block w-full pl-12 pr-3 py-2 border border-gray-300 rounded-lg text-sm ${
+                  orderData ? 'bg-gray-50' : 'focus:ring-blue-500 focus:border-blue-500'
+                }`}
               />
-              <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+              <DollarSign className="absolute left-4 top-2.5 h-5 w-5 text-gray-400" />
             </div>
           </div>
 
           {/* Source Document */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Chứng từ gốc
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Chứng từ gốc</label>
             <div className="relative">
               <Select
                 options={orderOptions}
                 value={selectedOrder}
-                onChange={(option) => {
+                onChange={option => {
                   if (!orderData && option) {
-                    setFormData(prev => ({
-                      ...prev,
-                      documentBasisId: option.value,
-                      documentBasisName: option.label
-                    }));
+                    updateFormData('documentBasisId', option.value);
+                    updateFormData('documentBasisName', option.label);
+                  } else {
+                    updateFormData('documentBasisId', '');
+                    updateFormData('documentBasisName', '');
                   }
                 }}
                 placeholder="Chọn chứng từ..."
                 isLoading={isFetchingOrders}
                 isDisabled={!!orderData}
+                isClearable
                 className="text-sm"
                 classNamePrefix="react-select"
+                noOptionsMessage={() => "Không tìm thấy chứng từ"}
               />
             </div>
           </div>
 
-          {/* Notes */}
+          {/* Comment */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Ghi chú
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Ghi chú</label>
             <div className="relative">
               <textarea
-                value={formData.comment}
-                onChange={(e) => setFormData(prev => ({ ...prev, comment: e.target.value }))}
-                rows={3}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
+                value={formData.comment || ''}
+                onChange={e => updateFormData('comment', e.target.value)}
+                rows={4}
+                className="block w-full pl-12 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
                 placeholder="Nhập ghi chú..."
               />
-              <FileText className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+              <FileText className="absolute left-4 top-2.5 h-5 w-5 text-gray-400" />
             </div>
           </div>
         </div>
@@ -328,7 +285,6 @@ export default function CashReceiptAdd() {
         >
           <ArrowLeft className="h-6 w-6" />
         </button>
-
         <button
           onClick={handleSubmit}
           disabled={isLoading}
@@ -341,24 +297,20 @@ export default function CashReceiptAdd() {
       {/* Confirmation Modal */}
       {showConfirmation && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-lg p-4 w-full max-w-sm">
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Xác nhận tạo phiếu thu
-            </h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Bạn có chắc chắn muốn tạo phiếu thu này không?
-            </p>
-            <div className="flex justify-end gap-2">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Xác nhận tạo phiếu thu</h3>
+            <p className="text-sm text-gray-600 mb-6">Bạn có chắc chắn muốn tạo phiếu thu này không?</p>
+            <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowConfirmation(false)}
-                className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 Hủy
               </button>
               <button
                 onClick={handleConfirmSubmit}
                 disabled={isLoading}
-                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
                 {isLoading ? 'Đang xử lý...' : 'Xác nhận'}
               </button>

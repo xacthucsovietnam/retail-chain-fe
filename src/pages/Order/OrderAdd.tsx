@@ -106,6 +106,7 @@ export default function OrderAdd() {
   const [employees, setEmployees] = useState<EmployeeDropdownItem[]>([]);
   const [products, setProducts] = useState<ProductDropdownItem[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
   const [isReturnOrder, setIsReturnOrder] = useState(false);
   const [availableProducts, setAvailableProducts] = useState<ProductDropdownItem[]>([]);
   const [showCreateCustomerPopup, setShowCreateCustomerPopup] = useState(false);
@@ -122,53 +123,67 @@ export default function OrderAdd() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [customerData, employeeData, productData] = await Promise.all([
+        // Load customers and employees first
+        const [customerData, employeeData] = await Promise.all([
           getCustomerDropdownData(),
-          getEmployeeDropdownData(),
-          getProductDropdownData()
+          getEmployeeDropdownData()
         ]);
         
         setCustomers(customerData);
         setEmployees(employeeData);
-        setProducts(productData);
 
-        const savedData = sessionStorage.getItem('newOrderData');
-        if (savedData) {
-          try {
-            const parsedData = JSON.parse(savedData) as OrderPreloadData;
-            
-            const selectedCustomer = customerData.find(c => 
-              c.id === parsedData.customerId || c.name === parsedData.customerName
-            );
+        // Allow UI to render after loading customers and employees
+        setIsLoadingData(false);
 
-            setFormData(prev => ({
-              ...prev,
-              customerId: selectedCustomer?.id || parsedData.customerId || '',
-              customerName: selectedCustomer?.name || parsedData.customerName || '',
-              employeeId: parsedData.employeeId || defaultValues.employeeResponsible?.id || '',
-              employeeName: parsedData.employeeName || defaultValues.employeeResponsible?.presentation || '',
-              deliveryAddress: parsedData.deliveryAddress || '',
-              products: []
-            }));
+        // Load products asynchronously
+        try {
+          const productData = await getProductDropdownData();
+          setProducts(productData);
 
-            setIsReturnOrder(parsedData.isReturnOrder);
-
-            if (parsedData.isReturnOrder && Array.isArray(parsedData.originalProducts)) {
-              const filteredProducts = productData.filter(p => 
-                parsedData.originalProducts?.some(op => op.productId === p.id)
+          // Handle saved data after products are loaded
+          const savedData = sessionStorage.getItem('newOrderData');
+          if (savedData) {
+            try {
+              const parsedData = JSON.parse(savedData) as OrderPreloadData;
+              
+              const selectedCustomer = customerData.find(c => 
+                c.id === parsedData.customerId || c.name === parsedData.customerName
               );
-              setAvailableProducts(filteredProducts);
-            }
 
-            sessionStorage.removeItem('newOrderData');
-          } catch (error) {
-            console.error('Error parsing saved order data:', error);
+              setFormData(prev => ({
+                ...prev,
+                customerId: selectedCustomer?.id || parsedData.customerId || '',
+                customerName: selectedCustomer?.name || parsedData.customerName || '',
+                employeeId: parsedData.employeeId || defaultValues.employeeResponsible?.id || '',
+                employeeName: parsedData.employeeName || defaultValues.employeeResponsible?.presentation || '',
+                deliveryAddress: parsedData.deliveryAddress || '',
+                products: []
+              }));
+
+              setIsReturnOrder(parsedData.isReturnOrder);
+
+              if (parsedData.isReturnOrder && Array.isArray(parsedData.originalProducts)) {
+                const filteredProducts = productData.filter(p => 
+                  parsedData.originalProducts?.some(op => op.productId === p.id)
+                );
+                setAvailableProducts(filteredProducts);
+              }
+
+              sessionStorage.removeItem('newOrderData');
+            } catch (error) {
+              console.error('Error parsing saved order data:', error);
+            }
           }
+        } catch (error) {
+          console.error('Error loading products:', error);
+          toast.error('Không thể tải danh sách sản phẩm.');
+        } finally {
+          setIsLoadingProducts(false);
         }
       } catch (error) {
-        toast.error('Không thể tải dữ liệu. Vui lòng thử lại sau.');
-      } finally {
+        toast.error('Không thể tải dữ liệu khách hàng hoặc nhân viên.');
         setIsLoadingData(false);
+        setIsLoadingProducts(false);
       }
     };
 
@@ -661,19 +676,21 @@ export default function OrderAdd() {
     }))
   ];
 
-  const productOptions = [
-    { value: 'create-product', label: 'Thêm mới sản phẩm', isCreateOption: true },
-    ...(isReturnOrder ? availableProducts : products).map(product => ({
-      value: product.id,
-      label: product.name
-    })),
-    ...formData.products
-      .filter(p => p.productId && !products.some(mp => mp.id === p.productId))
-      .map(p => ({
-        value: p.productId,
-        label: p.productName
-      }))
-  ];
+  const productOptions = isLoadingProducts
+    ? [{ value: '', label: 'Đang tải sản phẩm...', isDisabled: true }]
+    : [
+        { value: 'create-product', label: 'Thêm mới sản phẩm', isCreateOption: true },
+        ...(isReturnOrder ? availableProducts : products).map(product => ({
+          value: product.id,
+          label: product.name
+        })),
+        ...formData.products
+          .filter(p => p.productId && !products.some(mp => mp.id === p.productId))
+          .map(p => ({
+            value: p.productId,
+            label: p.productName
+          }))
+      ];
 
   const CustomOption = (props: any) => {
     const { data, innerRef, innerProps } = props;
@@ -925,6 +942,7 @@ export default function OrderAdd() {
                           className="text-sm"
                           classNamePrefix="select"
                           components={{ Option: CustomOption }}
+                          isDisabled={isLoadingProducts}
                         />
                         {product.productId && (
                           <>
@@ -1042,6 +1060,7 @@ export default function OrderAdd() {
                 <button
                   onClick={handleAddProduct}
                   className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isLoadingProducts}
                 >
                   <Plus className="h-5 w-5" />
                   <span className="text-base font-medium">Thêm sản phẩm</span>
@@ -1190,6 +1209,7 @@ export default function OrderAdd() {
                   className="text-sm"
                   classNamePrefix="select"
                   components={{ Option: CustomOption }}
+                  isDisabled={isLoadingProducts}
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">

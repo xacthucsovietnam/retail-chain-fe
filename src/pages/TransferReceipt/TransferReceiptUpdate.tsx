@@ -1,146 +1,165 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import {
-  ArrowLeft,
-  Save,
-  User,
-  Calendar,
-  FileText,
-  DollarSign,
-  Tag,
-  CreditCard,
-  Receipt,
-  Loader2,
-  AlertCircle
-} from 'lucide-react';
+import { ArrowLeft, Save, Calendar, FileText, DollarSign, Loader2, AlertCircle } from 'lucide-react';
+import Select from 'react-select';
 import toast from 'react-hot-toast';
-import { getTransferReceiptDetail, updateTransferReceipt } from '../../services/transferReceipt';
-import type { TransferReceiptDetail, UpdateTransferReceiptData } from '../../services/transferReceipt';
+import { getTransferReceiptDetail, updateTransferReceipt, UpdateTransferReceiptData } from '../../services/transferReceipt';
+import { getCustomerDropdownData, getOrders } from '../../services/order';
+
+interface CustomerDropdownItem {
+  id: string;
+  code?: string;
+  name: string;
+}
+
+interface Order {
+  id: string;
+  number: string;
+}
 
 interface FormData {
   id: string;
   number: string;
   title: string;
   date: string;
-  operationKindId: string;
-  operationKindName: string;
   customerId: string;
   customerName: string;
-  amount: number;
+  amount: number | string;
   comment: string;
-  employeeId: string;
-  employeeName: string;
+  documentBasisId?: string;
+  documentBasisName?: string;
+  // Lưu trữ các trường không hiển thị để gửi lại trong update
+  operationKindId: string;
+  operationKindName: string;
   bankAccountId: string;
   bankAccountName: string;
   cashFlowItemId: string;
   cashFlowItemName: string;
+  employeeId?: string;
+  employeeName?: string;
+  paymentDetails?: UpdateTransferReceiptData['paymentDetails'];
 }
 
 export default function TransferReceiptUpdate() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [receipt, setReceipt] = useState<TransferReceiptDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
+  const [customers, setCustomers] = useState<CustomerDropdownItem[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isFetchingCustomers, setIsFetchingCustomers] = useState(false);
+  const [isFetchingOrders, setIsFetchingOrders] = useState(false);
 
   const [formData, setFormData] = useState<FormData>({
     id: '',
     number: '',
     title: '',
     date: new Date().toISOString(),
-    operationKindId: 'FromSupplier',
-    operationKindName: 'Từ người bán',
     customerId: '',
     customerName: '',
-    amount: 0,
+    amount: '',
     comment: '',
-    employeeId: '0a1ae9b8-5b28-11ef-a699-00155d058802',
-    employeeName: 'Test',
-    bankAccountId: '583efa7c-6237-11ef-a699-00155d058802',
-    bankAccountName: 'Tài khoản VND',
-    cashFlowItemId: '6ceda0e4-5b28-11ef-a699-00155d058802',
-    cashFlowItemName: 'Nhận tiền từ người mua'
+    documentBasisId: '',
+    documentBasisName: '',
+    operationKindId: '',
+    operationKindName: '',
+    bankAccountId: '',
+    bankAccountName: '',
+    cashFlowItemId: '',
+    cashFlowItemName: '',
+    employeeId: '',
+    employeeName: '',
+    paymentDetails: []
   });
 
-  useEffect(() => {
-    const fetchReceiptDetail = async () => {
-      if (!id) {
-        setError('Receipt ID is missing');
-        setIsLoading(false);
-        return;
-      }
+  const fetchData = useCallback(async () => {
+    if (!id) {
+      setError('Receipt ID is missing');
+      setIsLoading(false);
+      return;
+    }
 
-      try {
-        setIsLoading(true);
-        setError(null);
-        const data = await getTransferReceiptDetail(id);
-        setReceipt(data);
-        setFormData({
-          id: data.id,
-          number: data.number,
-          title: data.number,
-          date: data.date,
-          operationKindId: 'FromSupplier',
-          operationKindName: data.transactionType,
-          customerId: data.customer,
-          customerName: data.customer,
-          amount: data.amount,
-          comment: data.notes || '',
-          employeeId: '0a1ae9b8-5b28-11ef-a699-00155d058802',
-          employeeName: data.collector || '',
-          bankAccountId: '583efa7c-6237-11ef-a699-00155d058802',
-          bankAccountName: data.bankAccount || 'Tài khoản VND',
-          cashFlowItemId: '6ceda0e4-5b28-11ef-a699-00155d058802',
-          cashFlowItemName: 'Nhận tiền từ người mua'
-        });
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to load receipt details';
-        setError(errorMessage);
-        toast.error(errorMessage);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    try {
+      setIsLoading(true);
+      setError(null);
 
-    fetchReceiptDetail();
+      // Fetch receipt detail
+      const data = await getTransferReceiptDetail(id);
+      setFormData({
+        id: data.id,
+        number: data.number,
+        title: data.number,
+        date: data.date,
+        customerId: data.customerId,
+        customerName: data.customer,
+        amount: data.amount,
+        comment: data.notes || '',
+        documentBasisId: data.documentBasisId,
+        documentBasisName: data.order || '',
+        operationKindId: '', // Should map from API
+        operationKindName: data.transactionType || '',
+        bankAccountId: '', // Should map from API
+        bankAccountName: data.bankAccount || '',
+        cashFlowItemId: '', // Should map from API
+        cashFlowItemName: data.transactionType || '',
+        employeeId: '', // Should map from API
+        employeeName: data.collector || '',
+        paymentDetails: [] // Should fetch from API if needed
+      });
+
+      // Fetch dropdown data
+      setIsFetchingCustomers(true);
+      const customerData = await getCustomerDropdownData();
+      setCustomers(customerData);
+      setIsFetchingCustomers(false);
+
+      setIsFetchingOrders(true);
+      const orderDataResponse = await getOrders(1, 1000);
+      setOrders(orderDataResponse.items);
+      setIsFetchingOrders(false);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load receipt details';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
   }, [id]);
 
-  const handleInputChange = (field: keyof FormData, value: string | number) => {
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleInputChange = useCallback((field: keyof FormData, value: string | number) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setIsDirty(true);
-  };
+  }, []);
 
-  const validateForm = (): boolean => {
-    if (!formData.customerId) {
+  const validateForm = useCallback((): boolean => {
+    if (!formData.customerId && !formData.customerName) {
       toast.error('Vui lòng chọn khách hàng');
       return false;
     }
 
-    if (formData.amount <= 0) {
+    if (!formData.amount || Number(formData.amount) <= 0) {
       toast.error('Số tiền phải lớn hơn 0');
       return false;
     }
 
-    if (!formData.operationKindId) {
-      toast.error('Vui lòng chọn loại nghiệp vụ');
-      return false;
-    }
-
     return true;
-  };
+  }, [formData]);
 
-  const handleSubmit = () => {
+  const handleSubmit = useCallback(() => {
     if (!validateForm()) return;
     setShowConfirmation(true);
-  };
+  }, [validateForm]);
 
-  const handleConfirmSubmit = async () => {
+  const handleConfirmSubmit = useCallback(async () => {
     try {
       setIsSaving(true);
-
       const updateData: UpdateTransferReceiptData = {
         id: formData.id,
         number: formData.number,
@@ -150,28 +169,32 @@ export default function TransferReceiptUpdate() {
         operationKindName: formData.operationKindName,
         customerId: formData.customerId,
         customerName: formData.customerName,
-        amount: formData.amount,
+        amount: Number(formData.amount),
         comment: formData.comment,
-        employeeId: formData.employeeId,
-        employeeName: formData.employeeName,
         bankAccountId: formData.bankAccountId,
         bankAccountName: formData.bankAccountName,
         cashFlowItemId: formData.cashFlowItemId,
-        cashFlowItemName: formData.cashFlowItemName
+        cashFlowItemName: formData.cashFlowItemName,
+        employeeId: formData.employeeId,
+        employeeName: formData.employeeName,
+        documentBasisId: formData.documentBasisId,
+        documentBasisName: formData.documentBasisName,
+        paymentDetails: formData.paymentDetails
       };
 
       await updateTransferReceipt(updateData);
       toast.success('Cập nhật phiếu thu chuyển khoản thành công');
       navigate(`/transfer-receipts/${formData.id}`);
     } catch (error) {
-      toast.error('Không thể cập nhật phiếu thu chuyển khoản');
+      const errorMessage = error instanceof Error ? error.message : 'Không thể cập nhật phiếu thu chuyển khoản';
+      toast.error(errorMessage);
     } finally {
       setIsSaving(false);
       setShowConfirmation(false);
     }
-  };
+  }, [formData, navigate]);
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     if (isDirty) {
       if (window.confirm('Bạn có thay đổi chưa lưu. Bạn có chắc chắn muốn thoát?')) {
         navigate(`/transfer-receipts/${id}`);
@@ -179,7 +202,20 @@ export default function TransferReceiptUpdate() {
     } else {
       navigate(`/transfer-receipts/${id}`);
     }
-  };
+  }, [isDirty, navigate, id]);
+
+  const customerOptions = customers.map((customer) => ({
+    value: customer.id,
+    label: `${customer.code ? `${customer.code} - ` : ''}${customer.name}`,
+  }));
+
+  const orderOptions = orders.map((order) => ({
+    value: order.id,
+    label: `Đơn hàng #${order.number}`,
+  }));
+
+  const selectedCustomer = customerOptions.find((option) => option.value === formData.customerId);
+  const selectedOrder = orderOptions.find((option) => option.value === formData.documentBasisId);
 
   if (isLoading) {
     return (
@@ -189,14 +225,12 @@ export default function TransferReceiptUpdate() {
     );
   }
 
-  if (error || !receipt) {
+  if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            {error || 'Receipt Not Found'}
-          </h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">{error}</h2>
           <button
             onClick={() => navigate('/transfer-receipts')}
             className="text-blue-600 hover:text-blue-800 flex items-center gap-2 mx-auto"
@@ -211,13 +245,6 @@ export default function TransferReceiptUpdate() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Fixed Header */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
-        <div className="px-4 py-3">
-          <h1 className="text-lg font-semibold text-gray-900">Cập nhật đơn thu tiền mặt</h1>
-          <p className="text-sm text-gray-500">#{formData.number}</p>
-        </div>
-      </div>
 
       {/* Main Content */}
       <div className="pt-4 px-4">
@@ -244,35 +271,20 @@ export default function TransferReceiptUpdate() {
               Khách hàng *
             </label>
             <div className="relative">
-              <input
-                type="text"
-                value={formData.customerName}
-                onChange={(e) => handleInputChange('customerName', e.target.value)}
-                placeholder="Chọn khách hàng..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
-              />
-              <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            </div>
-          </div>
-
-          {/* Operation Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Loại nghiệp vụ *
-            </label>
-            <div className="relative">
-              <select
-                value={formData.operationKindId}
-                onChange={(e) => {
-                  handleInputChange('operationKindId', e.target.value);
-                  handleInputChange('operationKindName', e.target.options[e.target.selectedIndex].text);
+              <Select
+                options={customerOptions}
+                value={selectedCustomer}
+                onChange={(option) => {
+                  if (option) {
+                    handleInputChange('customerId', option.value);
+                    handleInputChange('customerName', option.label);
+                  }
                 }}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="FromSupplier">Từ người bán</option>
-                <option value="FromCustomer">Từ khách hàng</option>
-              </select>
-              <Tag className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                placeholder="Chọn khách hàng..."
+                isLoading={isFetchingCustomers}
+                className="text-sm"
+                classNamePrefix="react-select"
+              />
             </div>
           </div>
 
@@ -285,32 +297,40 @@ export default function TransferReceiptUpdate() {
               <input
                 type="number"
                 value={formData.amount}
-                onChange={(e) => handleInputChange('amount', Number(e.target.value))}
-                min="0"
+                onChange={(e) => handleInputChange('amount', e.target.value)}
+                min=""
                 step="1000"
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Nhập số tiền..."
               />
               <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
           </div>
 
-          {/* Bank Account */}
+          {/* Source Document */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Tài khoản ngân hàng
+              Chứng từ gốc
             </label>
             <div className="relative">
-              <select
-                value={formData.bankAccountId}
-                onChange={(e) => {
-                  handleInputChange('bankAccountId', e.target.value);
-                  handleInputChange('bankAccountName', e.target.options[e.target.selectedIndex].text);
+              <Select
+                options={orderOptions}
+                value={selectedOrder}
+                onChange={(option) => {
+                  if (option) {
+                    handleInputChange('documentBasisId', option.value);
+                    handleInputChange('documentBasisName', option.label);
+                  } else {
+                    handleInputChange('documentBasisId', '');
+                    handleInputChange('documentBasisName', '');
+                  }
                 }}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="583efa7c-6237-11ef-a699-00155d058802">Tài khoản VND</option>
-              </select>
-              <CreditCard className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                placeholder="Chọn chứng từ..."
+                isLoading={isFetchingOrders}
+                isClearable
+                className="text-sm"
+                classNamePrefix="react-select"
+              />
             </div>
           </div>
 
@@ -344,9 +364,11 @@ export default function TransferReceiptUpdate() {
         
         <button
           onClick={handleSubmit}
-          disabled={!isDirty || isSaving}
+          disabled={isSaving}
           className={`p-3 rounded-full shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-            isDirty ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500' : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+            isDirty
+              ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500'
+              : 'bg-blue-400 text-white hover:bg-blue-500 focus:ring-blue-400'
           }`}
         >
           <Save className="h-6 w-6" />

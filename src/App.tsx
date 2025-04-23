@@ -18,11 +18,11 @@ import PartnerDetail from './pages/Partner/PartnerDetail';
 import PartnerAdd from './pages/Partner/PartnerAdd';
 import PartnerUpdate from './pages/Partner/PartnerUpdate';
 import CashReceipts from './pages/CashReceipt/CashReceipts';
-import CashReceiptDetail from './pages/CashReceipt/CashReceiptDetail';
+import CashReceiptDetailPage from './pages/CashReceipt/CashReceiptDetail';
 import CashReceiptAdd from './pages/CashReceipt/CashReceiptAdd';
 import CashReceiptUpdate from './pages/CashReceipt/CashReceiptUpdate';
 import TransferReceipts from './pages/TransferReceipt/TransferCollection';
-import TransferReceiptDetail from './pages/TransferReceipt/TransferReceiptDetail';
+import TransferReceiptDetailPage from './pages/TransferReceipt/TransferReceiptDetail';
 import TransferReceiptAdd from './pages/TransferReceipt/TransferReceiptAdd';
 import TransferReceiptUpdate from './pages/TransferReceipt/TransferReceiptUpdate';
 import SupplierInvoices from './pages/SupplierInvoice/SupplierInvoices';
@@ -72,11 +72,11 @@ export default function App() {
             <Route path="/supplier-invoices/edit/:id" element={<Layout><SupplierInvoiceUpdate /></Layout>} />
             <Route path="/cash-receipts" element={<Layout><CashReceipts /></Layout>} />
             <Route path="/cash-receipts/add" element={<Layout><CashReceiptAdd /></Layout>} />
-            <Route path="/cash-receipts/:id" element={<Layout><CashReceiptDetail /></Layout>} />
+            <Route path="/cash-receipts/:id" element={<Layout><CashReceiptDetailPage /></Layout>} />
             <Route path="/cash-receipts/edit/:id" element={<Layout><CashReceiptUpdate /></Layout>} />
             <Route path="/transfer-receipts" element={<Layout><TransferReceipts /></Layout>} />
             <Route path="/transfer-receipts/add" element={<Layout><TransferReceiptAdd /></Layout>} />
-            <Route path="/transfer-receipts/:id" element={<Layout><TransferReceiptDetail /></Layout>} />
+            <Route path="/transfer-receipts/:id" element={<Layout><TransferReceiptDetailPage /></Layout>} />
             <Route path="/transfer-receipts/edit/:id" element={<Layout><TransferReceiptUpdate /></Layout>} />
             <Route path="/currency" element={<Layout><Currency /></Layout>} />
             <Route path="/currency/add" element={<Layout><CurrencyAdd /></Layout>} />

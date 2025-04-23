@@ -5,27 +5,22 @@ import {
   Pencil,
   Trash2,
   User,
-  Phone,
-  Mail,
-  MapPin,
   Calendar,
   Loader2,
   AlertCircle,
   DollarSign,
-  CreditCard,
   Tag,
   FileText,
-  Receipt
+  Receipt,
+  Wallet
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getCashReceiptDetail } from '../../services/cashReceipt';
-import type { CashReceiptDetail } from '../../services/cashReceipt';
-import { formatCurrency } from '../../utils/currency';
+import { getCashReceiptDetail, XTSCashReceipt } from '../../services/cashReceipt';
 
 export default function CashReceiptDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [receipt, setReceipt] = useState<CashReceiptDetail | null>(null);
+  const [receipt, setReceipt] = useState<XTSCashReceipt | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,7 +31,7 @@ export default function CashReceiptDetail() {
         setIsLoading(false);
         return;
       }
-      
+
       try {
         setIsLoading(true);
         setError(null);
@@ -64,19 +59,39 @@ export default function CashReceiptDetail() {
     toast.error('Chức năng xóa chưa được triển khai');
   };
 
-  const formatDate = (dateString: string) => {
+  const formatCurrency = (amount: number, currencyString: string | null): string => {
+    const currencyMap: { [key: string]: string } = {
+      đồng: 'VND',
+      USD: 'USD',
+      Dollar: 'USD',
+      Euro: 'EUR',
+      EUR: 'EUR',
+      JPY: 'JPY',
+      Yen: 'JPY',
+    };
+
+    const currencyCode = currencyString ? currencyMap[currencyString] || 'VND' : 'VND';
+    try {
+      return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: currencyCode }).format(amount);
+    } catch (error) {
+      console.error(`Error formatting currency ${currencyString}:`, error);
+      return `${new Intl.NumberFormat('vi-VN').format(amount)} ${currencyCode}`;
+    }
+  };
+
+  const formatDate = (dateString: string): string => {
     return new Date(dateString).toLocaleDateString('vi-VN', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
       </div>
     );
@@ -84,7 +99,7 @@ export default function CashReceiptDetail() {
 
   if (error || !receipt) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
@@ -104,14 +119,6 @@ export default function CashReceiptDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Fixed Header */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
-        <div className="px-4 py-3">
-          <h1 className="text-lg font-semibold text-gray-900">Chi tiết phiếu thu</h1>
-          <p className="text-sm text-gray-500">#{receipt.number}</p>
-        </div>
-      </div>
-
       {/* Main Content */}
       <div className="pt-4 px-4">
         {/* Basic Information */}
@@ -122,7 +129,7 @@ export default function CashReceiptDetail() {
               <p className="text-base font-medium text-gray-900">#{receipt.number}</p>
             </div>
             <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-              {receipt.transactionType}
+              {receipt.operationKind?.presentation ?? 'Không xác định'}
             </span>
           </div>
 
@@ -139,7 +146,7 @@ export default function CashReceiptDetail() {
               <User className="w-5 h-5 text-gray-400 mr-3" />
               <div>
                 <p className="text-sm text-gray-500">Khách hàng</p>
-                <p className="text-base text-gray-900">{receipt.customer}</p>
+                <p className="text-base text-gray-900">{receipt.counterparty?.presentation ?? 'Không xác định'}</p>
               </div>
             </div>
 
@@ -148,7 +155,7 @@ export default function CashReceiptDetail() {
               <div>
                 <p className="text-sm text-gray-500">Số tiền</p>
                 <p className="text-base font-medium text-blue-600">
-                  {formatCurrency(receipt.amount, receipt.currency)}
+                  {formatCurrency(receipt.documentAmount, receipt.cashCurrency?.presentation ?? 'VND')}
                 </p>
               </div>
             </div>
@@ -157,36 +164,52 @@ export default function CashReceiptDetail() {
               <Tag className="w-5 h-5 text-gray-400 mr-3" />
               <div>
                 <p className="text-sm text-gray-500">Loại thu</p>
-                <p className="text-base text-gray-900">{receipt.transactionType}</p>
+                <p className="text-base text-gray-900">{receipt.operationKind?.presentation ?? 'Không xác định'}</p>
               </div>
             </div>
 
-            {receipt.collector && (
-              <div className="flex items-center">
-                <User className="w-5 h-5 text-gray-400 mr-3" />
-                <div>
-                  <p className="text-sm text-gray-500">Người thu</p>
-                  <p className="text-base text-gray-900">{receipt.collector}</p>
-                </div>
+            <div className="flex items-center">
+              <Wallet className="w-5 h-5 text-gray-400 mr-3" />
+              <div>
+                <p className="text-sm text-gray-500">Quỹ tiền</p>
+                <p className="text-base text-gray-900">{receipt.cashAccount?.presentation ?? 'Không xác định'}</p>
               </div>
-            )}
+            </div>
 
-            {receipt.order && (
+            <div className="flex items-center">
+              <FileText className="w-5 h-5 text-gray-400 mr-3" />
+              <div>
+                <p className="text-sm text-gray-500">Mục đích</p>
+                <p className="text-base text-gray-900">{receipt.cashFlowItem?.presentation ?? 'Không xác định'}</p>
+              </div>
+            </div>
+
+            {receipt.documentBasis && (
               <div className="flex items-center">
                 <Receipt className="w-5 h-5 text-gray-400 mr-3" />
                 <div>
-                  <p className="text-sm text-gray-500">Đơn hàng</p>
-                  <p className="text-base text-gray-900">{receipt.order}</p>
+                  <p className="text-sm text-gray-500">Tài liệu nguồn</p>
+                  <p className="text-base text-gray-900">{receipt.documentBasis?.presentation ?? 'Không xác định'}</p>
                 </div>
               </div>
             )}
 
-            {receipt.notes && (
+            {receipt.paymentDetails.length > 0 && (
+              <div className="flex items-center">
+                <FileText className="w-5 h-5 text-gray-400 mr-3" />
+                <div>
+                  <p className="text-sm text-gray-500">Hợp đồng</p>
+                  <p className="text-base text-gray-900">{receipt.paymentDetails[0].contract?.presentation ?? 'Không xác định'}</p>
+                </div>
+              </div>
+            )}
+
+            {receipt.comment && (
               <div className="flex items-start">
                 <FileText className="w-5 h-5 text-gray-400 mr-3 mt-0.5" />
                 <div>
                   <p className="text-sm text-gray-500">Ghi chú</p>
-                  <p className="text-base text-gray-900 whitespace-pre-line">{receipt.notes}</p>
+                  <p className="text-base text-gray-900 whitespace-pre-line">{receipt.comment}</p>
                 </div>
               </div>
             )}
@@ -202,7 +225,7 @@ export default function CashReceiptDetail() {
         >
           <ArrowLeft className="h-6 w-6" />
         </button>
-        
+
         <button
           onClick={handleEdit}
           className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
